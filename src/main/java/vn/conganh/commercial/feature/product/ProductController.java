@@ -1,0 +1,57 @@
+package vn.conganh.commercial.feature.product;
+
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
+import vn.conganh.commercial.feature.product.dto.ProductResponse;
+import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
+
+@RestController
+@RequestMapping("/api/products")
+@RequiredArgsConstructor
+public class ProductController {
+
+    private final ProductService productService;
+
+    @GetMapping(version = "1")
+    public ResponseEntity<ApiResponse<List<ProductResponse>>> getProducts() {
+        return ResponseEntity.ok(ApiResponse.success(productService.getAllProducts()));
+    }
+
+    @GetMapping(path = "/{id}", version = "1")
+    public ResponseEntity<ApiResponse<ProductResponse>> getProduct(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(productService.getProductById(id)));
+    }
+
+    @PostMapping(version = "1")
+    public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
+            @RequestBody @Valid CreateProductRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(productService.createProduct(request)));
+    }
+
+    @PutMapping(path = "/{id}", version = "1")
+    public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
+            @PathVariable UUID id,
+            @RequestBody @Valid UpdateProductRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(productService.updateProduct(id, request)));
+    }
+
+    @DeleteMapping(path = "/{id}", version = "1")
+    public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable UUID id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+}
