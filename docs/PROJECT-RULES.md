@@ -344,6 +344,8 @@ public class User {
 - Use `Instant` or `LocalDateTime` — NEVER `java.util.Date` or `Timestamp`
 - Use Lombok `@Getter`, `@Setter`, and `@NoArgsConstructor` for JPA boilerplate
 - Do NOT use Lombok `@Data` on entities — it generates `equals/hashCode` on all fields, causing JPA issues
+- Do NOT use `@ManyToMany` in JPA entities. Model join tables as explicit entities, for example `UserRole` and `PermissionRole`, then use `@ManyToOne` from the join entity and `@OneToMany` from the aggregate side.
+- Join entities with composite keys must use `@Embeddable` id classes or `@EmbeddedId` + `@MapsId` consistently.
 - `createdAt` / `updatedAt`: prefer getter-only fields or do not set them manually in business code because Hibernate manages them
 - Password: ALWAYS stored as BCrypt hash
 
