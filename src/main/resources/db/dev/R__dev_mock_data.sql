@@ -366,18 +366,21 @@ FROM (
 ) usage
 WHERE c.id = usage.coupon_id;
 
-INSERT INTO reviews (user_id, product_id, order_id, rating, comment)
+INSERT INTO reviews (user_id, product_id, order_item_id, rating, comment)
 SELECT u.id,
        p.id,
-       o.id,
+       oi.id,
        5,
        'Soft fabric and clean fit. Good demo product.'
 FROM users u
 JOIN products p ON p.slug = 'essential-cotton-tee'
-JOIN orders o ON o.order_code = 'VW-DEV-1001'
+JOIN order_items oi ON oi.product_name = p.name
+JOIN orders o ON o.id = oi.order_id
 WHERE u.email = 'user@velawear.local'
-ON CONFLICT (user_id, product_id, order_id) DO UPDATE
+  AND o.order_code = 'VW-DEV-1001'
+ON CONFLICT (user_id, order_item_id) DO UPDATE
 SET
+    product_id = EXCLUDED.product_id,
     rating = EXCLUDED.rating,
     comment = EXCLUDED.comment;
 

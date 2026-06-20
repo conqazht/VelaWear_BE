@@ -131,3 +131,14 @@
 
 - Existing local databases that already applied the old `V1/V2` migrations need to be dropped, cleaned, or repaired before rerunning Flyway.
 - Dev mock accounts use raw password `Password123!` represented by a BCrypt hash in SQL.
+
+## 2026-06-20
+
+### Completed
+
+- Updated `docs/DATABASE.md` ERD from a simplified diagram to a fuller box-style diagram that shows the current 28-table schema by domain area.
+- Kept high-level `N:M` relationships for readability and listed physical join tables separately where appropriate.
+- Corrected review relationships in the ERD: users, products, and orders each relate to reviews as `1:N`; order-product sales history is represented through `order_items`.
+- Added nullable `reference_type` and `reference_id` to `inventory_logs` for source tracing, with a paired-null check and reference lookup index.
+- Changed reviews to reference `order_items` through `order_item_id` instead of referencing only `orders`, so each review is tied to the exact purchased item.
+- Changed business history foreign keys from cascade delete to restrict delete for `order_items -> orders`, `payment_transactions -> payments`, and `order_status_histories -> orders`.

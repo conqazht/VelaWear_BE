@@ -26,74 +26,222 @@ Notes:
 
 ## Entity Relationship Diagram
 
-```
-┌──────────────┐       ┌──────────────┐       ┌──────────────────┐
-│    roles     │       │    users     │       │ refresh_tokens   │
-├──────────────┤       ├──────────────┤       ├──────────────────┤
-│ id (PK)      │       │ id (PK)      │  1:N  │ id (PK)          │
-│ name         │◄─────►│ email        │──────►│ user_id (FK)     │
-│ description  │ N:M   │ password     │       │ token (UNIQUE)   │
-│ created_at   │       │ deleted_at   │       │ expires_at       │
-│ updated_at   │       └──────┬───────┘       └──────────────────┘
-└──────┬───────┘              │
-       │ N:M                  │ 1:N
-       ▼                      ▼
-┌──────────────┐       ┌────────────────┐
-│ permissions  │       │ user_addresses │
-├──────────────┤       ├────────────────┤
-│ id (PK)      │       │ id (PK)        │
-│ api_path     │       │ user_id (FK)   │
-│ method       │       │ receiver_name  │
-│ module       │       │ is_default     │
-└──────────────┘       └────────────────┘
+Full ERD for the current 28-table VelaWear schema. Main business relationships use direct `N:M` notation for readability; physical join tables are listed separately.
 
-┌──────────────┐       ┌──────────────┐       ┌──────────────────┐
-│    brands    │       │  categories  │       │    products      │
-├──────────────┤       ├──────────────┤       ├──────────────────┤
-│ id (PK)      │  1:N  │ id (PK)      │  1:N  │ id (PK)          │
-│ slug         │──────►│ parent_id    │──────►│ category_id (FK) │
-│ deleted_at   │       │ slug         │       │ brand_id (FK)    │
-└──────────────┘       │ deleted_at   │       │ slug             │
-                       └──────────────┘       │ deleted_at       │
-                                              └────────┬─────────┘
-                                                       │ 1:N
-                                                       ▼
-┌──────────────┐       ┌──────────────┐       ┌──────────────────┐
-│    colors    │       │    sizes     │       │ product_variants │
-├──────────────┤       ├──────────────┤       ├──────────────────┤
-│ id (PK)      │  1:N  │ id (PK)      │  1:N  │ id (PK)          │
-│ name         │──────►│ name         │──────►│ product_id (FK)  │
-│ hex_code     │       │ sort_order   │       │ sku (UNIQUE)     │
-└──────────────┘       └──────────────┘       │ price            │
-                                              │ stock_quantity   │
-                                              └────────┬─────────┘
-                                                       │
-                        ┌──────────────────────────────┼──────────────────────────────┐
-                        ▼                              ▼                              ▼
-                 ┌──────────────┐              ┌──────────────┐              ┌────────────────┐
-                 │ product_imgs │              │ cart_items   │              │ inventory_logs │
-                 ├──────────────┤              ├──────────────┤              ├────────────────┤
-                 │ product_id   │              │ cart_id (FK) │              │ variant_id     │
-                 │ variant_id   │              │ variant_id   │              │ change_qty     │
-                 └──────────────┘              └──────────────┘              └────────────────┘
-
-┌──────────────┐       ┌──────────────┐       ┌──────────────────────┐
-│    orders    │  1:N  │ order_items  │       │ order_status_history │
-├──────────────┤──────►├──────────────┤       ├──────────────────────┤
-│ id (PK)      │       │ order_id     │       │ order_id (FK)        │
-│ user_id      │       │ variant_id   │       │ from_status          │
-│ order_code   │       │ price        │       │ to_status            │
-│ status       │       │ quantity     │       │ changed_by (FK)      │
-└──────┬───────┘       └──────────────┘       └──────────────────────┘
+```text
+RBAC / Account
+┌──────────────────┐       N:M       ┌──────────────┐       N:M       ┌──────────────────┐
+│      users       │◄───────────────►│    roles     │◄───────────────►│   permissions    │
+├──────────────────┤                 ├──────────────┤                 ├──────────────────┤
+│ id (PK)          │                 │ id (PK)      │                 │ id (PK)          │
+│ full_name        │                 │ name (UQ)    │                 │ name             │
+│ email (UQ)       │                 │ description  │                 │ api_path         │
+│ password         │                 │ created_at   │                 │ method           │
+│ birth_date       │                 │ updated_at   │                 │ module           │
+│ avatar           │                 └──────────────┘                 │ created_at       │
+│ gender           │                                                  │ updated_at       │
+│ created_at       │                                                  └──────────────────┘
+│ updated_at       │
+│ deleted_at       │
+└──────┬───────────┘
        │ 1:N
-       ▼
-┌──────────────┐       ┌──────────────────────┐
-│   payments   │  1:N  │ payment_transactions │
-├──────────────┤──────►├──────────────────────┤
-│ order_id     │       │ payment_id (FK)      │
-│ provider     │       │ transaction_code     │
-│ status       │       │ gateway_response     │
-└──────────────┘       └──────────────────────┘
+       ├──────────────────► refresh_tokens(id, token, user_id, expires_at, revoked, device_info, ip_address, created_at)
+       │ 1:N
+       ├──────────────────► user_addresses(id, user_id, receiver_name, phone, province, district, ward, address_detail, is_default)
+       │ 1:1
+       └──────────────────► carts(id, user_id, created_at)
+
+Physical join tables:
+
+┌──────────────────┐       ┌───────────────────┐
+│    user_role     │       │  permission_role  │
+├──────────────────┤       ├───────────────────┤
+│ user_id (PK/FK)  │       │ permission_id     │
+│ role_id (PK/FK)  │       │ (PK/FK)           │
+└──────────────────┘       │ role_id (PK/FK)   │
+                           └───────────────────┘
+
+Catalog
+┌──────────────┐       1:N       ┌──────────────────┐       N:1       ┌──────────────────┐
+│    brands    │◄───────────────│    products      │───────────────►│   categories     │
+├──────────────┤                 ├──────────────────┤                 ├──────────────────┤
+│ id (PK)      │                 │ id (PK)          │                 │ id (PK)          │
+│ name         │                 │ name             │                 │ name             │
+│ slug (UQ)    │                 │ slug (UQ)        │                 │ slug (UQ)        │
+│ description  │                 │ description      │                 │ parent_id (FK)   │
+│ status       │                 │ category_id (FK) │                 │ status           │
+│ created_at   │                 │ brand_id (FK)    │                 │ sort_order       │
+│ updated_at   │                 │ status           │                 │ created_at       │
+│ deleted_at   │                 │ created_at       │                 │ updated_at       │
+└──────────────┘                 │ updated_at       │                 │ deleted_at       │
+                                 │ deleted_at       │                 └────────┬─────────┘
+                                 └──────┬───────────┘                          │ 1:N self-reference
+                                        │ 1:N                                  ▼
+                    ┌───────────────────┼───────────────────┐          categories(children)
+                    ▼                   ▼                   ▼
+        ┌──────────────────┐   ┌──────────────────┐   ┌────────────────────┐
+        │ product_variants │   │ product_images   │   │ product_attributes │
+        ├──────────────────┤   ├──────────────────┤   ├────────────────────┤
+        │ id (PK)          │   │ id (PK)          │   │ id (PK)            │
+        │ product_id (FK)  │   │ product_id (FK)  │   │ product_id (FK)    │
+        │ sku (UQ)         │   │ variant_id NULL  │   │ name               │
+        │ price            │   │ image            │   │ value              │
+        │ sale_price       │   │ is_thumbnail     │   └────────────────────┘
+        │ stock_quantity   │   │ sort_order       │
+        │ color_id (FK)    │   └──────────────────┘
+        │ size_id (FK)     │
+        │ status           │
+        │ created_at       │
+        │ updated_at       │
+        │ deleted_at       │
+        └──────┬───────┬───┘
+               │ N:1   │ N:1
+               ▼       ▼
+        ┌──────────────┐       ┌──────────────┐
+        │    colors    │       │    sizes     │
+        ├──────────────┤       ├──────────────┤
+        │ id (PK)      │       │ id (PK)      │
+        │ name (UQ)    │       │ name (UQ)    │
+        │ hex_code     │       │ sort_order   │
+        │ sort_order   │       └──────────────┘
+        └──────────────┘
+
+Checkout / Orders / Payment
+┌──────────────┐       1:N       ┌──────────────────┐       1:N       ┌──────────────────┐
+│    users     │───────────────►│     orders       │───────────────►│   order_items    │
+├──────────────┤                 ├──────────────────┤                 ├──────────────────┤
+│ id (PK)      │                 │ id (PK)          │                 │ id (PK)          │
+│ email (UQ)   │                 │ user_id (FK)     │                 │ order_id (FK)    │
+└──────┬───────┘                 │ order_code (UQ)  │                 │ variant_id NULL  │
+       │ 1:1                     │ status           │                 │ product_name     │
+       ▼                         │ subtotal         │                 │ variant_name     │
+┌──────────────┐       1:N       │ shipping_fee     │                 │ sku              │
+│    carts     │───────────────►│ discount_amount  │                 │ image            │
+├──────────────┤                 │ final_amount     │                 │ price            │
+│ id (PK)      │                 │ receiver_name    │                 │ quantity         │
+│ user_id (UQ) │                 │ receiver_phone   │                 │ subtotal         │
+│ created_at   │                 │ receiver_address │                 │ status           │
+└──────────────┘                 │ payment_method   │                 │ created_at       │
+       │ 1:N                     │ payment_status   │                 └────────┬─────────┘
+       ▼                         │ created_at       │                          │ N:1 optional
+┌──────────────┐                 │ updated_at       │                          ▼
+│  cart_items  │                 └──────┬───────────┘                 ┌──────────────────┐
+├──────────────┤                        │ 1:N                         │ product_variants │
+│ id (PK)      │                        ▼                             ├──────────────────┤
+│ cart_id (FK) │                 ┌──────────────┐                     │ id (PK)          │
+│ variant_id   │                 │   payments   │                     │ sku (UQ)         │
+│ quantity     │                 ├──────────────┤                     └──────────────────┘
+└──────┬───────┘                 │ id (PK)      │
+       │ N:1                     │ order_id     │
+       ▼                         │ provider     │
+product_variants                 │ transaction_code │
+                                 │ amount       │
+                                 │ status       │
+                                 │ paid_at      │
+                                 │ created_at   │
+                                 │ updated_at   │
+                                 └──────┬───────┘
+                                        │ 1:N
+                                        ▼
+                                 ┌──────────────────────┐
+                                 │ payment_transactions │
+                                 ├──────────────────────┤
+                                 │ id (PK)              │
+                                 │ payment_id (FK)      │
+                                 │ transaction_code     │
+                                 │ status               │
+                                 │ gateway_response     │
+                                 │ created_at           │
+                                 └──────────────────────┘
+
+┌──────────────────┐       1:N       ┌────────────────┐       N:1       ┌──────────────┐
+│     coupons      │◄───────────────│ coupon_usages  │───────────────►│    orders    │
+├──────────────────┤                 ├────────────────┤                 ├──────────────┤
+│ id (PK)          │                 │ id (PK)        │                 │ id (PK)      │
+│ code (UQ)        │                 │ coupon_id (FK) │                 │ order_code   │
+│ type             │                 │ user_id (FK)   │                 └──────────────┘
+│ value            │                 │ order_id (UQ)  │
+│ min_order_amount │                 │ discount_amt   │
+│ max_discount     │                 │ used_at        │
+│ usage_limit      │                 └───────┬────────┘
+│ used_count       │                         │ N:1
+│ start_date       │                         ▼
+│ end_date         │                  ┌──────────────┐
+│ status           │                  │    users     │
+└──────────────────┘                  └──────────────┘
+
+Review / Wishlist / Inventory / History
+┌──────────────┐       1:N       ┌──────────────┐       N:1       ┌──────────────┐
+│    users     │───────────────►│   reviews    │◄───────────────│   products   │
+├──────────────┤                 ├──────────────┤                 ├──────────────┤
+│ id (PK)      │                 │ id (PK)      │                 │ id (PK)      │
+│ email (UQ)   │                 │ user_id      │                 │ slug (UQ)    │
+└──────────────┘                 │ product_id   │                 └──────────────┘
+                                 │ order_item_id│
+                                 │ rating       │ N:1
+                                 │ comment      │───────────────►┌──────────────────┐
+                                 │ created_at   │                 │   order_items    │
+                                 └──────┬───────┘                 ├──────────────────┤
+                                        │ 1:N                     │ id (PK)          │
+                                        ▼                         │ order_id (FK)    │
+                                 ┌──────────────┐                 │ variant_id NULL  │
+                                 │ review_images│                 └────────┬─────────┘
+                                 ├──────────────┤                          │ N:1
+                                 │ id (PK)      │                          ▼
+                                 │ review_id    │                   ┌──────────────┐
+                                 │ image        │                   │    orders    │
+                                 └──────────────┘                   ├──────────────┤
+                                                                    │ id (PK)      │
+                                                                    │ order_code   │
+                                                                    └──────┬───────┘
+                                                                           │ 1:N
+                                                                           ▼
+                                                                  ┌────────────────────────┐
+                                                                  │ order_status_histories │
+                                                                  ├────────────────────────┤
+                                                                  │ id (PK)                │
+                                                                  │ order_id (FK)          │
+                                                                  │ from_status            │
+                                                                  │ to_status              │
+                                                                  │ changed_by NULL        │
+                                                                  │ reason                 │
+                                                                  │ created_at             │
+                                                                  └───────────┬────────────┘
+                                                                              │ N:1
+                                                                              ▼
+                                                                       ┌──────────────┐
+                                                                       │    users     │
+                                                                       └──────────────┘
+
+Order-product relationship is represented by order_items:
+orders 1:N order_items, and product_variants 1:N order_items.
+
+┌──────────────┐       N:M       ┌──────────────┐
+│    users     │◄───────────────►│   products   │
+└──────────────┘  via wishlists  └──────┬───────┘
+                                        │ 1:N
+                                        ▼
+                                ┌──────────────┐
+                                │  wishlists   │
+                                ├──────────────┤
+                                │ id (PK)      │
+                                │ user_id      │
+                                │ product_id   │
+                                │ created_at   │
+                                └──────────────┘
+
+┌──────────────────┐       1:N       ┌────────────────┐
+│ product_variants │───────────────►│ inventory_logs │
+├──────────────────┤                 ├────────────────┤
+│ id (PK)          │                 │ id (PK)        │
+│ sku (UQ)         │                 │ variant_id     │
+│ stock_quantity   │                 │ change_qty     │
+└──────────────────┘                 │ type           │
+                                     │ reference_type │
+                                     │ reference_id   │
+                                     │ reason         │
+                                     │ created_at     │
+                                     └────────────────┘
 ```
 
 ---
@@ -487,6 +635,7 @@ Indexes:
 - `INDEX idx_order_items_status ON order_items(status)`
 
 Notes:
+- `order_id` uses `ON DELETE RESTRICT` because order items are commercial history and should not be cascade-deleted with an order.
 - `variant_id` is nullable so old order items still remain valid if a variant is removed.
 - Snapshot fields (`product_name`, `variant_name`, `sku`, `image`, `price`) must be filled at checkout and never recomputed from catalog tables.
 - Add check constraint: `subtotal = price * quantity` if subtotal is always strictly derived.
@@ -527,6 +676,7 @@ Indexes:
 - `INDEX idx_payment_transactions_payment_id ON payment_transactions(payment_id)`
 
 Notes:
+- `payment_id` uses `ON DELETE RESTRICT` because payment transaction records are financial/audit history.
 - Do not store sensitive payment data such as card number, CVV, raw access tokens, or provider secrets.
 
 ### coupon_usages
@@ -556,7 +706,7 @@ Notes:
 | id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
 | user_id | BIGINT | FK -> users(id), NOT NULL | Reviewer |
 | product_id | BIGINT | FK -> products(id), NOT NULL | Reviewed product |
-| order_id | BIGINT | FK -> orders(id), NOT NULL | Proof of purchase |
+| order_item_id | BIGINT | FK -> order_items(id), NOT NULL | Purchased order item being reviewed |
 | rating | SMALLINT | NOT NULL, CHECK rating BETWEEN 1 AND 5 | Star rating |
 | comment | TEXT | NULLABLE | Review content |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
@@ -564,13 +714,14 @@ Notes:
 Indexes:
 - `INDEX idx_reviews_product_id ON reviews(product_id)`
 - `INDEX idx_reviews_user_id ON reviews(user_id)`
-- `INDEX idx_reviews_order_id ON reviews(order_id)`
+- `INDEX idx_reviews_order_item_id ON reviews(order_item_id)`
 
 Constraints:
-- Unique review per purchased product/order: `UNIQUE (user_id, product_id, order_id)`
+- Unique review per purchased order item: `UNIQUE (user_id, order_item_id)`
 
 Notes:
-- The unique constraint prevents duplicate reviews for the same purchased product in the same order.
+- Review eligibility should be validated against the order item: the order must belong to the reviewing user, must be completed, and the order item must correspond to the reviewed product/variant.
+- `product_id` is intentionally kept for fast product review listing, while `order_item_id` proves the exact purchased item.
 
 ### review_images
 
@@ -594,14 +745,20 @@ Notes:
 | variant_id | BIGINT | FK -> product_variants(id), NOT NULL | Affected variant |
 | change_quantity | INT | NOT NULL | Positive or negative stock change |
 | type | VARCHAR(30) | NOT NULL | IMPORT, EXPORT, ORDER, CANCEL, RETURN, ADJUSTMENT |
+| reference_type | VARCHAR(50) | NULLABLE | Source object type, e.g. ORDER, ORDER_ITEM, RETURN, MANUAL_ADJUSTMENT |
+| reference_id | BIGINT | NULLABLE | Source object id matching `reference_type` |
 | reason | VARCHAR(255) | NULLABLE | Human-readable reason |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
 
 Indexes:
 - `INDEX idx_inventory_logs_variant_id ON inventory_logs(variant_id)`
+- `INDEX idx_inventory_logs_reference ON inventory_logs(reference_type, reference_id)`
 
 Notes:
 - Inventory logs should usually be append-only. Avoid updating/deleting logs except for data retention policies.
+- `reference_type` and `reference_id` are nullable because some inventory changes can be manual or imported without a business record at first.
+- If one reference field is present, both must be present. Enforce this with `ck_inventory_logs_reference_pair`.
+- Do not add polymorphic foreign keys for `reference_id`; validate allowed reference types in service logic.
 
 ### wishlists
 
@@ -640,6 +797,7 @@ Indexes:
 - `INDEX idx_order_status_histories_created_at ON order_status_histories(created_at)`
 
 Notes:
+- `order_id` uses `ON DELETE RESTRICT` because status history is part of the order audit trail.
 - `changed_by` is nullable for system-generated changes.
 - Keep histories append-only.
 
@@ -682,9 +840,10 @@ Notes:
 | coupon_usages | `idx_coupon_usages_used_at` | `used_at` | Coupon usage reports |
 | reviews | `idx_reviews_product_id` | `product_id` | Product review listing |
 | reviews | `idx_reviews_user_id` | `user_id` | User review listing |
-| reviews | `idx_reviews_order_id` | `order_id` | Verify review source order |
+| reviews | `idx_reviews_order_item_id` | `order_item_id` | Verify review source order item |
 | review_images | `idx_review_images_review_id` | `review_id` | Lookup images by review |
 | inventory_logs | `idx_inventory_logs_variant_id` | `variant_id` | Variant stock history |
+| inventory_logs | `idx_inventory_logs_reference` | `reference_type`, `reference_id` | Trace inventory change source |
 | wishlists | `idx_wishlists_product_id` | `product_id` | Product popularity reports |
 | order_status_histories | `idx_order_status_histories_order_id` | `order_id` | Load order status timeline |
 | order_status_histories | `idx_order_status_histories_changed_by` | `changed_by` | Audit staff/system changes |
@@ -726,6 +885,7 @@ Soft-delete cleanup indexes:
 | Payment -> PaymentTransaction | OneToMany | PaymentTransaction | `@JoinColumn(name = "payment_id")` |
 | Coupon -> CouponUsage | OneToMany | CouponUsage | `@JoinColumn(name = "coupon_id")` |
 | Product -> Review | OneToMany | Review | `@JoinColumn(name = "product_id")` |
+| OrderItem -> Review | OneToMany | Review | `@JoinColumn(name = "order_item_id")` |
 | Review -> ReviewImage | OneToMany | ReviewImage | `@JoinColumn(name = "review_id")` |
 | ProductVariant -> InventoryLog | OneToMany | InventoryLog | `@JoinColumn(name = "variant_id")` |
 | User -> Wishlist | OneToMany | Wishlist | `@JoinColumn(name = "user_id")` |
@@ -885,8 +1045,8 @@ private User user;
 private Product product;
 
 @ManyToOne(fetch = FetchType.LAZY)
-@JoinColumn(name = "order_id", nullable = false)
-private Order order;
+@JoinColumn(name = "order_item_id", nullable = false)
+private OrderItem orderItem;
 
 @OneToMany(mappedBy = "review", fetch = FetchType.LAZY)
 private List<ReviewImage> images = new ArrayList<>();
@@ -1016,6 +1176,7 @@ $$ LANGUAGE plpgsql;
   - `PRIMARY KEY (permission_id, role_id)` for `permission_role`
 - Join table foreign keys should use `ON DELETE CASCADE` for both sides.
 - Order, payment, review, and inventory records should not be hard-deleted during normal application workflows.
+- Business history child records such as `order_items`, `payment_transactions`, and `order_status_histories` should use `ON DELETE RESTRICT` to prevent accidental cascade deletion of audit/commercial history.
 - Use `JSONB` only for external gateway response data where the shape can vary. Core business fields should remain relational columns.
 
 ---
