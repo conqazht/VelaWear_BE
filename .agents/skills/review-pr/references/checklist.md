@@ -73,7 +73,7 @@ Use this lens when business rules start depending on framework/infrastructure de
 - Use `@Transactional` on write service methods.
 - Use `@Enumerated(EnumType.STRING)`.
 - Do not use JPA `@ManyToMany`; model join tables explicitly.
-- Do not use Lombok `@Data` on entities.
+- Always prioritize using Lombok `@Getter`, `@Setter`, `@RequiredArgsConstructor`, `@NoArgsConstructor`, `@Builder`, etc. (only import what is actually used to avoid redundant imports/code). Do not use Lombok `@Data` on entities.
 - Use custom exceptions such as `ResourceNotFoundException` and `InvalidRequestException`.
 
 ## Tests & Docs

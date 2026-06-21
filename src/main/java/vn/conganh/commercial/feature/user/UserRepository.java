@@ -1,14 +1,14 @@
 package vn.conganh.commercial.feature.user;
 
+import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
-    Optional<User> findByEmail(String email);
+    Optional<User> findByIdAndDeletedAtIsNull(Long id);
+
+    List<User> findAllByDeletedAtIsNull();
 
     boolean existsByEmail(String email);
-
-    boolean existsByUsername(String username);
 }

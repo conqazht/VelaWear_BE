@@ -898,7 +898,7 @@ Soft-delete cleanup indexes:
 - Do not use JPA `@ManyToMany`. Model join tables as explicit entities (`UserRole`, `PermissionRole`) with `@ManyToOne` and `@OneToMany`.
 - Avoid returning entities directly from controllers; map to DTOs in service layer.
 - Use `@Enumerated(EnumType.STRING)` for statuses, gender, payment method, provider, and log type.
-- Use Lombok `@Getter`, `@Setter`, and `@NoArgsConstructor` for JPA entities.
+- Always prioritize using Lombok `@Getter`, `@Setter`, `@RequiredArgsConstructor`, `@NoArgsConstructor`, `@Builder`, etc. (only import what is actually used to avoid redundant imports/code).
 - Do not use Lombok `@Data` on entities.
 - For soft-delete tables, repository queries should filter `deletedAt IS NULL` by default.
 - Join tables `user_role` and `permission_role` use composite primary keys and `ON DELETE CASCADE` for both foreign keys.

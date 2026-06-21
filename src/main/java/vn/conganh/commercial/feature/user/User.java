@@ -2,51 +2,47 @@ package vn.conganh.commercial.feature.user;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.UUID;
+import java.time.LocalDate;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
+@NoArgsConstructor
 @Entity
 @Table(name = "users")
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @Column(nullable = false, unique = true, length = 255)
-    private String email;
-
-    @Column(unique = true, length = 100)
-    private String username;
-
-    @Column(name = "password_hash", nullable = false, length = 255)
-    private String passwordHash;
-
-    @Column(name = "full_name", length = 255)
+    @Column(name = "full_name", nullable = false, length = 150)
     private String fullName;
 
-    @Column(length = 32)
-    private String phone;
+    @Column(name = "email", nullable = false, unique = true, length = 255)
+    private String email;
 
-    @Column(name = "avatar_url")
-    private String avatarUrl;
+    @Column(name = "password", nullable = false, length = 255)
+    private String password;
 
-    @Column(nullable = false, length = 30)
-    private String status = "ACTIVE";
+    @Column(name = "birth_date", nullable = false)
+    private LocalDate birthDate;
 
-    @Column(name = "email_verified", nullable = false)
-    private boolean isEmailVerified;
+    @Column(name = "avatar", length = 500)
+    private String avatar;
 
-    @Column(name = "last_login_at")
-    private Instant lastLoginAt;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", nullable = false, length = 20)
+    private UserGender gender;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -59,39 +55,12 @@ public class User {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    public User() {
-    }
-
-    public UUID getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(UUID id) {
+    public void setId(Long id) {
         this.id = id;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
     }
 
     public String getFullName() {
@@ -102,44 +71,44 @@ public class User {
         this.fullName = fullName;
     }
 
-    public String getPhone() {
-        return phone;
+    public String getEmail() {
+        return email;
     }
 
-    public void setPhone(String phone) {
-        this.phone = phone;
+    public void setEmail(String email) {
+        this.email = email;
     }
 
-    public String getAvatarUrl() {
-        return avatarUrl;
+    public String getPassword() {
+        return password;
     }
 
-    public void setAvatarUrl(String avatarUrl) {
-        this.avatarUrl = avatarUrl;
+    public void setPassword(String password) {
+        this.password = password;
     }
 
-    public String getStatus() {
-        return status;
+    public LocalDate getBirthDate() {
+        return birthDate;
     }
 
-    public void setStatus(String status) {
-        this.status = status;
+    public void setBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
     }
 
-    public boolean isEmailVerified() {
-        return isEmailVerified;
+    public String getAvatar() {
+        return avatar;
     }
 
-    public void setEmailVerified(boolean emailVerified) {
-        isEmailVerified = emailVerified;
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
     }
 
-    public Instant getLastLoginAt() {
-        return lastLoginAt;
+    public UserGender getGender() {
+        return gender;
     }
 
-    public void setLastLoginAt(Instant lastLoginAt) {
-        this.lastLoginAt = lastLoginAt;
+    public void setGender(UserGender gender) {
+        this.gender = gender;
     }
 
     public Instant getCreatedAt() {

@@ -2,8 +2,6 @@ package vn.conganh.commercial.feature.user;
 
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,10 +19,13 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @RestController
 @RequestMapping("/api/users")
-@RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
 
     @GetMapping(version = "1")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsers() {
@@ -32,7 +33,7 @@ public class UserController {
     }
 
     @GetMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<UserResponse>> getUser(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<UserResponse>> getUser(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
@@ -44,13 +45,13 @@ public class UserController {
 
     @PutMapping(path = "/{id}", version = "1")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestBody @Valid UpdateUserRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request)));
     }
 
     @DeleteMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }

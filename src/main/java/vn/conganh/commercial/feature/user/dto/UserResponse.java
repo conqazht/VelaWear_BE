@@ -1,18 +1,17 @@
 package vn.conganh.commercial.feature.user.dto;
 
 import java.time.Instant;
-import java.util.UUID;
+import java.time.LocalDate;
 import vn.conganh.commercial.feature.user.User;
+import vn.conganh.commercial.feature.user.UserGender;
 
 public record UserResponse(
-        UUID id,
-        String email,
-        String username,
+        Long id,
         String fullName,
-        String phone,
-        String avatarUrl,
-        String status,
-        boolean isEmailVerified,
+        String email,
+        LocalDate birthDate,
+        String avatar,
+        UserGender gender,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -20,13 +19,11 @@ public record UserResponse(
     public static UserResponse fromEntity(User user) {
         return new UserResponse(
                 user.getId(),
-                user.getEmail(),
-                user.getUsername(),
                 user.getFullName(),
-                user.getPhone(),
-                user.getAvatarUrl(),
-                user.getStatus(),
-                user.isEmailVerified(),
+                user.getEmail(),
+                user.getBirthDate(),
+                user.getAvatar(),
+                user.getGender(),
                 user.getCreatedAt(),
                 user.getUpdatedAt());
     }

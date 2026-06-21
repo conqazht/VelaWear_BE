@@ -342,7 +342,7 @@ public class User {
 - Explicit `@Column(nullable, length, unique)` constraints
 - `@Enumerated(EnumType.STRING)` — NEVER use ORDINAL
 - Use `Instant` or `LocalDateTime` — NEVER `java.util.Date` or `Timestamp`
-- Use Lombok `@Getter`, `@Setter`, and `@NoArgsConstructor` for JPA boilerplate
+- Always prioritize using Lombok `@Getter`, `@Setter`, `@RequiredArgsConstructor`, `@NoArgsConstructor`, `@Builder`, etc. (only import what is actually used to avoid redundant imports/code)
 - Do NOT use Lombok `@Data` on entities — it generates `equals/hashCode` on all fields, causing JPA issues
 - Do NOT use `@ManyToMany` in JPA entities. Model join tables as explicit entities, for example `UserRole` and `PermissionRole`, then use `@ManyToOne` from the join entity and `@OneToMany` from the aggregate side.
 - Join entities with composite keys must use `@Embeddable` id classes or `@EmbeddedId` + `@MapsId` consistently.

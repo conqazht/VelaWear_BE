@@ -1,20 +1,25 @@
 package vn.conganh.commercial.feature.user.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
+import vn.conganh.commercial.feature.user.UserGender;
 
 public record UpdateUserRequest(
         @NotBlank(message = "Full name is required")
-        @Size(max = 255, message = "Full name must be at most 255 characters")
+        @Size(max = 150, message = "Full name must be at most 150 characters")
         String fullName,
 
-        @Size(max = 32, message = "Phone must be at most 32 characters")
-        String phone,
+        @NotNull(message = "Birth date is required")
+        @Past(message = "Birth date must be in the past")
+        LocalDate birthDate,
 
-        String avatarUrl,
+        @Size(max = 500, message = "Avatar must be at most 500 characters")
+        String avatar,
 
-        @NotBlank(message = "Status is required")
-        @Size(max = 30, message = "Status must be at most 30 characters")
-        String status
+        @NotNull(message = "Gender is required")
+        UserGender gender
 ) {
 }

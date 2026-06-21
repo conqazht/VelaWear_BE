@@ -86,7 +86,7 @@ Application errors:
 {
   "statusCode": 404,
   "data": null,
-  "message": "User not found with id: 018fd0e8-...",
+  "message": "User not found with id: 1",
   "timestamp": "2026-06-14T21:00:00"
 }
 ```
@@ -270,14 +270,12 @@ List all users.
   "statusCode": 200,
   "data": [
     {
-      "id": "018fd0e8-6e0e-7d41-9f38-5962a3d4a132",
-      "email": "admin@example.com",
-      "username": "admin",
+      "id": 1,
       "fullName": "System Admin",
-      "phone": "0900000000",
-      "avatarUrl": null,
-      "status": "ACTIVE",
-      "emailVerified": true,
+      "email": "admin@example.com",
+      "birthDate": "1990-01-01",
+      "avatar": null,
+      "gender": "OTHER",
       "createdAt": "2026-06-14T14:00:00Z",
       "updatedAt": "2026-06-14T14:00:00Z"
     }
@@ -291,7 +289,7 @@ List all users.
 
 ### GET /users/{id}
 
-Get a single user by UUID.
+Get a single user by numeric ID.
 
 **Errors:**
 
@@ -309,11 +307,12 @@ Create a user. Password is stored only as BCrypt hash.
 
 ```json
 {
-  "email": "staff@example.com",
-  "username": "staff01",
-  "password": "password123",
   "fullName": "Tran Thi B",
-  "phone": "0911111111"
+  "email": "staff@example.com",
+  "password": "password123",
+  "birthDate": "1995-05-20",
+  "avatar": "https://cdn.example.com/avatars/staff01.png",
+  "gender": "FEMALE"
 }
 ```
 
@@ -325,22 +324,21 @@ Create a user. Password is stored only as BCrypt hash.
 |--------|------|
 | 400 | Validation failed |
 | 400 | Email already exists |
-| 400 | Username already exists |
 
 ---
 
 ### PUT /users/{id}
 
-Update profile/status fields. Email, username, and password are not updated by this endpoint.
+Update profile fields. Email and password are not updated by this endpoint.
 
 **Request Body:**
 
 ```json
 {
   "fullName": "Tran Thi B Updated",
-  "phone": "0922222222",
-  "avatarUrl": "https://cdn.example.com/avatars/staff01.png",
-  "status": "ACTIVE"
+  "birthDate": "1995-05-20",
+  "avatar": "https://cdn.example.com/avatars/staff01.png",
+  "gender": "FEMALE"
 }
 ```
 
@@ -357,7 +355,7 @@ Update profile/status fields. Email, username, and password are not updated by t
 
 ### DELETE /users/{id}
 
-Soft delete a user by setting `status = DELETED` and `deleted_at = now`.
+Soft delete a user by setting `deleted_at = now`.
 
 **Success Response (200):**
 

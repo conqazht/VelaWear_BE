@@ -2,8 +2,7 @@ package vn.conganh.commercial.feature.user;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,70 +13,74 @@ import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @Service
-@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
+    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<UserResponse> getAllUsers() {
-        return userRepository.findAll().stream()
+        return userRepository.findAllByDeletedAtIsNull().stream()
                 .map(UserResponse::fromEntity)
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public UserResponse getUserById(UUID id) {
-        return UserResponse.fromEntity(findUser(id));
+    public UserResponse getUserById(Long id) {
+        return UserResponse.fromEntity(findActiveUser(id));
     }
 
     @Override
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
-        validateUniqueUser(request.email(), request.username());
+        String normalizedEmail = normalizeEmail(request.email());
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new InvalidRequestException("Email already exists");
+        }
+
         User user = new User();
-        user.setEmail(request.email());
-        user.setUsername(request.username());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFullName(request.fullName());
-        user.setPhone(request.phone());
+        user.setEmail(normalizedEmail);
+        user.setPassword(passwordEncoder.encode(request.password()));
+        user.setBirthDate(request.birthDate());
+        user.setAvatar(request.avatar());
+        user.setGender(request.gender());
+
         return UserResponse.fromEntity(userRepository.save(user));
     }
 
     @Override
     @Transactional
-    public UserResponse updateUser(UUID id, UpdateUserRequest request) {
-        User user = findUser(id);
+    public UserResponse updateUser(Long id, UpdateUserRequest request) {
+        User user = findActiveUser(id);
         user.setFullName(request.fullName());
-        user.setPhone(request.phone());
-        user.setAvatarUrl(request.avatarUrl());
-        user.setStatus(request.status());
+        user.setBirthDate(request.birthDate());
+        user.setAvatar(request.avatar());
+        user.setGender(request.gender());
         return UserResponse.fromEntity(userRepository.save(user));
     }
 
     @Override
     @Transactional
-    public void deleteUser(UUID id) {
-        User user = findUser(id);
-        user.setStatus("DELETED");
+    public void deleteUser(Long id) {
+        User user = findActiveUser(id);
         user.setDeletedAt(Instant.now());
         userRepository.save(user);
     }
 
-    private User findUser(UUID id) {
-        return userRepository.findById(id)
+    private User findActiveUser(Long id) {
+        return userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
     }
 
-    private void validateUniqueUser(String email, String username) {
-        if (userRepository.existsByEmail(email)) {
-            throw new InvalidRequestException("Email already exists");
-        }
-        if (username != null && userRepository.existsByUsername(username)) {
-            throw new InvalidRequestException("Username already exists");
-        }
+    private String normalizeEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 }

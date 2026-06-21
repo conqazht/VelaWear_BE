@@ -1,5 +1,15 @@
 # Project Status
 
+## 2026-06-22
+
+### Completed
+
+- Aligned user CRUD with the current VelaWear `users` schema:
+  - Switched user IDs to identity-backed `BIGINT`/`Long`.
+  - Replaced stale username/phone/status fields with full name, email, password, birth date, avatar, gender, and soft-delete timestamps.
+  - Added email normalization on create, active-only reads, and soft delete via `deleted_at`.
+- Updated user DTOs, repository methods, service behavior, controller path IDs, feature context, and API examples.
+
 ## 2026-06-14
 
 ### Completed

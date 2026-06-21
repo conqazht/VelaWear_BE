@@ -39,7 +39,7 @@ feature/{feature_name}/
 ## Entity Rules
 
 - Use `@Entity` and explicit `@Table(name = "...")`.
-- Use Lombok `@Getter`, `@Setter`, `@NoArgsConstructor`.
+- Always prioritize using Lombok `@Getter`, `@Setter`, `@RequiredArgsConstructor`, `@NoArgsConstructor`, `@Builder`, etc. (only import what is actually used to avoid redundant imports/code).
 - Do not use Lombok `@Data` on entities.
 - Use explicit `@Column(nullable, length, unique)` constraints.
 - Use `@Enumerated(EnumType.STRING)` for enum-like values.
