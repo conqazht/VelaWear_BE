@@ -15,17 +15,15 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
+import lombok.RequiredArgsConstructor;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @RestController
 @RequestMapping("/api/users")
+@RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
-
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
 
     @GetMapping(version = "1")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsers() {

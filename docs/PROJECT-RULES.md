@@ -120,7 +120,54 @@ com.example.projectname/
 
 ---
 
-## 3. Service Layer — Interface + Implementation
+## 3. Code Style
+
+### Formatting
+- Use UTF-8 encoding.
+- Use blank lines to separate logical blocks of code.
+- Keep line length at or below 120 characters.
+
+### Java Style
+- Use descriptive names for classes, methods, and variables.
+- Avoid `var`; prefer explicit types.
+- Prefer immutable values and avoid mutating objects inside `for-each` loops or `Stream.forEach()`.
+- Avoid magic numbers and strings; extract constants for business values.
+- Check nullness and emptiness before operating on nullable collections or strings.
+- Avoid declaring `throws` on application methods unless a framework contract requires it.
+- Avoid comments by default. Comments are acceptable for cron expressions, regex patterns, TODOs,
+  and given/when/then test sections.
+- Use `@Override` when overriding methods.
+- Prefer direct null checks over `Objects.isNull()` / `Objects.nonNull()` for one or two variables.
+- Wrap complex boolean conditions in a named boolean variable for readability.
+- Prefer early returns.
+- Avoid `else` when an early return makes the flow clearer.
+
+### Lombok
+- Use `@RequiredArgsConstructor` for constructor-based dependency injection.
+- Use `@Slf4j` for logging.
+- Use `@Builder(setterPrefix = "with")` for complex object creation.
+- Do NOT use Lombok `@Data`; prefer `@Getter` and `@Setter` for granular control.
+- Only import Lombok annotations that are actually used.
+
+### Spring Annotations
+- `@Service`: business logic classes.
+- `@Repository`: data access classes that extend Spring Data repositories or interact with the database.
+- `@RestController`: HTTP API controllers.
+- `@Component`: generic Spring-managed components.
+- `@Configuration`: Spring configuration classes.
+- `@Autowired`: avoid in production code; use constructor injection with `@RequiredArgsConstructor`.
+  Field injection is acceptable only in tests.
+- `@ConfigurationProperties`: use for related configuration properties; consider it when more than two
+  properties are needed.
+- `@Transactional`: keep transaction boundaries in service classes, not controllers or repositories.
+- `@Validated`: use when method parameter validation is needed.
+- `@PreAuthorize`: use at the controller layer for method-level authorization.
+- Avoid circular dependencies.
+- Avoid `@Order` as a dependency resolution workaround.
+
+---
+
+## 4. Service Layer — Interface + Implementation
 
 ### Interface
 ```java
@@ -135,16 +182,12 @@ public interface UserService {
 
 ### Implementation
 ```java
+@RequiredArgsConstructor
 @Service
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-
-    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
 
     @Override
     public UserResponse getUserById(long id) {
@@ -180,18 +223,15 @@ public class UserServiceImpl implements UserService {
 
 ---
 
-## 4. Controller Layer
+## 5. Controller Layer
 
 ```java
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserController {
 
     private final UserService userService;  // Interface, not Impl
-
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUser(@PathVariable long id) {
@@ -218,13 +258,13 @@ public class UserController {
 - NO business logic in controller
 - ALWAYS use `@Valid` on `@RequestBody`
 - ALWAYS return `ResponseEntity<ApiResponse<T>>`
-- ALWAYS use constructor injection — declare `final` fields, write explicit constructor
+- ALWAYS use constructor injection with `final` fields and Lombok `@RequiredArgsConstructor`
 - NEVER use `@Autowired` field injection
 - Inject interface, NOT implementation class
 
 ---
 
-## 5. ApiResponse Wrapper
+## 6. ApiResponse Wrapper
 
 ```java
 public record ApiResponse<T>(
@@ -255,7 +295,7 @@ public record ApiResponse<T>(
 
 ---
 
-## 6. DTO Rules — Java Records
+## 7. DTO Rules — Java Records
 
 ```java
 // Request DTO — with Jakarta validation
@@ -300,7 +340,59 @@ public record UserResponse(
 
 ---
 
-## 7. Entity Rules
+## 8. Mapper Rules
+
+> Project default: use static mapper methods for simple CRUD. Use MapStruct when mapping logic becomes
+> complex, repeated, or shared across multiple services.
+
+### Static Mappers
+- Define a private constructor that throws `UnsupportedOperationException`.
+- Use static methods for DTO/entity conversion.
+- Name mapper methods clearly: `toDto`, `toEntity`, `toResponse`, `fromRequest`.
+- Mapper classes must use the `Mapper` suffix, for example `UserMapper`.
+
+```java
+public final class UserMapper {
+
+    private UserMapper() {
+        throw new UnsupportedOperationException("This class should never be instantiated");
+    }
+
+    public static UserResponse toResponse(User user) {
+        if (user == null) {
+            return null;
+        }
+        return UserResponse.builder()
+                .withId(user.getId())
+                .withEmail(user.getEmail())
+                .build();
+    }
+}
+```
+
+### MapStruct
+- Use MapStruct only when mapping logic is complex enough to justify it.
+- Define mapper interfaces with `@Mapper(componentModel = "spring")`.
+- Use `@Mapping` for custom field mappings.
+- Mapper interfaces must use the `Mapper` suffix.
+- Name mapper methods clearly: `toDto`, `toEntity`, `toResponse`, `fromRequest`.
+- For isolated mapper tests, use `Mappers.getMapper(UserMapper.class)`.
+
+```java
+@Mapper(componentModel = "spring")
+public interface UserMapper {
+
+    @Mapping(source = "email", target = "emailAddress")
+    UserResponse toResponse(User user);
+
+    @Mapping(source = "emailAddress", target = "email")
+    User toEntity(UserRequest request);
+}
+```
+
+---
+
+## 9. Entity Rules
 
 ```java
 @Getter
@@ -311,8 +403,8 @@ public record UserResponse(
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Column(nullable = false, unique = true, length = 255)
     private String email;
@@ -342,16 +434,19 @@ public class User {
 - Explicit `@Column(nullable, length, unique)` constraints
 - `@Enumerated(EnumType.STRING)` — NEVER use ORDINAL
 - Use `Instant` or `LocalDateTime` — NEVER `java.util.Date` or `Timestamp`
-- Always prioritize using Lombok `@Getter`, `@Setter`, `@RequiredArgsConstructor`, `@NoArgsConstructor`, `@Builder`, etc. (only import what is actually used to avoid redundant imports/code)
-- Do NOT use Lombok `@Data` on entities — it generates `equals/hashCode` on all fields, causing JPA issues
-- Do NOT use `@ManyToMany` in JPA entities. Model join tables as explicit entities, for example `UserRole` and `PermissionRole`, then use `@ManyToOne` from the join entity and `@OneToMany` from the aggregate side.
+- Always prioritize using Lombok `@Getter`, `@Setter`, `@RequiredArgsConstructor`, `@NoArgsConstructor`,
+  `@Builder`, etc. Only import what is actually used to avoid redundant imports/code.
+- Do NOT use Lombok `@Data` on entities; it generates `equals/hashCode` on all fields, causing JPA issues
+- Do NOT use `@ManyToMany` in JPA entities. Model join tables as explicit entities, for example `UserRole`
+  and `PermissionRole`, then use `@ManyToOne` from the join entity and `@OneToMany` from the aggregate side.
 - Join entities with composite keys must use `@Embeddable` id classes or `@EmbeddedId` + `@MapsId` consistently.
-- `createdAt` / `updatedAt`: prefer getter-only fields or do not set them manually in business code because Hibernate manages them
+- `createdAt` / `updatedAt`: prefer getter-only fields or do not set them manually in business code
+  because Hibernate manages them
 - Password: ALWAYS stored as BCrypt hash
 
 ---
 
-## 8. JWT with oauth2-resource-server
+## 10. JWT with oauth2-resource-server
 
 ### Approach
 Spring Security's built-in oauth2-resource-server handles JWT validation automatically.
@@ -387,14 +482,11 @@ public record JwtProperties(
 
 ### JwtConfig.java
 ```java
+@RequiredArgsConstructor
 @Configuration
 public class JwtConfig {
 
     private final JwtProperties jwtProperties;
-
-    public JwtConfig(JwtProperties jwtProperties) {
-        this.jwtProperties = jwtProperties;
-    }
 
     @Bean
     public JwtEncoder jwtEncoder() {
@@ -484,20 +576,18 @@ public class SecurityUtil {
 
 ---
 
-## 9. Exception Handling
+## 11. Exception Handling
 
 ```java
 // Base exception — Lombok @Getter is allowed
+@Getter
 public class AppException extends RuntimeException {
+
     private final HttpStatus status;
 
     public AppException(String message, HttpStatus status) {
         super(message);
         this.status = status;
-    }
-
-    public HttpStatus getStatus() {
-        return status;
     }
 }
 
@@ -515,11 +605,10 @@ public class InvalidRequestException extends AppException {
     }
 }
 
-// Global handler — SLF4J logger declared manually
+// Global handler
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
@@ -552,12 +641,13 @@ public class GlobalExceptionHandler {
 - All custom exceptions extend `AppException`
 - `@RestControllerAdvice` handles ALL exceptions — controllers do NOT try/catch
 - Validation errors return field → message map
+- Use one consistent error response structure for all errors.
 - Unexpected errors: log full stack trace, but return only generic message to client
 - NEVER expose stack traces, SQL errors, or internal details to client
 
 ---
 
-## 10. Repository Layer
+## 12. Repository Layer
 
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -579,7 +669,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 ---
 
-## 11. API Versioning (Spring Boot 4)
+## 13. API Versioning (Spring Boot 4)
 
 ```java
 @RestController
@@ -602,7 +692,7 @@ public class UserController {
 
 ---
 
-## 12. Spring Boot 4 Specifics
+## 14. Spring Boot 4 Specifics
 
 ### Null Safety (JSpecify)
 ```java
@@ -636,7 +726,7 @@ public record PaymentProperties(
 
 ---
 
-## 13. Testing
+## 15. Testing
 
 ```java
 // Unit test — Service layer (mock dependencies)
@@ -700,19 +790,18 @@ class AuthControllerIntegrationTest {
 }
 ```
 
-### application-test.yml (bắt buộc có)
+### application-test.yml (required)
 ```yaml
 # src/main/resources/application-test.yml
 spring:
-  datasource:
-    url: ${TEST_DB_URL}           # PostgreSQL test database — NOT H2
-    username: ${TEST_DB_USERNAME}
-    password: ${TEST_DB_PASSWORD}
   jpa:
     hibernate:
-      ddl-auto: validate          # Flyway là nguồn schema chính, Hibernate chỉ validate
+      ddl-auto: validate          # Flyway is the schema source of truth; Hibernate only validates
   flyway:
     enabled: true
+
+testcontainers:
+  enabled: true
 
 jwt:
   secret-key: ${TEST_JWT_SECRET_KEY}
@@ -720,43 +809,49 @@ jwt:
   refresh-token-expiration: 604800
 ```
 
+### Testcontainers
+- Use Testcontainers for integration tests that need a real PostgreSQL instance.
+- Do NOT use H2.
+- Keep `application-test.yml` focused on test profile flags and schema validation.
+
 ### Rules
 - Test naming: `[method]_[scenario]_[expected]`
 - `@DisplayName` on every test — describe behavior, not implementation
 - Unit tests: `@ExtendWith(MockitoExtension.class)`, mock dependencies
 - Integration tests: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@ActiveProfiles("test")`
 - Always test: happy path + validation error + not found + unauthorized
-- **TUYỆT ĐỐI KHÔNG dùng H2 in-memory database** — không thêm H2 vào `pom.xml`, kể cả scope `test`
-- **Chạy test bằng profile `test`** — tất cả integration test PHẢI có `@ActiveProfiles("test")`
-- Database cho test: PostgreSQL riêng (local hoặc CI), cấu hình qua `application-test.yml`
-- Flyway chạy trong test profile; Hibernate chỉ validate schema, không tự tạo/xóa schema
-- Biến môi trường test (`TEST_DB_URL`, v.v.) phải được set trước khi chạy test
+- **NEVER use H2 in-memory database** — do not add H2 to `pom.xml`, even with `test` scope
+- **Use Testcontainers for database-backed integration tests** — start PostgreSQL containers in tests instead of relying on a local DB
+- **Run tests with the `test` profile** — every integration test MUST use `@ActiveProfiles("test")`
+- Test database: PostgreSQL via Testcontainers
+- Flyway runs in the test profile; Hibernate only validates schema and must not create/drop schema
+- Test environment variables (`TEST_DB_URL`, etc.) must be set before running tests
 
 ### ⚠️ Spring Boot 4 — Breaking Changes in Tests
 
-| What | Old (Spring Boot 3) | New (Spring Boot 4) |
-|------|--------------------|--------------------|
-| `ObjectMapper` import | `com.fasterxml.jackson.databind.ObjectMapper` | `tools.jackson.databind.ObjectMapper` |
-| `@AutoConfigureMockMvc` import | `org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc` | `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc` |
+- `ObjectMapper` import:
+  Old Spring Boot 3 import was `com.fasterxml.jackson.databind.ObjectMapper`.
+  New Spring Boot 4 import is `tools.jackson.databind.ObjectMapper`.
+- `@AutoConfigureMockMvc` import:
+  Old Spring Boot 3 import was `org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc`.
+  New Spring Boot 4 import is `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc`.
 
-- **Jackson 3.x**: package `com.fasterxml.jackson` đã đổi thành `tools.jackson` — cập nhật toàn bộ import `ObjectMapper` trong test files.
-- **`@AutoConfigureMockMvc`**: đã chuyển sang package mới — IDE có thể không tự resolve đúng, kiểm tra import thủ công.
+- **Jackson 3.x**: package `com.fasterxml.jackson` changed to `tools.jackson` — update every
+  `ObjectMapper` import in test files.
+- **`@AutoConfigureMockMvc`**: moved to the new package — IDEs may not auto-resolve it correctly,
+  so check imports manually.
 
 ---
 
-## 14. Logging
+## 16. Logging
 
 ```java
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class PaymentServiceImpl implements PaymentService {
 
-    private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
-
     private final PaymentRepository paymentRepository;
-
-    public PaymentServiceImpl(PaymentRepository paymentRepository) {
-        this.paymentRepository = paymentRepository;
-    }
 
     @Override
     public PaymentResponse processPayment(PaymentRequest request) {
@@ -768,17 +863,19 @@ public class PaymentServiceImpl implements PaymentService {
 ```
 
 ### Rules
-- Declare logger as `private static final Logger log = LoggerFactory.getLogger(ClassName.class)`
-- Import: `org.slf4j.Logger` and `org.slf4j.LoggerFactory`
+- Use Lombok `@Slf4j` for logging.
 - NEVER log: passwords, tokens, credit cards, personal identifiable info
 - Log levels: ERROR (needs action), WARN (notable), INFO (business events), DEBUG (dev only)
 - Use parameterized `{}` — NEVER string concatenation in log statements
+- Prefer structured log messages with contextual values such as request ID, user ID, order ID, or module.
+- Info log template: `log.info("[VelaWear/Module] - ACTION: response: {}, userId: {}", body, userId);`
+- Error log template: `log.error("[VelaWear/Module] - ACTION: errorMessage: {}, userId: {}", errorMessage, userId);`
 - Controller: no logging needed (HTTP access logs cover it)
 - Service: log important business events
 
 ---
 
-## 15. Code Size Limits
+## 17. Code Size Limits
 
 | Metric | Limit | Action if exceeded |
 |---|---|---|
@@ -790,9 +887,9 @@ public class PaymentServiceImpl implements PaymentService {
 
 ---
 
-## 16. Commit Checklist
+## 18. Commit Checklist
 
-- [ ] No `@Autowired` field injection — constructor injection only (explicit constructor)
+- [ ] No `@Autowired` field injection — constructor injection with `@RequiredArgsConstructor`
 - [ ] No Entity returned from controller — DTO records used
 - [ ] `@Valid` on every `@RequestBody`
 - [ ] Custom exceptions used — no raw `RuntimeException`
@@ -807,11 +904,11 @@ public class PaymentServiceImpl implements PaymentService {
 
 ---
 
-## 17. Dynamic Filter — JPA Specification
+## 19. Dynamic Filter — JPA Specification
 
 > Decision & code examples: `docs/decisions/004-filter-strategy.md`
 
-### File structure trong feature package
+### File structure inside a feature package
 
 ```
 feature/{name}/
@@ -822,21 +919,21 @@ feature/{name}/
 ├── {Name}.java                     # Entity
 ├── {Name}Specification.java        # PredicateSpecification builder
 └── dto/
-    ├── {Name}FilterRequest.java    # Record — chỉ chứa filter fields
+    ├── {Name}FilterRequest.java    # Record — contains only filter fields
     ├── {Name}Response.java
     └── ...
 ```
 
 ### Rules
-- Filter request dùng **record** — chỉ chứa filter fields, pagination do `Pageable` xử lý
-- Controller nhận filter trực tiếp (không cần `@ModelAttribute`) — Spring tự bind query params vào record
-- Repository extends thêm `JpaSpecificationExecutor<T>`
-- Spring Data JPA 4.0: dùng `PredicateSpecification<T>` (không dùng `Specification<T>` cũ)
-- Service trả về `ResultPaginationDTO` (không trả `Page<T>` trực tiếp) — bọc trong `ApiResponse` như mọi endpoint khác
+- Filter request uses a **record** and contains only filter fields; pagination is handled by `Pageable`
+- Controller receives filters directly; no `@ModelAttribute` is needed because Spring binds query params to records
+- Repository also extends `JpaSpecificationExecutor<T>`
+- Spring Data JPA 4.0: use `PredicateSpecification<T>` instead of the old `Specification<T>`
+- Service returns `ResultPaginationDTO`, not `Page<T>` directly, and wraps it in `ApiResponse` like every endpoint
 
 ---
 
-## 18. Documentation Requirements
+## 20. Documentation Requirements
 
 | When | Action |
 |------|--------|

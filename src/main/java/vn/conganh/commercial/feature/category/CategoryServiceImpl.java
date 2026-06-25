@@ -1,7 +1,6 @@
 package vn.conganh.commercial.feature.category;
 
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +24,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public CategoryResponse getCategoryById(UUID id) {
+    public CategoryResponse getCategoryById(Long id) {
         return CategoryResponse.fromEntity(findCategory(id));
     }
 
@@ -36,35 +35,34 @@ public class CategoryServiceImpl implements CategoryService {
             throw new InvalidRequestException("Category slug already exists");
         }
         Category category = new Category();
-        apply(category, request.parentId(), request.name(), request.slug(), request.description(), request.sortOrder(), request.isActive());
+        apply(category, request.parentId(), request.name(), request.slug(), request.sortOrder(), request.status());
         return CategoryResponse.fromEntity(categoryRepository.save(category));
     }
 
     @Override
     @Transactional
-    public CategoryResponse updateCategory(UUID id, UpdateCategoryRequest request) {
+    public CategoryResponse updateCategory(Long id, UpdateCategoryRequest request) {
         Category category = findCategory(id);
-        apply(category, request.parentId(), request.name(), category.getSlug(), request.description(), request.sortOrder(), request.isActive());
+        apply(category, request.parentId(), request.name(), category.getSlug(), request.sortOrder(), request.status());
         return CategoryResponse.fromEntity(categoryRepository.save(category));
     }
 
     @Override
     @Transactional
-    public void deleteCategory(UUID id) {
+    public void deleteCategory(Long id) {
         categoryRepository.delete(findCategory(id));
     }
 
-    private Category findCategory(UUID id) {
+    private Category findCategory(Long id) {
         return categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", id));
     }
 
-    private void apply(Category category, UUID parentId, String name, String slug, String description, int sortOrder, boolean isActive) {
+    private void apply(Category category, Long parentId, String name, String slug, int sortOrder, String status) {
         category.setParentId(parentId);
         category.setName(name);
         category.setSlug(slug);
-        category.setDescription(description);
         category.setSortOrder(sortOrder);
-        category.setActive(isActive);
+        category.setStatus(status);
     }
 }

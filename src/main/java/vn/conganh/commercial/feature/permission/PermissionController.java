@@ -2,7 +2,6 @@ package vn.conganh.commercial.feature.permission;
 
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +31,7 @@ public class PermissionController {
     }
 
     @GetMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<PermissionResponse>> getPermission(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<PermissionResponse>> getPermission(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(permissionService.getPermissionById(id)));
     }
 
@@ -45,13 +44,13 @@ public class PermissionController {
 
     @PutMapping(path = "/{id}", version = "1")
     public ResponseEntity<ApiResponse<PermissionResponse>> updatePermission(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestBody @Valid UpdatePermissionRequest request) {
         return ResponseEntity.ok(ApiResponse.success(permissionService.updatePermission(id, request)));
     }
 
     @DeleteMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<Void>> deletePermission(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deletePermission(@PathVariable Long id) {
         permissionService.deletePermission(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }

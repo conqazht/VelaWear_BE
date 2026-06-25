@@ -2,7 +2,6 @@ package vn.conganh.commercial.feature.role;
 
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +31,7 @@ public class RoleController {
     }
 
     @GetMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<RoleResponse>> getRole(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<RoleResponse>> getRole(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(roleService.getRoleById(id)));
     }
 
@@ -43,13 +42,13 @@ public class RoleController {
 
     @PutMapping(path = "/{id}", version = "1")
     public ResponseEntity<ApiResponse<RoleResponse>> updateRole(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestBody @Valid UpdateRoleRequest request) {
         return ResponseEntity.ok(ApiResponse.success(roleService.updateRole(id, request)));
     }
 
     @DeleteMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable Long id) {
         roleService.deleteRole(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }

@@ -1,7 +1,6 @@
 package vn.conganh.commercial.feature.role;
 
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,41 +24,38 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     @Transactional(readOnly = true)
-    public RoleResponse getRoleById(UUID id) {
+    public RoleResponse getRoleById(Long id) {
         return RoleResponse.fromEntity(findRole(id));
     }
 
     @Override
     @Transactional
     public RoleResponse createRole(CreateRoleRequest request) {
-        if (roleRepository.existsByCode(request.code())) {
-            throw new InvalidRequestException("Role code already exists");
+        if (roleRepository.existsByName(request.name())) {
+            throw new InvalidRequestException("Role name already exists");
         }
         Role role = new Role();
-        role.setCode(request.code());
         role.setName(request.name());
         role.setDescription(request.description());
-        role.setSystemRole(request.isSystemRole());
         return RoleResponse.fromEntity(roleRepository.save(role));
     }
 
     @Override
     @Transactional
-    public RoleResponse updateRole(UUID id, UpdateRoleRequest request) {
+    public RoleResponse updateRole(Long id, UpdateRoleRequest request) {
         Role role = findRole(id);
         role.setName(request.name());
         role.setDescription(request.description());
-        role.setSystemRole(request.isSystemRole());
         return RoleResponse.fromEntity(roleRepository.save(role));
     }
 
     @Override
     @Transactional
-    public void deleteRole(UUID id) {
+    public void deleteRole(Long id) {
         roleRepository.delete(findRole(id));
     }
 
-    private Role findRole(UUID id) {
+    private Role findRole(Long id) {
         return roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
     }

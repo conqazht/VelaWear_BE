@@ -6,27 +6,31 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "products")
 public class Product {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
+    private Long id;
 
-    @Column(name = "category_id")
-    private UUID categoryId;
+    @Column(name = "category_id", nullable = false)
+    private Long categoryId;
 
-    @Column(nullable = false, unique = true, length = 80)
-    private String sku;
+    @Column(name = "brand_id", nullable = false)
+    private Long brandId;
 
     @Column(nullable = false, length = 255)
     private String name;
@@ -34,113 +38,22 @@ public class Product {
     @Column(nullable = false, unique = true, length = 280)
     private String slug;
 
-    @Column
+    @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false, length = 30)
+    @Column(nullable = false, length = 20)
     private String status = "DRAFT";
-
-    @Column(name = "base_price", nullable = false, precision = 19, scale = 2)
-    private BigDecimal basePrice = BigDecimal.ZERO;
-
-    @Column(nullable = false, length = 3)
-    private String currency = "VND";
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Setter(AccessLevel.NONE)
     private Instant createdAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
+    @Setter(AccessLevel.NONE)
     private Instant updatedAt;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
-
-    public Product() {
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public UUID getCategoryId() {
-        return categoryId;
-    }
-
-    public void setCategoryId(UUID categoryId) {
-        this.categoryId = categoryId;
-    }
-
-    public String getSku() {
-        return sku;
-    }
-
-    public void setSku(String sku) {
-        this.sku = sku;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getSlug() {
-        return slug;
-    }
-
-    public void setSlug(String slug) {
-        this.slug = slug;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public BigDecimal getBasePrice() {
-        return basePrice;
-    }
-
-    public void setBasePrice(BigDecimal basePrice) {
-        this.basePrice = basePrice;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public Instant getDeletedAt() {
-        return deletedAt;
-    }
-
-    public void setDeletedAt(Instant deletedAt) {
-        this.deletedAt = deletedAt;
-    }
 }

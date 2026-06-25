@@ -2,7 +2,6 @@ package vn.conganh.commercial.feature.category;
 
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +31,7 @@ public class CategoryController {
     }
 
     @GetMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<CategoryResponse>> getCategory(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<CategoryResponse>> getCategory(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(categoryService.getCategoryById(id)));
     }
 
@@ -44,13 +43,13 @@ public class CategoryController {
 
     @PutMapping(path = "/{id}", version = "1")
     public ResponseEntity<ApiResponse<CategoryResponse>> updateCategory(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestBody @Valid UpdateCategoryRequest request) {
         return ResponseEntity.ok(ApiResponse.success(categoryService.updateCategory(id, request)));
     }
 
     @DeleteMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long id) {
         categoryService.deleteCategory(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }

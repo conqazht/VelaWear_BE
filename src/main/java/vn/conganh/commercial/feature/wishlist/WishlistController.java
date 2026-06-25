@@ -1,0 +1,57 @@
+package vn.conganh.commercial.feature.wishlist;
+
+import jakarta.validation.Valid;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
+import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
+
+@RestController
+@RequestMapping("/api/wishlists")
+@RequiredArgsConstructor
+public class WishlistController {
+
+    private final WishlistService wishlistService;
+
+    @GetMapping(version = "1")
+    public ResponseEntity<ApiResponse<List<WishlistResponse>>> getWishlists(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long productId) {
+        if (userId != null) {
+            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByUserId(userId)));
+        }
+        if (productId != null) {
+            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByProductId(productId)));
+        }
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getAllWishlists()));
+    }
+
+    @GetMapping(path = "/{id}", version = "1")
+    public ResponseEntity<ApiResponse<WishlistResponse>> getWishlist(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistById(id)));
+    }
+
+    @PostMapping(version = "1")
+    public ResponseEntity<ApiResponse<WishlistResponse>> createWishlist(
+            @RequestBody @Valid CreateWishlistRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.created(wishlistService.createWishlist(request)));
+    }
+
+    @DeleteMapping(path = "/{id}", version = "1")
+    public ResponseEntity<ApiResponse<Void>> deleteWishlist(@PathVariable Long id) {
+        wishlistService.deleteWishlist(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+}

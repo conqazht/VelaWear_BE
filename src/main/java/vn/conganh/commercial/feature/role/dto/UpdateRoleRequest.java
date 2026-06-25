@@ -5,11 +5,10 @@ import jakarta.validation.constraints.Size;
 
 public record UpdateRoleRequest(
         @NotBlank(message = "Name is required")
-        @Size(max = 150, message = "Name must be at most 150 characters")
+        @Size(max = 50, message = "Name must be at most 50 characters")
         String name,
 
-        String description,
-
-        boolean isSystemRole
+        @Size(max = 255, message = "Description must be at most 255 characters")
+        String description
 ) {
 }

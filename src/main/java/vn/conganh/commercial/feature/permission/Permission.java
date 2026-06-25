@@ -5,81 +5,53 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import vn.conganh.commercial.feature.role.RoleHasPermission;
 
 @Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "permissions")
 public class Permission {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
+    private Long id;
 
-    @Column(nullable = false, unique = true, length = 150)
-    private String code;
-
-    @Column(nullable = false, length = 150)
+    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, length = 80)
+    @Column(name = "api_path", nullable = false, length = 255)
+    private String apiPath;
+
+    @Column(nullable = false, length = 10)
+    private String method;
+
+    @Column(nullable = false, length = 100)
     private String module;
 
-    @Column
-    private String description;
+    @OneToMany(mappedBy = "permission")
+    private Set<RoleHasPermission> roleHasPermissions = new HashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Setter(AccessLevel.NONE)
     private Instant createdAt;
 
-    public Permission() {
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public void setCode(String code) {
-        this.code = code;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getModule() {
-        return module;
-    }
-
-    public void setModule(String module) {
-        this.module = module;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    @Setter(AccessLevel.NONE)
+    private Instant updatedAt;
 }

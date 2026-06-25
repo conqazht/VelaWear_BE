@@ -4,18 +4,20 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record CreatePermissionRequest(
-        @NotBlank(message = "Code is required")
-        @Size(max = 150, message = "Code must be at most 150 characters")
-        String code,
-
         @NotBlank(message = "Name is required")
-        @Size(max = 150, message = "Name must be at most 150 characters")
+        @Size(max = 100, message = "Name must be at most 100 characters")
         String name,
 
-        @NotBlank(message = "Module is required")
-        @Size(max = 80, message = "Module must be at most 80 characters")
-        String module,
+        @NotBlank(message = "API path is required")
+        @Size(max = 255, message = "API path must be at most 255 characters")
+        String apiPath,
 
-        String description
+        @NotBlank(message = "Method is required")
+        @Size(max = 10, message = "Method must be at most 10 characters")
+        String method,
+
+        @NotBlank(message = "Module is required")
+        @Size(max = 100, message = "Module must be at most 100 characters")
+        String module
 ) {
 }

@@ -30,13 +30,13 @@ public class OpenApiConfig {
         return new Info()
                 .title("Commercial API")
                 .version("v1")
-                .description("REST API for commercial management: RBAC, users, catalog, products, carts, orders, payments, and shipments.")
+                .description("REST API for commercial management.")
                 .contact(new Contact()
                         .name("Commercial Team")
                         .email("support@example.com"))
                 .license(new License()
-                        .name("Private")
-                        .url("https://example.com/license"));
+                        .name("MIT License")
+                        .url("https://example.com/license/mit"));
     }
 
     private List<Server> apiServers() {
@@ -44,6 +44,9 @@ public class OpenApiConfig {
                 new Server()
                         .url("http://localhost:8080")
                         .description("Local development"),
+                new Server()
+                        .url("https://staging-api.example.com")
+                        .description("Staging"),
                 new Server()
                         .url("https://api.example.com")
                         .description("Production")

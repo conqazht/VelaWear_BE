@@ -3,7 +3,7 @@ package vn.conganh.commercial.feature.user.dto;
 import java.time.Instant;
 import java.time.LocalDate;
 import vn.conganh.commercial.feature.user.User;
-import vn.conganh.commercial.feature.user.UserGender;
+import vn.conganh.commercial.util.constant.UserGender;
 
 public record UserResponse(
         Long id,

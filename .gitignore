@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### OpenSpec ###
+.opencode
+.codex/skills
+.agent
+openspec

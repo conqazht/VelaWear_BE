@@ -1,25 +1,26 @@
 package vn.conganh.commercial.feature.permission.dto;
 
 import java.time.Instant;
-import java.util.UUID;
 import vn.conganh.commercial.feature.permission.Permission;
 
 public record PermissionResponse(
-        UUID id,
-        String code,
+        Long id,
         String name,
+        String apiPath,
+        String method,
         String module,
-        String description,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 
     public static PermissionResponse fromEntity(Permission permission) {
         return new PermissionResponse(
                 permission.getId(),
-                permission.getCode(),
                 permission.getName(),
+                permission.getApiPath(),
+                permission.getMethod(),
                 permission.getModule(),
-                permission.getDescription(),
-                permission.getCreatedAt());
+                permission.getCreatedAt(),
+                permission.getUpdatedAt());
     }
 }

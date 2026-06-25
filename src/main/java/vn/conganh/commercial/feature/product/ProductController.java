@@ -2,7 +2,6 @@ package vn.conganh.commercial.feature.product;
 
 import jakarta.validation.Valid;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +31,7 @@ public class ProductController {
     }
 
     @GetMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<ProductResponse>> getProduct(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<ProductResponse>> getProduct(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(productService.getProductById(id)));
     }
 
@@ -44,13 +43,13 @@ public class ProductController {
 
     @PutMapping(path = "/{id}", version = "1")
     public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestBody @Valid UpdateProductRequest request) {
         return ResponseEntity.ok(ApiResponse.success(productService.updateProduct(id, request)));
     }
 
     @DeleteMapping(path = "/{id}", version = "1")
-    public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }

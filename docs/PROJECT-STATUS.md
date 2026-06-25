@@ -1,8 +1,34 @@
 # Project Status
 
+## 2026-06-23
+
+### Completed
+
+- Updated `docs/PROJECT-RULES.md` with missing coding convention rules from the reference checklist:
+  - Formatting, Java style, immutability, early returns, comment limits, and annotation guidance.
+  - Lombok rules for `@RequiredArgsConstructor`, `@Slf4j`, `@Builder(setterPrefix = "with")`, and avoiding `@Data`.
+  - Mapper guidance for static mappers and optional MapStruct usage.
+  - Structured logging guidance and consistent error response notes.
+- Converted remaining Vietnamese guidance in `docs/PROJECT-RULES.md` to English.
+- Updated code examples in `docs/PROJECT-RULES.md` to prefer Lombok `@RequiredArgsConstructor` and `@Slf4j` where appropriate.
+- Removed mandatory `final` usage rules for method parameters and local variables to keep the project style lighter.
+
 ## 2026-06-22
 
 ### Completed
+
+- Implemented full CRUD features for all remaining database tables across 17 feature modules:
+  - **Catalog**: Brand (soft delete), Color, Size, ProductVariant (soft delete), ProductImage, ProductAttribute
+  - **Cart & Checkout**: Cart, CartItem, Order, OrderItem, OrderStatusHistory (append-only)
+  - **Payment & Coupon**: Payment, PaymentTransaction, Coupon, CouponUsage
+  - **User-related**: UserAddress, RefreshToken, Wishlist
+  - **RBAC Joins**: UserRole, PermissionRole (composite key entities)
+  - **Review & Inventory**: Review (append-only), ReviewImage, InventoryLog (append-only)
+- Resolved duplicate entity conflicts (OrderItem, ProductVariant) caused by parallel agent overlap.
+- Fixed cross-feature imports (Review → OrderItem, InventoryLog → ProductVariant).
+- Verified compilation: `mvnw compile` passed with 235 source files.
+
+### Previously Completed
 
 - Aligned user CRUD with the current VelaWear `users` schema:
   - Switched user IDs to identity-backed `BIGINT`/`Long`.
@@ -34,7 +60,7 @@
 - Split environment configuration into `dev`, `test`, and `prod` profiles:
   - `application.yaml` contains shared defaults and activates `dev` by default.
   - `application-dev.yml` uses local PostgreSQL defaults and verbose SQL logging.
-  - `application-test.yml` uses PostgreSQL test env variables and Flyway.
+  - `application-test.yml` is intended for Testcontainers-driven PostgreSQL tests and Flyway.
   - `application-prod.yml` requires env-provided PostgreSQL/JWT config and disables Swagger UI by default.
 - Added CRUD features:
   - `feature/user`
@@ -49,8 +75,8 @@
 - Services use interface + implementation pattern.
 - DTOs are Java records with Jakarta validation.
 - Entities and Spring components may use Lombok for boilerplate, but entities must not use `@Data`.
-- H2 test dependency was removed to comply with project rules.
-- Test database target is PostgreSQL, not H2.
+- H2 test dependency is not used; Testcontainers is the expected approach for integration tests.
+- Test database target is PostgreSQL via Testcontainers, not H2.
 
 ### Verification
 

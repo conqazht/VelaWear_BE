@@ -5,88 +5,52 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
+import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import vn.conganh.commercial.feature.user.UserHasRole;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "roles")
 public class Role {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
+    private Long id;
 
-    @Column(nullable = false, unique = true, length = 100)
-    private String code;
-
-    @Column(nullable = false, length = 150)
+    @Column(nullable = false, unique = true, length = 50)
     private String name;
 
-    @Column
+    @Column(length = 255)
     private String description;
 
-    @Column(name = "system_role", nullable = false)
-    private boolean isSystemRole;
+    @OneToMany(mappedBy = "role")
+    private Set<UserHasRole> userHasRoles = new HashSet<>();
+
+    @OneToMany(mappedBy = "role")
+    private Set<RoleHasPermission> roleHasPermissions = new HashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Setter(AccessLevel.NONE)
     private Instant createdAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
+    @Setter(AccessLevel.NONE)
     private Instant updatedAt;
-
-    public Role() {
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public void setCode(String code) {
-        this.code = code;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public boolean isSystemRole() {
-        return isSystemRole;
-    }
-
-    public void setSystemRole(boolean systemRole) {
-        isSystemRole = systemRole;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
 
     public Instant getUpdatedAt() {
         return updatedAt;

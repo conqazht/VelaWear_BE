@@ -1,17 +1,15 @@
 package vn.conganh.commercial.feature.category.dto;
 
 import java.time.Instant;
-import java.util.UUID;
 import vn.conganh.commercial.feature.category.Category;
 
 public record CategoryResponse(
-        UUID id,
-        UUID parentId,
+        Long id,
+        Long parentId,
         String name,
         String slug,
-        String description,
         int sortOrder,
-        boolean isActive,
+        String status,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -22,9 +20,8 @@ public record CategoryResponse(
                 category.getParentId(),
                 category.getName(),
                 category.getSlug(),
-                category.getDescription(),
                 category.getSortOrder(),
-                category.isActive(),
+                category.getStatus(),
                 category.getCreatedAt(),
                 category.getUpdatedAt());
     }

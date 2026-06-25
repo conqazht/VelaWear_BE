@@ -1,20 +1,16 @@
 package vn.conganh.commercial.feature.product.dto;
 
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.UUID;
 import vn.conganh.commercial.feature.product.Product;
 
 public record ProductResponse(
-        UUID id,
-        UUID categoryId,
-        String sku,
+        Long id,
+        Long categoryId,
+        Long brandId,
         String name,
         String slug,
         String description,
         String status,
-        BigDecimal basePrice,
-        String currency,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -23,13 +19,11 @@ public record ProductResponse(
         return new ProductResponse(
                 product.getId(),
                 product.getCategoryId(),
-                product.getSku(),
+                product.getBrandId(),
                 product.getName(),
                 product.getSlug(),
                 product.getDescription(),
                 product.getStatus(),
-                product.getBasePrice(),
-                product.getCurrency(),
                 product.getCreatedAt(),
                 product.getUpdatedAt());
     }

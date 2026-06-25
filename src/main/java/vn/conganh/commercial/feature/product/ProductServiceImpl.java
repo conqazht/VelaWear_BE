@@ -2,7 +2,6 @@ package vn.conganh.commercial.feature.product;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,16 +25,15 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public ProductResponse getProductById(UUID id) {
+    public ProductResponse getProductById(Long id) {
         return ProductResponse.fromEntity(findProduct(id));
     }
 
     @Override
     @Transactional
     public ProductResponse createProduct(CreateProductRequest request) {
-        validateUniqueProduct(request.sku(), request.slug());
+        validateUniqueProduct(request.slug());
         Product product = new Product();
-        product.setSku(request.sku());
         product.setSlug(request.slug());
         apply(product, request);
         return ProductResponse.fromEntity(productRepository.save(product));
@@ -43,35 +41,31 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public ProductResponse updateProduct(UUID id, UpdateProductRequest request) {
+    public ProductResponse updateProduct(Long id, UpdateProductRequest request) {
         Product product = findProduct(id);
         product.setCategoryId(request.categoryId());
+        product.setBrandId(request.brandId());
         product.setName(request.name());
         product.setDescription(request.description());
         product.setStatus(request.status());
-        product.setBasePrice(request.basePrice());
-        product.setCurrency(request.currency());
         return ProductResponse.fromEntity(productRepository.save(product));
     }
 
     @Override
     @Transactional
-    public void deleteProduct(UUID id) {
+    public void deleteProduct(Long id) {
         Product product = findProduct(id);
-        product.setStatus("ARCHIVED");
+        product.setStatus("INACTIVE");
         product.setDeletedAt(Instant.now());
         productRepository.save(product);
     }
 
-    private Product findProduct(UUID id) {
+    private Product findProduct(Long id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
     }
 
-    private void validateUniqueProduct(String sku, String slug) {
-        if (productRepository.existsBySku(sku)) {
-            throw new InvalidRequestException("Product sku already exists");
-        }
+    private void validateUniqueProduct(String slug) {
         if (productRepository.existsBySlug(slug)) {
             throw new InvalidRequestException("Product slug already exists");
         }
@@ -79,10 +73,9 @@ public class ProductServiceImpl implements ProductService {
 
     private void apply(Product product, CreateProductRequest request) {
         product.setCategoryId(request.categoryId());
+        product.setBrandId(request.brandId());
         product.setName(request.name());
         product.setDescription(request.description());
         product.setStatus(request.status());
-        product.setBasePrice(request.basePrice());
-        product.setCurrency(request.currency());
     }
 }
