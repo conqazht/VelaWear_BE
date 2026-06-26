@@ -1,245 +1,204 @@
 package vn.conganh.commercial.feature.user;
 
-import static org.hamcrest.Matchers.hasSize;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.validation.beanvalidation.MethodValidationPostProcessor;
-import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
-import vn.conganh.commercial.exception.GlobalExceptionHandler;
-import vn.conganh.commercial.exception.InvalidRequestException;
-import vn.conganh.commercial.exception.ResourceNotFoundException;
-import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
-import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
-import vn.conganh.commercial.feature.user.dto.UserResponse;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.test.annotation.Rollback;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import vn.conganh.commercial.AbstractIntegrationTest;
+import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
+import vn.conganh.commercial.util.constant.UserGender;
 
-@ExtendWith(MockitoExtension.class)
-@Disabled("Temporarily disabled while controller/API versioning tests are being realigned")
-class UserControllerTest {
+@Transactional
+@Rollback
+@DisplayName("Module User - UserController")
+class UserControllerTest extends AbstractIntegrationTest {
 
-    @Mock
-    private UserService userService;
+    @Autowired
+    private JwtEncoder jwtEncoder;
 
-    @InjectMocks
-    private UserController userController;
+    @Autowired
+    private UserRepository userRepository;
 
-    private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @BeforeEach
-    void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(userController)
-                .setControllerAdvice(new GlobalExceptionHandler())
+    @Nested
+    @DisplayName("Happy path")
+    class HappyPath {
+
+        @Test
+        @DisplayName("POST /users - 201: tạo user thành công khi dữ liệu hợp lệ")
+        void createUser_validRequest_returnsCreatedUser() throws Exception {
+            // Arrange
+            CreateUserRequest request = validRequest(
+                    "Controller Test User",
+                    "controller.post.user@velawear.local",
+                    "password123");
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/users")
+                            .header("Authorization", "Bearer " + adminToken())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.statusCode").value(201))
+                    .andExpect(jsonPath("$.data.id").exists())
+                    .andExpect(jsonPath("$.data.fullName", is("Controller Test User")))
+                    .andExpect(jsonPath("$.data.email", is("controller.post.user@velawear.local")))
+                    .andExpect(jsonPath("$.data.password").doesNotExist());
+
+            Optional<User> savedUser = userRepository.findByEmailAndDeletedAtIsNull(
+                    "controller.post.user@velawear.local");
+            assertThat(savedUser).isPresent();
+            assertThat(savedUser.get().getFullName()).isEqualTo("Controller Test User");
+            assertThat(savedUser.get().getPassword()).isNotEqualTo("password123");
+            assertThat(savedUser.get().getPassword()).startsWith("$2");
+        }
+    }
+
+    @Nested
+    @DisplayName("Validation errors")
+    class ValidationErrors {
+
+        @Test
+        @DisplayName("POST /users - 400: từ chối khi tên để trống")
+        void createUser_blankName_returnsBadRequestAndDoesNotSave() throws Exception {
+            // Arrange
+            CreateUserRequest request = validRequest("", "blank.name@velawear.local", "password123");
+
+            // Act & Assert
+            assertValidationFailure(request, "blank.name@velawear.local");
+        }
+
+        @Test
+        @DisplayName("POST /users - 400: từ chối khi email để trống")
+        void createUser_blankEmail_returnsBadRequestAndDoesNotSave() throws Exception {
+            // Arrange
+            CreateUserRequest request = validRequest("Blank Email User", "", "password123");
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/users")
+                            .header("Authorization", "Bearer " + adminToken())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.statusCode").value(400));
+
+            assertThat(userRepository.findAll()).noneMatch(user -> user.getFullName().equals("Blank Email User"));
+        }
+
+        @Test
+        @DisplayName("POST /users - 400: từ chối khi email sai định dạng")
+        void createUser_invalidEmail_returnsBadRequestAndDoesNotSave() throws Exception {
+            // Arrange
+            CreateUserRequest request = validRequest("Invalid Email User", "not-an-email", "password123");
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/users")
+                            .header("Authorization", "Bearer " + adminToken())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.statusCode").value(400));
+
+            assertThat(userRepository.findAll()).noneMatch(user -> user.getFullName().equals("Invalid Email User"));
+        }
+
+        @Test
+        @DisplayName("POST /users - 400: từ chối khi password quá ngắn")
+        void createUser_shortPassword_returnsBadRequestAndDoesNotSave() throws Exception {
+            // Arrange
+            CreateUserRequest request = validRequest("Short Password User", "short.password@velawear.local", "12345");
+
+            // Act & Assert
+            assertValidationFailure(request, "short.password@velawear.local");
+        }
+    }
+
+    @Nested
+    @DisplayName("Business errors")
+    class BusinessErrors {
+
+        @Test
+        @DisplayName("POST /users - 409: từ chối khi email đã tồn tại")
+        void createUser_duplicateEmail_returnsConflictAndDoesNotCreateNewUser() throws Exception {
+            // Arrange
+            User existingUser = new User();
+            existingUser.setFullName("Existing User");
+            existingUser.setEmail("duplicate.user@velawear.local");
+            existingUser.setPassword("$2a$10$alreadyencoded");
+            existingUser.setBirthDate(LocalDate.of(1999, 1, 1));
+            existingUser.setGender(UserGender.OTHER);
+            userRepository.save(existingUser);
+
+            CreateUserRequest request = validRequest(
+                    "Duplicate User",
+                    "duplicate.user@velawear.local",
+                    "password123");
+
+            long countBefore = userRepository.count();
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/users")
+                            .header("Authorization", "Bearer " + adminToken())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.statusCode").value(409));
+
+            assertThat(userRepository.count()).isEqualTo(countBefore);
+        }
+    }
+
+    private void assertValidationFailure(CreateUserRequest request, String expectedEmail) throws Exception {
+        mockMvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400));
+
+        assertThat(userRepository.findByEmailAndDeletedAtIsNull(expectedEmail)).isEmpty();
+    }
+
+    private CreateUserRequest validRequest(String fullName, String email, String password) {
+        return new CreateUserRequest(
+                fullName,
+                email,
+                password,
+                LocalDate.of(1998, 4, 10),
+                null,
+                UserGender.OTHER);
+    }
+
+    private String adminToken() {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject("admin@velawear.local")
+                .claim("userId", 1L)
+                .claim("roles", java.util.List.of("ROLE_ADMIN"))
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(900))
                 .build();
-    }
 
-    // ===== GET /api/users =====
-
-    @Test
-    @DisplayName("Should return list of users")
-    void getUsers_success() throws Exception {
-        UserResponse user = new UserResponse(1L, "John Doe", "john@test.com",
-                LocalDate.of(2000, 1, 1), "avatar.png", UserGender.MALE,
-                java.time.Instant.now(), java.time.Instant.now());
-        when(userService.getAllUsers()).thenReturn(List.of(user));
-
-        mockMvc.perform(get("/api/users")
-                        .header("Accept-Version", "1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statusCode", is(200)))
-                .andExpect(jsonPath("$.data", hasSize(1)))
-                .andExpect(jsonPath("$.data[0].email", is("john@test.com")));
-    }
-
-    @Test
-    @DisplayName("Should return empty list when no users")
-    void getUsers_empty() throws Exception {
-        when(userService.getAllUsers()).thenReturn(List.of());
-
-        mockMvc.perform(get("/api/users")
-                        .header("Accept-Version", "1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(0)));
-    }
-
-    // ===== GET /api/users/{id} =====
-
-    @Test
-    @DisplayName("Should return user by id")
-    void getUser_found() throws Exception {
-        UserResponse user = new UserResponse(1L, "John Doe", "john@test.com",
-                LocalDate.of(2000, 1, 1), "avatar.png", UserGender.MALE,
-                java.time.Instant.now(), java.time.Instant.now());
-        when(userService.getUserById(1L)).thenReturn(user);
-
-        mockMvc.perform(get("/api/users/1")
-                        .header("Accept-Version", "1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id", is(1)))
-                .andExpect(jsonPath("$.data.email", is("john@test.com")));
-    }
-
-    @Test
-    @DisplayName("Should return 404 when user not found")
-    void getUser_notFound() throws Exception {
-        when(userService.getUserById(99L))
-                .thenThrow(new ResourceNotFoundException("User", "id", 99L));
-
-        mockMvc.perform(get("/api/users/99")
-                        .header("Accept-Version", "1"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message", is("User not found with id: 99")));
-    }
-
-    // ===== POST /api/users =====
-
-    @Test
-    @DisplayName("Should create user successfully")
-    void createUser_success() throws Exception {
-        CreateUserRequest request = new CreateUserRequest(
-                "John Doe", "john@test.com", "password123",
-                LocalDate.of(2000, 1, 1), "avatar.png", UserGender.MALE);
-        UserResponse response = new UserResponse(1L, "John Doe", "john@test.com",
-                LocalDate.of(2000, 1, 1), "avatar.png", UserGender.MALE,
-                java.time.Instant.now(), java.time.Instant.now());
-        when(userService.createUser(any(CreateUserRequest.class))).thenReturn(response);
-
-        mockMvc.perform(post("/api/users")
-                        .header("Accept-Version", "1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.statusCode", is(201)))
-                .andExpect(jsonPath("$.data.email", is("john@test.com")));
-    }
-
-    @Test
-    @DisplayName("Should return 400 when validation fails")
-    void createUser_validationError() throws Exception {
-        CreateUserRequest request = new CreateUserRequest(
-                "", "invalid-email", "short",
-                LocalDate.of(2030, 1, 1), null, null);
-
-        mockMvc.perform(post("/api/users")
-                        .header("Accept-Version", "1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.statusCode", is(400)));
-    }
-
-    @Test
-    @DisplayName("Should return 400 when email already exists")
-    void createUser_duplicateEmail() throws Exception {
-        CreateUserRequest request = new CreateUserRequest(
-                "John Doe", "existing@test.com", "password123",
-                LocalDate.of(2000, 1, 1), null, UserGender.MALE);
-        when(userService.createUser(any(CreateUserRequest.class)))
-                .thenThrow(new InvalidRequestException("Email already exists"));
-
-        mockMvc.perform(post("/api/users")
-                        .header("Accept-Version", "1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", is("Email already exists")));
-    }
-
-    // ===== PUT /api/users/{id} =====
-
-    @Test
-    @DisplayName("Should update user successfully")
-    void updateUser_success() throws Exception {
-        UpdateUserRequest request = new UpdateUserRequest(
-                "Updated Name", LocalDate.of(1995, 5, 15),
-                "new-avatar.png", UserGender.FEMALE);
-        UserResponse response = new UserResponse(1L, "Updated Name", "john@test.com",
-                LocalDate.of(1995, 5, 15), "new-avatar.png", UserGender.FEMALE,
-                java.time.Instant.now(), java.time.Instant.now());
-        when(userService.updateUser(any(Long.class), any(UpdateUserRequest.class))).thenReturn(response);
-
-        mockMvc.perform(put("/api/users/1")
-                        .header("Accept-Version", "1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.fullName", is("Updated Name")))
-                .andExpect(jsonPath("$.data.gender", is("FEMALE")));
-    }
-
-    @Test
-    @DisplayName("Should return 404 when updating non-existent user")
-    void updateUser_notFound() throws Exception {
-        UpdateUserRequest request = new UpdateUserRequest(
-                "Updated Name", LocalDate.of(1995, 5, 15),
-                null, UserGender.MALE);
-        when(userService.updateUser(any(Long.class), any(UpdateUserRequest.class)))
-                .thenThrow(new ResourceNotFoundException("User", "id", 99L));
-
-        mockMvc.perform(put("/api/users/99")
-                        .header("Accept-Version", "1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    @DisplayName("Should return 400 when update validation fails")
-    void updateUser_validationError() throws Exception {
-        UpdateUserRequest request = new UpdateUserRequest(
-                "", null, null, null);
-
-        mockMvc.perform(put("/api/users/1")
-                        .header("Accept-Version", "1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
-
-    // ===== DELETE /api/users/{id} =====
-
-    @Test
-    @DisplayName("Should delete user successfully")
-    void deleteUser_success() throws Exception {
-        mockMvc.perform(delete("/api/users/1")
-                        .header("Accept-Version", "1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statusCode", is(200)));
-        verify(userService).deleteUser(1L);
-    }
-
-    @Test
-    @DisplayName("Should return 404 when deleting non-existent user")
-    void deleteUser_notFound() throws Exception {
-        doThrow(new ResourceNotFoundException("User", "id", 99L))
-                .when(userService).deleteUser(99L);
-
-        mockMvc.perform(delete("/api/users/99")
-                        .header("Accept-Version", "1"))
-                .andExpect(status().isNotFound());
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS512).build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 }

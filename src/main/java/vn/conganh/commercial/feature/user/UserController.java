@@ -19,36 +19,36 @@ import lombok.RequiredArgsConstructor;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsers() {
         return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUser(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<UserResponse>> createUser(@RequestBody @Valid CreateUserRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(userService.createUser(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             @PathVariable Long id,
             @RequestBody @Valid UpdateUserRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success(null));

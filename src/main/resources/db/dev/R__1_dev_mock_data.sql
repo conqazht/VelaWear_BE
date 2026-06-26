@@ -366,9 +366,8 @@ FROM (
 ) usage
 WHERE c.id = usage.coupon_id;
 
-INSERT INTO reviews (user_id, product_id, order_item_id, rating, comment)
+INSERT INTO reviews (user_id, order_item_id, rating, comment)
 SELECT u.id,
-       p.id,
        oi.id,
        5,
        'Soft fabric and clean fit. Good demo product.'
@@ -380,7 +379,6 @@ WHERE u.email = 'user@velawear.local'
   AND o.order_code = 'VW-DEV-1001'
 ON CONFLICT (user_id, order_item_id) DO UPDATE
 SET
-    product_id = EXCLUDED.product_id,
     rating = EXCLUDED.rating,
     comment = EXCLUDED.comment;
 
@@ -388,7 +386,8 @@ INSERT INTO review_images (review_id, image)
 SELECT r.id, '/images/dev/reviews/essential-cotton-tee-review.jpg'
 FROM reviews r
 JOIN users u ON u.id = r.user_id
-JOIN products p ON p.id = r.product_id
+JOIN order_items oi ON oi.id = r.order_item_id
+JOIN products p ON p.name = oi.product_name
 WHERE u.email = 'user@velawear.local'
   AND p.slug = 'essential-cotton-tee'
   AND NOT EXISTS (

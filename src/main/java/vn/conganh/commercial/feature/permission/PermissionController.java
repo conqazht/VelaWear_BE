@@ -19,37 +19,37 @@ import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
 
 @RestController
-@RequestMapping("/api/permissions")
+@RequestMapping("/api/v1/permissions")
 @RequiredArgsConstructor
 public class PermissionController {
 
     private final PermissionService permissionService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getPermissions() {
         return ResponseEntity.ok(ApiResponse.success(permissionService.getAllPermissions()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<PermissionResponse>> getPermission(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(permissionService.getPermissionById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<PermissionResponse>> createPermission(
             @RequestBody @Valid CreatePermissionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(permissionService.createPermission(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<PermissionResponse>> updatePermission(
             @PathVariable Long id,
             @RequestBody @Valid UpdatePermissionRequest request) {
         return ResponseEntity.ok(ApiResponse.success(permissionService.updatePermission(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deletePermission(@PathVariable Long id) {
         permissionService.deletePermission(id);
         return ResponseEntity.ok(ApiResponse.success(null));

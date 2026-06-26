@@ -16,33 +16,33 @@ import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewResponse;
 
 @RestController
-@RequestMapping("/api/reviews")
+@RequestMapping("/api/v1/reviews")
 @RequiredArgsConstructor
 public class ReviewController {
 
     private final ReviewService reviewService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviews() {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getAllReviews()));
     }
 
-    @GetMapping(path = "/user/{userId}", version = "1")
+    @GetMapping(path = "/user/{userId}")
     public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviewsByUser(@PathVariable Long userId) {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByUserId(userId)));
     }
 
-    @GetMapping(path = "/order/{orderId}", version = "1")
+    @GetMapping(path = "/order/{orderId}")
     public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviewsByOrder(@PathVariable Long orderId) {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderId(orderId)));
     }
 
-    @GetMapping(path = "/order-item/{orderItemId}", version = "1")
+    @GetMapping(path = "/order-item/{orderItemId}")
     public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviewsByOrderItem(@PathVariable Long orderItemId) {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderItemId(orderItemId)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<ReviewResponse>> createReview(
             @RequestBody @Valid CreateReviewRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)

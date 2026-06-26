@@ -19,36 +19,36 @@ import vn.conganh.commercial.feature.brand.dto.CreateBrandRequest;
 import vn.conganh.commercial.feature.brand.dto.UpdateBrandRequest;
 
 @RestController
-@RequestMapping("/api/brands")
+@RequestMapping("/api/v1/brands")
 @RequiredArgsConstructor
 public class BrandController {
 
     private final BrandService brandService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<BrandResponse>>> getAll() {
         return ResponseEntity.ok(ApiResponse.success(brandService.getAll()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<BrandResponse>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(brandService.getById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<BrandResponse>> create(@RequestBody @Valid CreateBrandRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(brandService.create(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<BrandResponse>> update(
             @PathVariable Long id,
             @RequestBody @Valid UpdateBrandRequest request) {
         return ResponseEntity.ok(ApiResponse.success(brandService.update(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         brandService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));

@@ -18,13 +18,13 @@ import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 
 @RestController
-@RequestMapping("/api/wishlists")
+@RequestMapping("/api/v1/wishlists")
 @RequiredArgsConstructor
 public class WishlistController {
 
     private final WishlistService wishlistService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<WishlistResponse>>> getWishlists(
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) Long productId) {
@@ -37,19 +37,19 @@ public class WishlistController {
         return ResponseEntity.ok(ApiResponse.success(wishlistService.getAllWishlists()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<WishlistResponse>> getWishlist(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<WishlistResponse>> createWishlist(
             @RequestBody @Valid CreateWishlistRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(wishlistService.createWishlist(request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteWishlist(@PathVariable Long id) {
         wishlistService.deleteWishlist(id);
         return ResponseEntity.ok(ApiResponse.success(null));

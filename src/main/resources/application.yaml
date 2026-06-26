@@ -3,13 +3,6 @@ spring:
     name: VelaWear
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-  mvc:
-    apiversion:
-      enabled: true
-      supported: 1
-      default: 1
-      use:
-        path-segment: 1
   jpa:
     open-in-view: false
     properties:

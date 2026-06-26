@@ -19,36 +19,36 @@ import vn.conganh.commercial.feature.color.dto.CreateColorRequest;
 import vn.conganh.commercial.feature.color.dto.UpdateColorRequest;
 
 @RestController
-@RequestMapping("/api/colors")
+@RequestMapping("/api/v1/colors")
 @RequiredArgsConstructor
 public class ColorController {
 
     private final ColorService colorService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<ColorResponse>>> getAll() {
         return ResponseEntity.ok(ApiResponse.success(colorService.getAll()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<ColorResponse>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(colorService.getById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<ColorResponse>> create(@RequestBody @Valid CreateColorRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(colorService.create(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<ColorResponse>> update(
             @PathVariable Long id,
             @RequestBody @Valid UpdateColorRequest request) {
         return ResponseEntity.ok(ApiResponse.success(colorService.update(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         colorService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));

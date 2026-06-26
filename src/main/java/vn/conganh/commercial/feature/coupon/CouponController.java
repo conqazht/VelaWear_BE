@@ -19,37 +19,37 @@ import vn.conganh.commercial.feature.coupon.dto.CreateCouponRequest;
 import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
 
 @RestController
-@RequestMapping("/api/coupons")
+@RequestMapping("/api/v1/coupons")
 @RequiredArgsConstructor
 public class CouponController {
 
     private final CouponService couponService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<CouponResponse>>> getCoupons() {
         return ResponseEntity.ok(ApiResponse.success(couponService.getAllCoupons()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<CouponResponse>> getCoupon(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(couponService.getCouponById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<CouponResponse>> createCoupon(
             @RequestBody @Valid CreateCouponRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(couponService.createCoupon(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<CouponResponse>> updateCoupon(
             @PathVariable Long id,
             @RequestBody @Valid UpdateCouponRequest request) {
         return ResponseEntity.ok(ApiResponse.success(couponService.updateCoupon(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteCoupon(@PathVariable Long id) {
         couponService.deleteCoupon(id);
         return ResponseEntity.ok(ApiResponse.success(null));

@@ -1,0 +1,141 @@
+package vn.conganh.commercial.feature.category;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.exception.InvalidRequestException;
+import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.category.dto.CategoryResponse;
+import vn.conganh.commercial.feature.category.dto.CreateCategoryRequest;
+import vn.conganh.commercial.feature.category.dto.UpdateCategoryRequest;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("Module Category - CategoryServiceImpl")
+class CategoryServiceImplTest {
+
+    @Mock
+    private CategoryRepository categoryRepository;
+
+    private CategoryServiceImpl categoryService;
+
+    @BeforeEach
+    void setUp() {
+        categoryService = new CategoryServiceImpl(categoryRepository);
+    }
+
+    @Nested
+    @DisplayName("Create category")
+    class CreateCategory {
+
+        @Test
+        @DisplayName("createCategory - tạo category thành công khi slug chưa tồn tại")
+        void createCategory_validRequest_returnsCategoryResponse() {
+            // Arrange
+            CreateCategoryRequest request = new CreateCategoryRequest(null, "Shoes", "shoes", 1, "ACTIVE");
+            when(categoryRepository.existsBySlug("shoes")).thenReturn(false);
+            when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> {
+                Category category = invocation.getArgument(0);
+                ReflectionTestUtils.setField(category, "id", 1L);
+                return category;
+            });
+
+            // Act
+            CategoryResponse response = categoryService.createCategory(request);
+
+            // Assert
+            assertThat(response.id()).isEqualTo(1L);
+            assertThat(response.name()).isEqualTo("Shoes");
+            assertThat(response.slug()).isEqualTo("shoes");
+        }
+
+        @Test
+        @DisplayName("createCategory - không gọi save khi slug đã tồn tại")
+        void createCategory_duplicateSlug_throwsInvalidRequestExceptionAndDoesNotSave() {
+            // Arrange
+            CreateCategoryRequest request = new CreateCategoryRequest(null, "Shoes", "shoes", 1, "ACTIVE");
+            when(categoryRepository.existsBySlug("shoes")).thenReturn(true);
+
+            // Act & Assert
+            assertThatThrownBy(() -> categoryService.createCategory(request))
+                    .isInstanceOf(InvalidRequestException.class);
+            verify(categoryRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Read category")
+    class ReadCategory {
+
+        @Test
+        @DisplayName("getAllCategories - trả về danh sách category")
+        void getAllCategories_existingCategories_returnsResponses() {
+            // Arrange
+            when(categoryRepository.findAll()).thenReturn(List.of(category(1L, "Shoes", "shoes")));
+
+            // Act
+            List<CategoryResponse> responses = categoryService.getAllCategories();
+
+            // Assert
+            assertThat(responses).hasSize(1);
+            assertThat(responses.get(0).slug()).isEqualTo("shoes");
+        }
+
+        @Test
+        @DisplayName("getCategoryById - ném ResourceNotFoundException khi không tìm thấy category")
+        void getCategoryById_missingCategory_throwsResourceNotFoundException() {
+            // Arrange
+            when(categoryRepository.findById(99L)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> categoryService.getCategoryById(99L))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Update category")
+    class UpdateCategory {
+
+        @Test
+        @DisplayName("updateCategory - cập nhật category thành công khi id tồn tại")
+        void updateCategory_existingCategory_returnsUpdatedResponse() {
+            // Arrange
+            Category category = category(1L, "Old", "old");
+            UpdateCategoryRequest request = new UpdateCategoryRequest(null, "New", 2, "INACTIVE");
+            when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+            when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Act
+            CategoryResponse response = categoryService.updateCategory(1L, request);
+
+            // Assert
+            assertThat(response.name()).isEqualTo("New");
+            assertThat(response.slug()).isEqualTo("old");
+            assertThat(response.status()).isEqualTo("INACTIVE");
+        }
+    }
+
+    private Category category(Long id, String name, String slug) {
+        Category category = new Category();
+        ReflectionTestUtils.setField(category, "id", id);
+        category.setName(name);
+        category.setSlug(slug);
+        category.setSortOrder(1);
+        category.setStatus("ACTIVE");
+        return category;
+    }
+}

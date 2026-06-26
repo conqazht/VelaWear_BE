@@ -6,7 +6,7 @@ import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import vn.conganh.commercial.exception.InvalidRequestException;
+import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
@@ -39,7 +39,7 @@ public class UserServiceImpl implements UserService {
     public UserResponse createUser(CreateUserRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
         if (userRepository.existsByEmail(normalizedEmail)) {
-            throw new InvalidRequestException("Email already exists");
+            throw new DuplicateResourceException("User", "email", normalizedEmail);
         }
 
         User user = new User();

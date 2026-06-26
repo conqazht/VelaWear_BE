@@ -19,36 +19,36 @@ import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
 public class ProductController {
 
     private final ProductService productService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<ProductResponse>>> getProducts() {
         return ResponseEntity.ok(ApiResponse.success(productService.getAllProducts()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<ProductResponse>> getProduct(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(productService.getProductById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
             @RequestBody @Valid CreateProductRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(productService.createProduct(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
             @PathVariable Long id,
             @RequestBody @Valid UpdateProductRequest request) {
         return ResponseEntity.ok(ApiResponse.success(productService.updateProduct(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
         return ResponseEntity.ok(ApiResponse.success(null));

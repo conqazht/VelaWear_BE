@@ -19,35 +19,35 @@ import vn.conganh.commercial.feature.role.dto.RoleResponse;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
 public class RoleController {
 
     private final RoleService roleService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<RoleResponse>>> getRoles() {
         return ResponseEntity.ok(ApiResponse.success(roleService.getAllRoles()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<RoleResponse>> getRole(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(roleService.getRoleById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<RoleResponse>> createRole(@RequestBody @Valid CreateRoleRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(roleService.createRole(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<RoleResponse>> updateRole(
             @PathVariable Long id,
             @RequestBody @Valid UpdateRoleRequest request) {
         return ResponseEntity.ok(ApiResponse.success(roleService.updateRole(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable Long id) {
         roleService.deleteRole(id);
         return ResponseEntity.ok(ApiResponse.success(null));

@@ -19,36 +19,36 @@ import vn.conganh.commercial.feature.size.dto.SizeResponse;
 import vn.conganh.commercial.feature.size.dto.UpdateSizeRequest;
 
 @RestController
-@RequestMapping("/api/sizes")
+@RequestMapping("/api/v1/sizes")
 @RequiredArgsConstructor
 public class SizeController {
 
     private final SizeService sizeService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<SizeResponse>>> getAll() {
         return ResponseEntity.ok(ApiResponse.success(sizeService.getAll()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<SizeResponse>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(sizeService.getById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<SizeResponse>> create(@RequestBody @Valid CreateSizeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(sizeService.create(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<SizeResponse>> update(
             @PathVariable Long id,
             @RequestBody @Valid UpdateSizeRequest request) {
         return ResponseEntity.ok(ApiResponse.success(sizeService.update(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         sizeService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));

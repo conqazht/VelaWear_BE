@@ -1,0 +1,156 @@
+package vn.conganh.commercial.feature.productvariant;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.exception.InvalidRequestException;
+import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.color.Color;
+import vn.conganh.commercial.feature.color.ColorRepository;
+import vn.conganh.commercial.feature.product.Product;
+import vn.conganh.commercial.feature.product.ProductRepository;
+import vn.conganh.commercial.feature.productvariant.dto.CreateProductVariantRequest;
+import vn.conganh.commercial.feature.productvariant.dto.ProductVariantResponse;
+import vn.conganh.commercial.feature.size.Size;
+import vn.conganh.commercial.feature.size.SizeRepository;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("Module ProductVariant - ProductVariantServiceImpl")
+class ProductVariantServiceImplTest {
+
+    @Mock
+    private ProductVariantRepository productVariantRepository;
+
+    @Mock
+    private ProductRepository productRepository;
+
+    @Mock
+    private ColorRepository colorRepository;
+
+    @Mock
+    private SizeRepository sizeRepository;
+
+    private ProductVariantServiceImpl productVariantService;
+
+    @BeforeEach
+    void setUp() {
+        productVariantService = new ProductVariantServiceImpl(
+                productVariantRepository, productRepository, colorRepository, sizeRepository);
+    }
+
+    @Nested
+    @DisplayName("Create product variant")
+    class CreateProductVariant {
+
+        @Test
+        @DisplayName("create - tạo variant thành công và set default stock/status")
+        void create_validRequest_returnsVariantResponse() {
+            // Arrange
+            Product product = product(1L);
+            CreateProductVariantRequest request = new CreateProductVariantRequest(
+                    1L, "SKU-001", BigDecimal.valueOf(100000), null, null, null, null, null);
+            when(productVariantRepository.existsBySku("SKU-001")).thenReturn(false);
+            when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+            when(productVariantRepository.save(any(ProductVariant.class))).thenAnswer(invocation -> {
+                ProductVariant variant = invocation.getArgument(0);
+                ReflectionTestUtils.setField(variant, "id", 1L);
+                return variant;
+            });
+
+            // Act
+            ProductVariantResponse response = productVariantService.create(request);
+
+            // Assert
+            assertThat(response.id()).isEqualTo(1L);
+            assertThat(response.sku()).isEqualTo("SKU-001");
+            assertThat(response.stockQuantity()).isZero();
+            assertThat(response.status()).isEqualTo("ACTIVE");
+        }
+
+        @Test
+        @DisplayName("create - không gọi save khi sku đã tồn tại")
+        void create_duplicateSku_throwsInvalidRequestExceptionAndDoesNotSave() {
+            // Arrange
+            CreateProductVariantRequest request = new CreateProductVariantRequest(
+                    1L, "SKU-001", BigDecimal.TEN, null, 1, null, null, "ACTIVE");
+            when(productVariantRepository.existsBySku("SKU-001")).thenReturn(true);
+
+            // Act & Assert
+            assertThatThrownBy(() -> productVariantService.create(request))
+                    .isInstanceOf(InvalidRequestException.class);
+            verify(productVariantRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("create - ném ResourceNotFoundException khi product không tồn tại")
+        void create_missingProduct_throwsResourceNotFoundException() {
+            // Arrange
+            CreateProductVariantRequest request = new CreateProductVariantRequest(
+                    99L, "SKU-001", BigDecimal.TEN, null, 1, null, null, "ACTIVE");
+            when(productVariantRepository.existsBySku("SKU-001")).thenReturn(false);
+            when(productRepository.findById(99L)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> productVariantService.create(request))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("create - liên kết color và size khi được truyền")
+        void create_withColorAndSize_returnsVariantResponse() {
+            // Arrange
+            Product product = product(1L);
+            Color color = color(2L, "Black");
+            Size size = size(3L, "XL");
+            CreateProductVariantRequest request = new CreateProductVariantRequest(
+                    1L, "SKU-002", BigDecimal.TEN, null, 5, 2L, 3L, "ACTIVE");
+            when(productVariantRepository.existsBySku("SKU-002")).thenReturn(false);
+            when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+            when(colorRepository.findById(2L)).thenReturn(Optional.of(color));
+            when(sizeRepository.findById(3L)).thenReturn(Optional.of(size));
+            when(productVariantRepository.save(any(ProductVariant.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Act
+            ProductVariantResponse response = productVariantService.create(request);
+
+            // Assert
+            assertThat(response.color().name()).isEqualTo("Black");
+            assertThat(response.size().name()).isEqualTo("XL");
+        }
+    }
+
+    private Product product(Long id) {
+        Product product = new Product();
+        ReflectionTestUtils.setField(product, "id", id);
+        product.setName("Product");
+        return product;
+    }
+
+    private Color color(Long id, String name) {
+        Color color = new Color();
+        ReflectionTestUtils.setField(color, "id", id);
+        color.setName(name);
+        return color;
+    }
+
+    private Size size(Long id, String name) {
+        Size size = new Size();
+        ReflectionTestUtils.setField(size, "id", id);
+        size.setName(name);
+        return size;
+    }
+}

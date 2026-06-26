@@ -20,52 +20,52 @@ import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
 import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryResponse;
 
 @RestController
-@RequestMapping("/api/orders")
+@RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 public class OrderController {
 
     private final OrderService orderService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrders() {
         return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrderById(id)));
     }
 
-    @GetMapping(path = "/code/{orderCode}", version = "1")
+    @GetMapping(path = "/code/{orderCode}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderByCode(@PathVariable String orderCode) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrderByOrderCode(orderCode)));
     }
 
-    @GetMapping(path = "/user/{userId}", version = "1")
+    @GetMapping(path = "/user/{userId}")
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrdersByUser(@PathVariable Long userId) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByUserId(userId)));
     }
 
-    @GetMapping(path = "/{id}/status-histories", version = "1")
+    @GetMapping(path = "/{id}/status-histories")
     public ResponseEntity<ApiResponse<List<OrderStatusHistoryResponse>>> getOrderStatusHistories(
             @PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStatusHistories(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<OrderResponse>> createOrder(@RequestBody @Valid CreateOrderRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(orderService.createOrder(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrder(
             @PathVariable Long id,
             @RequestBody @Valid UpdateOrderRequest request) {
         return ResponseEntity.ok(ApiResponse.success(orderService.updateOrder(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteOrder(@PathVariable Long id) {
         orderService.deleteOrder(id);
         return ResponseEntity.ok(ApiResponse.success(null));

@@ -17,34 +17,34 @@ import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 
 @RestController
-@RequestMapping("/api/carts")
+@RequestMapping("/api/v1/carts")
 @RequiredArgsConstructor
 public class CartController {
 
     private final CartService cartService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<CartResponse>>> getCarts() {
         return ResponseEntity.ok(ApiResponse.success(cartService.getAllCarts()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<CartResponse>> getCart(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(cartService.getCartById(id)));
     }
 
-    @GetMapping(path = "/user/{userId}", version = "1")
+    @GetMapping(path = "/user/{userId}")
     public ResponseEntity<ApiResponse<CartResponse>> getCartByUser(@PathVariable Long userId) {
         return ResponseEntity.ok(ApiResponse.success(cartService.getCartByUserId(userId)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<CartResponse>> createCart(@RequestBody @Valid CreateCartRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(cartService.createCart(request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteCart(@PathVariable Long id) {
         cartService.deleteCart(id);
         return ResponseEntity.ok(ApiResponse.success(null));

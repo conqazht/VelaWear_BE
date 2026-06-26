@@ -19,36 +19,36 @@ import vn.conganh.commercial.feature.category.dto.CreateCategoryRequest;
 import vn.conganh.commercial.feature.category.dto.UpdateCategoryRequest;
 
 @RestController
-@RequestMapping("/api/categories")
+@RequestMapping("/api/v1/categories")
 @RequiredArgsConstructor
 public class CategoryController {
 
     private final CategoryService categoryService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<CategoryResponse>>> getCategories() {
         return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<CategoryResponse>> getCategory(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(categoryService.getCategoryById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<CategoryResponse>> createCategory(
             @RequestBody @Valid CreateCategoryRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(categoryService.createCategory(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<CategoryResponse>> updateCategory(
             @PathVariable Long id,
             @RequestBody @Valid UpdateCategoryRequest request) {
         return ResponseEntity.ok(ApiResponse.success(categoryService.updateCategory(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long id) {
         categoryService.deleteCategory(id);
         return ResponseEntity.ok(ApiResponse.success(null));

@@ -19,37 +19,37 @@ import vn.conganh.commercial.feature.productvariant.dto.ProductVariantResponse;
 import vn.conganh.commercial.feature.productvariant.dto.UpdateProductVariantRequest;
 
 @RestController
-@RequestMapping("/api/product-variants")
+@RequestMapping("/api/v1/product-variants")
 @RequiredArgsConstructor
 public class ProductVariantController {
 
     private final ProductVariantService productVariantService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<ProductVariantResponse>>> getAll() {
         return ResponseEntity.ok(ApiResponse.success(productVariantService.getAll()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<ProductVariantResponse>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(productVariantService.getById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<ProductVariantResponse>> create(
             @RequestBody @Valid CreateProductVariantRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(productVariantService.create(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<ProductVariantResponse>> update(
             @PathVariable Long id,
             @RequestBody @Valid UpdateProductVariantRequest request) {
         return ResponseEntity.ok(ApiResponse.success(productVariantService.update(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         productVariantService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));

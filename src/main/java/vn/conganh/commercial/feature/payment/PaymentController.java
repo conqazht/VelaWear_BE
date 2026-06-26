@@ -17,37 +17,37 @@ import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.feature.payment.dto.PaymentResponse;
 
 @RestController
-@RequestMapping("/api/payments")
+@RequestMapping("/api/v1/payments")
 @RequiredArgsConstructor
 public class PaymentController {
 
     private final PaymentService paymentService;
 
-    @GetMapping(version = "1")
+    @GetMapping
     public ResponseEntity<ApiResponse<List<PaymentResponse>>> getPayments() {
         return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments()));
     }
 
-    @GetMapping(path = "/{id}", version = "1")
+    @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<PaymentResponse>> getPayment(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(paymentService.getPaymentById(id)));
     }
 
-    @PostMapping(version = "1")
+    @PostMapping
     public ResponseEntity<ApiResponse<PaymentResponse>> createPayment(
             @RequestBody @Valid CreatePaymentRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(paymentService.createPayment(request)));
     }
 
-    @PutMapping(path = "/{id}", version = "1")
+    @PutMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<PaymentResponse>> updatePayment(
             @PathVariable Long id,
             @RequestBody @Valid UpdatePaymentRequest request) {
         return ResponseEntity.ok(ApiResponse.success(paymentService.updatePayment(id, request)));
     }
 
-    @DeleteMapping(path = "/{id}", version = "1")
+    @DeleteMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<Void>> deletePayment(@PathVariable Long id) {
         paymentService.deletePayment(id);
         return ResponseEntity.ok(ApiResponse.success(null));
