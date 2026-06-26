@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.refreshtoken;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.exception.UnauthorizedException;
 import vn.conganh.commercial.feature.refreshtoken.dto.CreateRefreshTokenRequest;
 import vn.conganh.commercial.feature.refreshtoken.dto.RefreshTokenResponse;
 import vn.conganh.commercial.feature.user.User;
@@ -18,6 +20,8 @@ import vn.conganh.commercial.feature.user.UserRepository;
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenServiceImpl implements RefreshTokenService {
+
+    private static final String REFRESH_TOKEN_HASH_ALGORITHM = "SHA-512";
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -68,6 +72,31 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public RefreshToken findValidRefreshToken(String rawToken) {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(hashToken(rawToken))
+                .orElseThrow(() -> new UnauthorizedException("Refresh token is invalid"));
+
+        if (refreshToken.isRevoked()) {
+            throw new UnauthorizedException("Refresh token is revoked");
+        }
+
+        if (refreshToken.getExpiresAt().isBefore(Instant.now())) {
+            throw new UnauthorizedException("Refresh token is expired");
+        }
+
+        return refreshToken;
+    }
+
+    @Override
+    @Transactional
+    public RefreshTokenResponse revokeRefreshToken(String rawToken) {
+        RefreshToken refreshToken = findValidRefreshToken(rawToken);
+        refreshToken.setRevoked(true);
+        return RefreshTokenResponse.fromEntity(refreshTokenRepository.save(refreshToken));
+    }
+
+    @Override
     @Transactional
     public void deleteRefreshToken(Long id) {
         refreshTokenRepository.delete(findRefreshToken(id));
@@ -85,11 +114,11 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     private String hashToken(String rawToken) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = MessageDigest.getInstance(REFRESH_TOKEN_HASH_ALGORITHM);
             byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
+            throw new RuntimeException("Refresh token hash algorithm not available", e);
         }
     }
 }

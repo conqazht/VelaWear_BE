@@ -21,6 +21,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 @RequiredArgsConstructor
 public class JwtConfig {
 
+    private static final String HMAC_SECRET_ALGORITHM = "HmacSHA512";
+    private static final MacAlgorithm JWT_MAC_ALGORITHM = MacAlgorithm.HS512;
+
     private final JwtProperties jwtProperties;
 
     @Bean
@@ -33,11 +36,11 @@ public class JwtConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
         return NimbusJwtDecoder.withSecretKey(secretKey())
-                .macAlgorithm(MacAlgorithm.HS512)
+                .macAlgorithm(JWT_MAC_ALGORITHM)
                 .build();
     }
 
     private SecretKey secretKey() {
-        return new SecretKeySpec(jwtProperties.secretKey().getBytes(StandardCharsets.UTF_8), "HmacSHA512");
+        return new SecretKeySpec(jwtProperties.secretKey().getBytes(StandardCharsets.UTF_8), HMAC_SECRET_ALGORITHM);
     }
 }

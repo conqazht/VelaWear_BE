@@ -14,5 +14,9 @@ public interface RefreshTokenService {
 
     RefreshTokenResponse revokeRefreshToken(Long id);
 
+    RefreshToken findValidRefreshToken(String rawToken);
+
+    RefreshTokenResponse revokeRefreshToken(String rawToken);
+
     void deleteRefreshToken(Long id);
 }

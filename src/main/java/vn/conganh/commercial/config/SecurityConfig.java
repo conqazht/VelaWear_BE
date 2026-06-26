@@ -20,11 +20,15 @@ import vn.conganh.commercial.security.PermissionAuthorizationManager;
 @EnableMethodSecurity
 public class SecurityConfig {
    private static final String[] WHITELIST = {
-            "/api/v1/auth/**",
+            "/api/v1/auth/login",
+            "/api/v1/auth/register",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/actuator/health"
+            "/actuator/health",
+            "/actuator/info"
     };
     @Bean
     public SecurityFilterChain filterChain(
@@ -36,6 +40,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(WHITELIST).permitAll()
+                        .requestMatchers("/api/v1/auth/me").authenticated()
                         .anyRequest().access(permissionAuthorizationManager))
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
                 .build();
