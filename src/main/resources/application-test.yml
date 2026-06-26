@@ -5,7 +5,8 @@ spring:
     show-sql: false
   flyway:
     enabled: true
+    locations: classpath:db/migration,classpath:db/dev
 
 jwt:
   access-token-expiration: 900
-  refresh-token-expiration: 604800
+  refresh-token-expiration: 259200

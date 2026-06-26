@@ -20,6 +20,11 @@ springdoc:
   api-docs:
     enabled: ${OPENAPI_DOCS_ENABLED:false}
 
+jwt:
+  secret-key: ${JWT_SECRET_KEY}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:259200}
+
 logging:
   level:
     root: info
