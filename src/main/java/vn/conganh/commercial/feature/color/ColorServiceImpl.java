@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.color;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.color.dto.ColorResponse;
@@ -18,10 +19,9 @@ public class ColorServiceImpl implements ColorService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ColorResponse> getAll() {
-        return colorRepository.findAll().stream()
-                .map(ColorResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAll(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(colorRepository.findAll(pageable)
+                .map(ColorResponse::fromEntity));
     }
 
     @Override
@@ -59,7 +59,7 @@ public class ColorServiceImpl implements ColorService {
     @Override
     @Transactional
     public void delete(Long id) {
-        colorRepository.deleteById(id);
+        colorRepository.delete(findById(id));
     }
 
     private Color findById(Long id) {

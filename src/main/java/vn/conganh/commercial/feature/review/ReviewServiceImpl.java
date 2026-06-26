@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.review;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.OrderItem;
@@ -23,34 +24,30 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getAllReviews() {
-        return reviewRepository.findAll().stream()
-                .map(this::toResponse)
-                .toList();
+    public ResultPaginationDTO getAllReviews(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(reviewRepository.findAll(pageable)
+                .map(this::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getReviewsByUserId(Long userId) {
-        return reviewRepository.findByUserId(userId).stream()
-                .map(this::toResponse)
-                .toList();
+    public ResultPaginationDTO getReviewsByUserId(Long userId, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(reviewRepository.findByUserId(userId, pageable)
+                .map(this::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getReviewsByOrderId(Long orderId) {
-        return reviewRepository.findByOrderItemOrderId(orderId).stream()
-                .map(this::toResponse)
-                .toList();
+    public ResultPaginationDTO getReviewsByOrderId(Long orderId, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(reviewRepository.findByOrderItemOrderId(orderId, pageable)
+                .map(this::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getReviewsByOrderItemId(Long orderItemId) {
-        return reviewRepository.findByOrderItemId(orderItemId).stream()
-                .map(this::toResponse)
-                .toList();
+    public ResultPaginationDTO getReviewsByOrderItemId(Long orderItemId, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(reviewRepository.findByOrderItemId(orderItemId, pageable)
+                .map(this::toResponse));
     }
 
     @Override

@@ -1,11 +1,12 @@
 package vn.conganh.commercial.feature.user;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Locale;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
@@ -22,10 +23,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserResponse> getAllUsers() {
-        return userRepository.findAllByDeletedAtIsNull().stream()
-                .map(UserResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAllUsers(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(userRepository.findAllByDeletedAtIsNull(pageable)
+                .map(UserResponse::fromEntity));
     }
 
     @Override

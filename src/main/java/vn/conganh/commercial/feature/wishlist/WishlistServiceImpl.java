@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.wishlist;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.product.Product;
@@ -23,26 +24,23 @@ public class WishlistServiceImpl implements WishlistService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<WishlistResponse> getAllWishlists() {
-        return wishlistRepository.findAll().stream()
-                .map(WishlistResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAllWishlists(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(wishlistRepository.findAll(pageable)
+                .map(WishlistResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<WishlistResponse> getWishlistsByUserId(Long userId) {
-        return wishlistRepository.findByUserId(userId).stream()
-                .map(WishlistResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getWishlistsByUserId(Long userId, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(wishlistRepository.findByUserId(userId, pageable)
+                .map(WishlistResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<WishlistResponse> getWishlistsByProductId(Long productId) {
-        return wishlistRepository.findByProductId(productId).stream()
-                .map(WishlistResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getWishlistsByProductId(Long productId, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(wishlistRepository.findByProductId(productId, pageable)
+                .map(WishlistResponse::fromEntity));
     }
 
     @Override

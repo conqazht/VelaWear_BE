@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.payment;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderRepository;
@@ -18,8 +19,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getAllPayments() {
-        return paymentRepository.findAll().stream().map(PaymentResponse::fromEntity).toList();
+    public ResultPaginationDTO getAllPayments(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(paymentRepository.findAll(pageable)
+                .map(PaymentResponse::fromEntity));
     }
 
     @Override

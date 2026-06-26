@@ -1,14 +1,15 @@
 package vn.conganh.commercial.feature.wishlist;
 
-import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface WishlistRepository extends JpaRepository<Wishlist, Long> {
 
-    List<Wishlist> findByUserId(Long userId);
+    Page<Wishlist> findByUserId(Long userId, Pageable pageable);
 
-    List<Wishlist> findByProductId(Long productId);
+    Page<Wishlist> findByProductId(Long productId, Pageable pageable);
 
     Optional<Wishlist> findByUserIdAndProductId(Long userId, Long productId);
 

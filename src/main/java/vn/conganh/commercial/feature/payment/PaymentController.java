@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.payment;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.payment.dto.PaymentResponse;
 
 @RestController
@@ -24,8 +25,8 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PaymentResponse>>> getPayments() {
-        return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getPayments(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments(pageable)));
     }
 
     @GetMapping(path = "/{id}")

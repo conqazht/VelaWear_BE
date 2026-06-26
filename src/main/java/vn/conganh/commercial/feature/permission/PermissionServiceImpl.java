@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.permission;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
@@ -18,8 +19,9 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PermissionResponse> getAllPermissions() {
-        return permissionRepository.findAll().stream().map(PermissionResponse::fromEntity).toList();
+    public ResultPaginationDTO getAllPermissions(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(permissionRepository.findAll(pageable)
+                .map(PermissionResponse::fromEntity));
     }
 
     @Override

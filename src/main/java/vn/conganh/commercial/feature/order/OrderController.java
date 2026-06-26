@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.order;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.order.dto.CreateOrderRequest;
 import vn.conganh.commercial.feature.order.dto.OrderResponse;
 import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
@@ -27,8 +28,8 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrders() {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrders(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(pageable)));
     }
 
     @GetMapping(path = "/{id}")
@@ -42,14 +43,17 @@ public class OrderController {
     }
 
     @GetMapping(path = "/user/{userId}")
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getOrdersByUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByUserId(userId)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrdersByUser(
+            @PathVariable Long userId,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByUserId(userId, pageable)));
     }
 
     @GetMapping(path = "/{id}/status-histories")
-    public ResponseEntity<ApiResponse<List<OrderStatusHistoryResponse>>> getOrderStatusHistories(
-            @PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStatusHistories(id)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrderStatusHistories(
+            @PathVariable Long id,
+            Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStatusHistories(id, pageable)));
     }
 
     @PostMapping

@@ -1,10 +1,11 @@
 package vn.conganh.commercial.feature.productvariant;
 
 import java.time.Instant;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.color.Color;
@@ -27,10 +28,9 @@ public class ProductVariantServiceImpl implements ProductVariantService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductVariantResponse> getAll() {
-        return productVariantRepository.findAllByDeletedAtIsNull().stream()
-                .map(ProductVariantResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAll(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(productVariantRepository.findAllByDeletedAtIsNull(pageable)
+                .map(ProductVariantResponse::fromEntity));
     }
 
     @Override

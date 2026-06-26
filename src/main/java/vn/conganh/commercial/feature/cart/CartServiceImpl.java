@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.cart;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
@@ -20,10 +21,9 @@ public class CartServiceImpl implements CartService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CartResponse> getAllCarts() {
-        return cartRepository.findAll().stream()
-                .map(CartResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAllCarts(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(cartRepository.findAll(pageable)
+                .map(CartResponse::fromEntity));
     }
 
     @Override

@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.coupon;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.coupon.dto.CouponResponse;
 import vn.conganh.commercial.feature.coupon.dto.CreateCouponRequest;
 import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
@@ -26,8 +27,8 @@ public class CouponController {
     private final CouponService couponService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<CouponResponse>>> getCoupons() {
-        return ResponseEntity.ok(ApiResponse.success(couponService.getAllCoupons()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCoupons(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(couponService.getAllCoupons(pageable)));
     }
 
     @GetMapping(path = "/{id}")

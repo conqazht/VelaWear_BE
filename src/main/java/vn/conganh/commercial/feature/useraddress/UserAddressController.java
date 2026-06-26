@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.useraddress;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.useraddress.dto.CreateUserAddressRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UpdateUserAddressRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UserAddressResponse;
@@ -27,12 +28,13 @@ public class UserAddressController {
     private final UserAddressService userAddressService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UserAddressResponse>>> getUserAddresses(
-            @RequestParam(required = false) Long userId) {
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getUserAddresses(
+            @RequestParam(required = false) Long userId,
+            Pageable pageable) {
         if (userId != null) {
-            return ResponseEntity.ok(ApiResponse.success(userAddressService.getUserAddressesByUserId(userId)));
+            return ResponseEntity.ok(ApiResponse.success(userAddressService.getUserAddressesByUserId(userId, pageable)));
         }
-        return ResponseEntity.ok(ApiResponse.success(userAddressService.getAllUserAddresses()));
+        return ResponseEntity.ok(ApiResponse.success(userAddressService.getAllUserAddresses(pageable)));
     }
 
     @GetMapping(path = "/{id}")

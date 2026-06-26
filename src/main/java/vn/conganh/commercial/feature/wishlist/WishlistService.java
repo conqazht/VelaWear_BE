@@ -1,16 +1,17 @@
 package vn.conganh.commercial.feature.wishlist;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 
 public interface WishlistService {
 
-    List<WishlistResponse> getAllWishlists();
+    ResultPaginationDTO getAllWishlists(Pageable pageable);
 
-    List<WishlistResponse> getWishlistsByUserId(Long userId);
+    ResultPaginationDTO getWishlistsByUserId(Long userId, Pageable pageable);
 
-    List<WishlistResponse> getWishlistsByProductId(Long productId);
+    ResultPaginationDTO getWishlistsByProductId(Long productId, Pageable pageable);
 
     WishlistResponse getWishlistById(Long id);
 

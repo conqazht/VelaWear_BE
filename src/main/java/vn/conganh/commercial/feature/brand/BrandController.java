@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.brand;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.brand.dto.BrandResponse;
 import vn.conganh.commercial.feature.brand.dto.CreateBrandRequest;
 import vn.conganh.commercial.feature.brand.dto.UpdateBrandRequest;
@@ -26,8 +27,8 @@ public class BrandController {
     private final BrandService brandService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<BrandResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.success(brandService.getAll()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(brandService.getAll(pageable)));
     }
 
     @GetMapping(path = "/{id}")

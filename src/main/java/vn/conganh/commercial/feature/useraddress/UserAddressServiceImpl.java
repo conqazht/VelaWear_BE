@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.useraddress;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
@@ -20,18 +21,16 @@ public class UserAddressServiceImpl implements UserAddressService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserAddressResponse> getAllUserAddresses() {
-        return userAddressRepository.findAll().stream()
-                .map(UserAddressResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAllUserAddresses(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(userAddressRepository.findAll(pageable)
+                .map(UserAddressResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserAddressResponse> getUserAddressesByUserId(Long userId) {
-        return userAddressRepository.findByUserId(userId).stream()
-                .map(UserAddressResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getUserAddressesByUserId(Long userId, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(userAddressRepository.findByUserId(userId, pageable)
+                .map(UserAddressResponse::fromEntity));
     }
 
     @Override

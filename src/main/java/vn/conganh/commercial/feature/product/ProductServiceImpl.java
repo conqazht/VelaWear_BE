@@ -1,10 +1,11 @@
 package vn.conganh.commercial.feature.product;
 
 import java.time.Instant;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
@@ -19,8 +20,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> getAllProducts() {
-        return productRepository.findAll().stream().map(ProductResponse::fromEntity).toList();
+    public ResultPaginationDTO getAllProducts(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(productRepository.findAllByDeletedAtIsNull(pageable)
+                .map(ProductResponse::fromEntity));
     }
 
     @Override
@@ -61,7 +63,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private Product findProduct(Long id) {
-        return productRepository.findById(id)
+        return productRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
     }
 

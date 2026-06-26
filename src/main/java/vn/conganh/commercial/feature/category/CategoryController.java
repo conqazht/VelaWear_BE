@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.category;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.category.dto.CategoryResponse;
 import vn.conganh.commercial.feature.category.dto.CreateCategoryRequest;
 import vn.conganh.commercial.feature.category.dto.UpdateCategoryRequest;
@@ -26,8 +27,8 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<CategoryResponse>>> getCategories() {
-        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCategories(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories(pageable)));
     }
 
     @GetMapping(path = "/{id}")

@@ -1,13 +1,14 @@
 package vn.conganh.commercial.feature.size;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.size.dto.CreateSizeRequest;
 import vn.conganh.commercial.feature.size.dto.SizeResponse;
 import vn.conganh.commercial.feature.size.dto.UpdateSizeRequest;
 
 public interface SizeService {
 
-    List<SizeResponse> getAll();
+    ResultPaginationDTO getAll(Pageable pageable);
 
     SizeResponse getById(Long id);
 

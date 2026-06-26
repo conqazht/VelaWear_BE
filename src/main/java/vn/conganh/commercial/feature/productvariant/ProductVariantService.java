@@ -1,13 +1,14 @@
 package vn.conganh.commercial.feature.productvariant;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.productvariant.dto.CreateProductVariantRequest;
 import vn.conganh.commercial.feature.productvariant.dto.ProductVariantResponse;
 import vn.conganh.commercial.feature.productvariant.dto.UpdateProductVariantRequest;
 
 public interface ProductVariantService {
 
-    List<ProductVariantResponse> getAll();
+    ResultPaginationDTO getAll(Pageable pageable);
 
     ProductVariantResponse getById(Long id);
 

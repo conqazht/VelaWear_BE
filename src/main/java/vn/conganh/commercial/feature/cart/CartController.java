@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.cart;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 
@@ -24,8 +25,8 @@ public class CartController {
     private final CartService cartService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<CartResponse>>> getCarts() {
-        return ResponseEntity.ok(ApiResponse.success(cartService.getAllCarts()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCarts(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(cartService.getAllCarts(pageable)));
     }
 
     @GetMapping(path = "/{id}")

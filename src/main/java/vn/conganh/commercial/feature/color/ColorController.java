@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.color;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.color.dto.ColorResponse;
 import vn.conganh.commercial.feature.color.dto.CreateColorRequest;
 import vn.conganh.commercial.feature.color.dto.UpdateColorRequest;
@@ -26,8 +27,8 @@ public class ColorController {
     private final ColorService colorService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ColorResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.success(colorService.getAll()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(colorService.getAll(pageable)));
     }
 
     @GetMapping(path = "/{id}")

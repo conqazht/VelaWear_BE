@@ -1,10 +1,11 @@
 package vn.conganh.commercial.feature.brand;
 
 import java.time.Instant;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.brand.dto.BrandResponse;
@@ -19,10 +20,9 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<BrandResponse> getAll() {
-        return brandRepository.findAllByDeletedAtIsNull().stream()
-                .map(BrandResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAll(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(brandRepository.findAllByDeletedAtIsNull(pageable)
+                .map(BrandResponse::fromEntity));
     }
 
     @Override

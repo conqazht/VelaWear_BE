@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.size;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.size.dto.CreateSizeRequest;
@@ -18,10 +19,9 @@ public class SizeServiceImpl implements SizeService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SizeResponse> getAll() {
-        return sizeRepository.findAll().stream()
-                .map(SizeResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAll(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(sizeRepository.findAll(pageable)
+                .map(SizeResponse::fromEntity));
     }
 
     @Override
@@ -57,7 +57,7 @@ public class SizeServiceImpl implements SizeService {
     @Override
     @Transactional
     public void delete(Long id) {
-        sizeRepository.deleteById(id);
+        sizeRepository.delete(findById(id));
     }
 
     private Size findById(Long id) {

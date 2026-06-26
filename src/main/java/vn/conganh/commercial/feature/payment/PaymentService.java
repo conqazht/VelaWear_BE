@@ -1,11 +1,12 @@
 package vn.conganh.commercial.feature.payment;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.payment.dto.PaymentResponse;
 
 public interface PaymentService {
 
-    List<PaymentResponse> getAllPayments();
+    ResultPaginationDTO getAllPayments(Pageable pageable);
 
     PaymentResponse getPaymentById(Long id);
 

@@ -1,13 +1,14 @@
 package vn.conganh.commercial.feature.permission;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
 import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
 
 public interface PermissionService {
 
-    List<PermissionResponse> getAllPermissions();
+    ResultPaginationDTO getAllPermissions(Pageable pageable);
 
     PermissionResponse getPermissionById(Long id);
 

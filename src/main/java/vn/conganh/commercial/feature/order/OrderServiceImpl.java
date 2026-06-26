@@ -1,10 +1,11 @@
 package vn.conganh.commercial.feature.order;
 
 import java.math.BigDecimal;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.dto.CreateOrderRequest;
@@ -24,10 +25,9 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<OrderResponse> getAllOrders() {
-        return orderRepository.findAll().stream()
-                .map(OrderResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getAllOrders(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(orderRepository.findAll(pageable)
+                .map(OrderResponse::fromEntity));
     }
 
     @Override
@@ -48,22 +48,20 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<OrderResponse> getOrdersByUserId(Long userId) {
-        return orderRepository.findByUserId(userId).stream()
-                .map(OrderResponse::fromEntity)
-                .toList();
+    public ResultPaginationDTO getOrdersByUserId(Long userId, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(orderRepository.findByUserId(userId, pageable)
+                .map(OrderResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<OrderStatusHistoryResponse> getOrderStatusHistories(Long id) {
+    public ResultPaginationDTO getOrderStatusHistories(Long id, Pageable pageable) {
         if (!orderRepository.existsById(id)) {
             throw new ResourceNotFoundException("Order", "id", id);
         }
 
-        return orderStatusHistoryRepository.findByOrderId(id).stream()
-                .map(OrderStatusHistoryResponse::fromEntity)
-                .toList();
+        return ResultPaginationDTO.fromPage(orderStatusHistoryRepository.findByOrderId(id, pageable)
+                .map(OrderStatusHistoryResponse::fromEntity));
     }
 
     @Override

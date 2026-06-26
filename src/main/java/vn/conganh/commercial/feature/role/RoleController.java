@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.role;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.role.dto.CreateRoleRequest;
 import vn.conganh.commercial.feature.role.dto.RoleResponse;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
@@ -26,8 +27,8 @@ public class RoleController {
     private final RoleService roleService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<RoleResponse>>> getRoles() {
-        return ResponseEntity.ok(ApiResponse.success(roleService.getAllRoles()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getRoles(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(roleService.getAllRoles(pageable)));
     }
 
     @GetMapping(path = "/{id}")

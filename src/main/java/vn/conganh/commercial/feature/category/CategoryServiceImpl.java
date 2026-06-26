@@ -1,9 +1,11 @@
 package vn.conganh.commercial.feature.category;
 
-import java.util.List;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.category.dto.CategoryResponse;
@@ -18,8 +20,9 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CategoryResponse> getAllCategories() {
-        return categoryRepository.findAll().stream().map(CategoryResponse::fromEntity).toList();
+    public ResultPaginationDTO getAllCategories(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(categoryRepository.findAllByDeletedAtIsNull(pageable)
+                .map(CategoryResponse::fromEntity));
     }
 
     @Override
@@ -50,11 +53,13 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public void deleteCategory(Long id) {
-        categoryRepository.delete(findCategory(id));
+        Category category = findCategory(id);
+        category.setDeletedAt(Instant.now());
+        categoryRepository.save(category);
     }
 
     private Category findCategory(Long id) {
-        return categoryRepository.findById(id)
+        return categoryRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", id));
     }
 

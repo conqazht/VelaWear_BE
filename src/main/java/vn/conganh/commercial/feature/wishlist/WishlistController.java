@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.wishlist;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 
@@ -25,16 +26,17 @@ public class WishlistController {
     private final WishlistService wishlistService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<WishlistResponse>>> getWishlists(
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getWishlists(
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) Long productId) {
+            @RequestParam(required = false) Long productId,
+            Pageable pageable) {
         if (userId != null) {
-            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByUserId(userId)));
+            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByUserId(userId, pageable)));
         }
         if (productId != null) {
-            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByProductId(productId)));
+            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByProductId(productId, pageable)));
         }
-        return ResponseEntity.ok(ApiResponse.success(wishlistService.getAllWishlists()));
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getAllWishlists(pageable)));
     }
 
     @GetMapping(path = "/{id}")

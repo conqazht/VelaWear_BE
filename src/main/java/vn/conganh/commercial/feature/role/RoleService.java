@@ -1,13 +1,14 @@
 package vn.conganh.commercial.feature.role;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.role.dto.CreateRoleRequest;
 import vn.conganh.commercial.feature.role.dto.RoleResponse;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 
 public interface RoleService {
 
-    List<RoleResponse> getAllRoles();
+    ResultPaginationDTO getAllRoles(Pageable pageable);
 
     RoleResponse getRoleById(Long id);
 

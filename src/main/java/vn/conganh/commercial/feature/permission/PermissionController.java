@@ -1,8 +1,8 @@
 package vn.conganh.commercial.feature.permission;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
 import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
@@ -26,8 +27,8 @@ public class PermissionController {
     private final PermissionService permissionService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PermissionResponse>>> getPermissions() {
-        return ResponseEntity.ok(ApiResponse.success(permissionService.getAllPermissions()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getPermissions(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(permissionService.getAllPermissions(pageable)));
     }
 
     @GetMapping(path = "/{id}")

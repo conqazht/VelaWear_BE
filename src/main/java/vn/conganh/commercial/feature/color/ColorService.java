@@ -1,13 +1,14 @@
 package vn.conganh.commercial.feature.color;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.color.dto.ColorResponse;
 import vn.conganh.commercial.feature.color.dto.CreateColorRequest;
 import vn.conganh.commercial.feature.color.dto.UpdateColorRequest;
 
 public interface ColorService {
 
-    List<ColorResponse> getAll();
+    ResultPaginationDTO getAll(Pageable pageable);
 
     ColorResponse getById(Long id);
 

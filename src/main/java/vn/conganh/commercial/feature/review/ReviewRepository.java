@@ -1,15 +1,16 @@
 package vn.conganh.commercial.feature.review;
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
-    List<Review> findByUserId(Long userId);
+    Page<Review> findByUserId(Long userId, Pageable pageable);
 
-    List<Review> findByOrderItemId(Long orderItemId);
+    Page<Review> findByOrderItemId(Long orderItemId, Pageable pageable);
 
-    List<Review> findByOrderItemOrderId(Long orderId);
+    Page<Review> findByOrderItemOrderId(Long orderId, Pageable pageable);
 
     boolean existsByUserIdAndOrderItemId(Long userId, Long orderItemId);
 }

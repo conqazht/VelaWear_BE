@@ -1,9 +1,10 @@
 package vn.conganh.commercial.feature.coupon;
 
-import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.coupon.dto.CouponResponse;
@@ -18,8 +19,9 @@ public class CouponServiceImpl implements CouponService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CouponResponse> getAllCoupons() {
-        return couponRepository.findAll().stream().map(CouponResponse::fromEntity).toList();
+    public ResultPaginationDTO getAllCoupons(Pageable pageable) {
+        return ResultPaginationDTO.fromPage(couponRepository.findAll(pageable)
+                .map(CouponResponse::fromEntity));
     }
 
     @Override

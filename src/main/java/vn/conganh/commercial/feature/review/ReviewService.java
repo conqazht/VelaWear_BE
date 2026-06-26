@@ -1,18 +1,19 @@
 package vn.conganh.commercial.feature.review;
 
-import java.util.List;
+import org.springframework.data.domain.Pageable;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewResponse;
 
 public interface ReviewService {
 
-    List<ReviewResponse> getAllReviews();
+    ResultPaginationDTO getAllReviews(Pageable pageable);
 
-    List<ReviewResponse> getReviewsByUserId(Long userId);
+    ResultPaginationDTO getReviewsByUserId(Long userId, Pageable pageable);
 
-    List<ReviewResponse> getReviewsByOrderId(Long orderId);
+    ResultPaginationDTO getReviewsByOrderId(Long orderId, Pageable pageable);
 
-    List<ReviewResponse> getReviewsByOrderItemId(Long orderItemId);
+    ResultPaginationDTO getReviewsByOrderItemId(Long orderItemId, Pageable pageable);
 
     ReviewResponse createReview(CreateReviewRequest request);
 }

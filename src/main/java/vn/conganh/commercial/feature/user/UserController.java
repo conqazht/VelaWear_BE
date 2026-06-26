@@ -1,7 +1,8 @@
 package vn.conganh.commercial.feature.user;
 
 import jakarta.validation.Valid;
-import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,9 +14,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
-import lombok.RequiredArgsConstructor;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @RestController
@@ -26,8 +27,8 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getUsers() {
-        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers()));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getUsers(Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(pageable)));
     }
 
     @GetMapping(path = "/{id}")
