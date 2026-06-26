@@ -1,8 +1,10 @@
 spring:
+  config:
+    import: "optional:file:.env[.properties]"
   application:
     name: VelaWear
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE}
   jpa:
     open-in-view: false
     properties:
@@ -18,7 +20,7 @@ spring:
         default-page-size: 10
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT}
 
 management:
   endpoints:
@@ -31,9 +33,9 @@ management:
         enabled: true
 
 jwt:
-  secret-key: ${JWT_SECRET_KEY:change-this-development-secret-key-must-be-at-least-64-characters-long}
-  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900}
-  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:259200}
+  secret-key: ${JWT_SECRET_KEY}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
 springdoc:
   api-docs:

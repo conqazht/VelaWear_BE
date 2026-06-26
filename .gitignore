@@ -37,3 +37,6 @@ build/
 .codex/skills
 .agent
 openspec
+
+# Environment variables
+.env

@@ -18,7 +18,6 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.order.dto.CreateOrderRequest;
 import vn.conganh.commercial.feature.order.dto.OrderResponse;
 import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
-import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryResponse;
 
 @RestController
 @RequestMapping("/api/v1/orders")
