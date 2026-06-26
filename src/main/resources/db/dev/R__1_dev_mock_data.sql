@@ -1,5 +1,7 @@
 INSERT INTO users (full_name, email, password, birth_date, avatar, gender)
 VALUES
+    ('System Admin', 'admin@gmail.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
+    ('Example Admin', 'admin@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
     ('VelaWear Admin', 'admin@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1995-01-10', NULL, 'OTHER'),
     ('VelaWear Staff', 'staff@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1998-05-20', NULL, 'FEMALE'),
     ('Demo Customer', 'user@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '2000-09-15', NULL, 'MALE')
@@ -15,7 +17,7 @@ INSERT INTO user_role (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 JOIN roles r ON r.name = 'ADMIN'
-WHERE u.email = 'admin@velawear.local'
+WHERE u.email IN ('admin@gmail.com', 'admin@example.com', 'admin@velawear.local')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO user_role (user_id, role_id)
@@ -31,6 +33,102 @@ FROM users u
 JOIN roles r ON r.name = 'USER'
 WHERE u.email = 'user@velawear.local'
 ON CONFLICT DO NOTHING;
+
+INSERT INTO permissions (name, api_path, method, module)
+VALUES
+    ('VIEW_BRANDS', '/api/v1/brands', 'GET', 'BRAND'),
+    ('VIEW_BRAND_DETAIL', '/api/v1/brands/{id}', 'GET', 'BRAND'),
+    ('CREATE_BRAND', '/api/v1/brands', 'POST', 'BRAND'),
+    ('UPDATE_BRAND', '/api/v1/brands/{id}', 'PUT', 'BRAND'),
+    ('DELETE_BRAND', '/api/v1/brands/{id}', 'DELETE', 'BRAND'),
+    ('VIEW_CARTS', '/api/v1/carts', 'GET', 'CART'),
+    ('VIEW_CART_DETAIL', '/api/v1/carts/{id}', 'GET', 'CART'),
+    ('VIEW_CART_BY_USER', '/api/v1/carts/user/{userId}', 'GET', 'CART'),
+    ('CREATE_CART', '/api/v1/carts', 'POST', 'CART'),
+    ('DELETE_CART', '/api/v1/carts/{id}', 'DELETE', 'CART'),
+    ('VIEW_CATEGORIES', '/api/v1/categories', 'GET', 'CATEGORY'),
+    ('VIEW_CATEGORY_DETAIL', '/api/v1/categories/{id}', 'GET', 'CATEGORY'),
+    ('CREATE_CATEGORY', '/api/v1/categories', 'POST', 'CATEGORY'),
+    ('UPDATE_CATEGORY', '/api/v1/categories/{id}', 'PUT', 'CATEGORY'),
+    ('DELETE_CATEGORY', '/api/v1/categories/{id}', 'DELETE', 'CATEGORY'),
+    ('VIEW_COLORS', '/api/v1/colors', 'GET', 'COLOR'),
+    ('VIEW_COLOR_DETAIL', '/api/v1/colors/{id}', 'GET', 'COLOR'),
+    ('CREATE_COLOR', '/api/v1/colors', 'POST', 'COLOR'),
+    ('UPDATE_COLOR', '/api/v1/colors/{id}', 'PUT', 'COLOR'),
+    ('DELETE_COLOR', '/api/v1/colors/{id}', 'DELETE', 'COLOR'),
+    ('VIEW_COUPONS', '/api/v1/coupons', 'GET', 'COUPON'),
+    ('VIEW_COUPON_DETAIL', '/api/v1/coupons/{id}', 'GET', 'COUPON'),
+    ('CREATE_COUPON', '/api/v1/coupons', 'POST', 'COUPON'),
+    ('UPDATE_COUPON', '/api/v1/coupons/{id}', 'PUT', 'COUPON'),
+    ('DELETE_COUPON', '/api/v1/coupons/{id}', 'DELETE', 'COUPON'),
+    ('VIEW_ORDERS', '/api/v1/orders', 'GET', 'ORDER'),
+    ('VIEW_ORDER_DETAIL', '/api/v1/orders/{id}', 'GET', 'ORDER'),
+    ('VIEW_ORDER_BY_CODE', '/api/v1/orders/code/{orderCode}', 'GET', 'ORDER'),
+    ('VIEW_ORDERS_BY_USER', '/api/v1/orders/user/{userId}', 'GET', 'ORDER'),
+    ('VIEW_ORDER_STATUS_HISTORIES', '/api/v1/orders/{id}/status-histories', 'GET', 'ORDER'),
+    ('CREATE_ORDER', '/api/v1/orders', 'POST', 'ORDER'),
+    ('UPDATE_ORDER', '/api/v1/orders/{id}', 'PUT', 'ORDER'),
+    ('DELETE_ORDER', '/api/v1/orders/{id}', 'DELETE', 'ORDER'),
+    ('VIEW_PAYMENTS', '/api/v1/payments', 'GET', 'PAYMENT'),
+    ('VIEW_PAYMENT_DETAIL', '/api/v1/payments/{id}', 'GET', 'PAYMENT'),
+    ('CREATE_PAYMENT', '/api/v1/payments', 'POST', 'PAYMENT'),
+    ('UPDATE_PAYMENT', '/api/v1/payments/{id}', 'PUT', 'PAYMENT'),
+    ('DELETE_PAYMENT', '/api/v1/payments/{id}', 'DELETE', 'PAYMENT'),
+    ('VIEW_PERMISSIONS', '/api/v1/permissions', 'GET', 'RBAC'),
+    ('VIEW_PERMISSION_DETAIL', '/api/v1/permissions/{id}', 'GET', 'RBAC'),
+    ('CREATE_PERMISSION', '/api/v1/permissions', 'POST', 'RBAC'),
+    ('UPDATE_PERMISSION', '/api/v1/permissions/{id}', 'PUT', 'RBAC'),
+    ('DELETE_PERMISSION', '/api/v1/permissions/{id}', 'DELETE', 'RBAC'),
+    ('VIEW_PRODUCTS', '/api/v1/products', 'GET', 'PRODUCT'),
+    ('VIEW_PRODUCT_DETAIL', '/api/v1/products/{id}', 'GET', 'PRODUCT'),
+    ('CREATE_PRODUCT', '/api/v1/products', 'POST', 'PRODUCT'),
+    ('UPDATE_PRODUCT', '/api/v1/products/{id}', 'PUT', 'PRODUCT'),
+    ('DELETE_PRODUCT', '/api/v1/products/{id}', 'DELETE', 'PRODUCT'),
+    ('VIEW_PRODUCT_VARIANTS', '/api/v1/product-variants', 'GET', 'PRODUCT'),
+    ('VIEW_PRODUCT_VARIANT_DETAIL', '/api/v1/product-variants/{id}', 'GET', 'PRODUCT'),
+    ('CREATE_PRODUCT_VARIANT', '/api/v1/product-variants', 'POST', 'PRODUCT'),
+    ('UPDATE_PRODUCT_VARIANT', '/api/v1/product-variants/{id}', 'PUT', 'PRODUCT'),
+    ('DELETE_PRODUCT_VARIANT', '/api/v1/product-variants/{id}', 'DELETE', 'PRODUCT'),
+    ('VIEW_REVIEWS', '/api/v1/reviews', 'GET', 'REVIEW'),
+    ('VIEW_REVIEWS_BY_USER', '/api/v1/reviews/user/{userId}', 'GET', 'REVIEW'),
+    ('VIEW_REVIEWS_BY_ORDER', '/api/v1/reviews/order/{orderId}', 'GET', 'REVIEW'),
+    ('VIEW_REVIEWS_BY_ORDER_ITEM', '/api/v1/reviews/order-item/{orderItemId}', 'GET', 'REVIEW'),
+    ('CREATE_REVIEW', '/api/v1/reviews', 'POST', 'REVIEW'),
+    ('VIEW_ROLES', '/api/v1/roles', 'GET', 'RBAC'),
+    ('VIEW_ROLE_DETAIL', '/api/v1/roles/{id}', 'GET', 'RBAC'),
+    ('CREATE_ROLE', '/api/v1/roles', 'POST', 'RBAC'),
+    ('UPDATE_ROLE', '/api/v1/roles/{id}', 'PUT', 'RBAC'),
+    ('DELETE_ROLE', '/api/v1/roles/{id}', 'DELETE', 'RBAC'),
+    ('VIEW_SIZES', '/api/v1/sizes', 'GET', 'SIZE'),
+    ('VIEW_SIZE_DETAIL', '/api/v1/sizes/{id}', 'GET', 'SIZE'),
+    ('CREATE_SIZE', '/api/v1/sizes', 'POST', 'SIZE'),
+    ('UPDATE_SIZE', '/api/v1/sizes/{id}', 'PUT', 'SIZE'),
+    ('DELETE_SIZE', '/api/v1/sizes/{id}', 'DELETE', 'SIZE'),
+    ('VIEW_USERS', '/api/v1/users', 'GET', 'USER'),
+    ('VIEW_USER_DETAIL', '/api/v1/users/{id}', 'GET', 'USER'),
+    ('CREATE_USER', '/api/v1/users', 'POST', 'USER'),
+    ('UPDATE_USER', '/api/v1/users/{id}', 'PUT', 'USER'),
+    ('DELETE_USER', '/api/v1/users/{id}', 'DELETE', 'USER'),
+    ('VIEW_USER_ADDRESSES', '/api/v1/user-addresses', 'GET', 'USER_ADDRESS'),
+    ('VIEW_USER_ADDRESS_DETAIL', '/api/v1/user-addresses/{id}', 'GET', 'USER_ADDRESS'),
+    ('CREATE_USER_ADDRESS', '/api/v1/user-addresses', 'POST', 'USER_ADDRESS'),
+    ('UPDATE_USER_ADDRESS', '/api/v1/user-addresses/{id}', 'PUT', 'USER_ADDRESS'),
+    ('DELETE_USER_ADDRESS', '/api/v1/user-addresses/{id}', 'DELETE', 'USER_ADDRESS'),
+    ('VIEW_WISHLISTS', '/api/v1/wishlists', 'GET', 'WISHLIST'),
+    ('VIEW_WISHLIST_DETAIL', '/api/v1/wishlists/{id}', 'GET', 'WISHLIST'),
+    ('CREATE_WISHLIST', '/api/v1/wishlists', 'POST', 'WISHLIST'),
+    ('DELETE_WISHLIST', '/api/v1/wishlists/{id}', 'DELETE', 'WISHLIST')
+ON CONFLICT (api_path, method) DO UPDATE
+SET
+    name = EXCLUDED.name,
+    module = EXCLUDED.module;
+
+INSERT INTO permission_role (permission_id, role_id)
+SELECT p.id, r.id
+FROM permissions p
+CROSS JOIN roles r
+WHERE r.name = 'ADMIN'
+ON CONFLICT (permission_id, role_id) DO NOTHING;
 
 INSERT INTO brands (name, slug, description, status)
 VALUES
