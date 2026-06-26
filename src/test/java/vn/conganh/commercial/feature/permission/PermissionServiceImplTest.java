@@ -16,7 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
@@ -84,14 +88,17 @@ class PermissionServiceImplTest {
         @DisplayName("getAllPermissions - trả về danh sách permission")
         void getAllPermissions_existingPermissions_returnsResponses() {
             // Arrange
-            when(permissionRepository.findAll()).thenReturn(List.of(permission(1L)));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(permissionRepository.findAll(pageable))
+                    .thenReturn(new PageImpl<>(List.of(permission(1L)), pageable, 1));
 
             // Act
-            List<PermissionResponse> responses = permissionService.getAllPermissions();
+            ResultPaginationDTO responses = permissionService.getAllPermissions(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).name()).isEqualTo("VIEW_TEST");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("name").containsExactly("VIEW_TEST");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test

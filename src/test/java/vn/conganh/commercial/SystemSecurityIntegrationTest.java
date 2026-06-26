@@ -12,7 +12,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 
 @DisplayName("System/Security - Kiểm tra bảo vệ các API nghiệp vụ")
-class SystemSecurityIntegrationTest extends AbstractIntegrationTest {
+class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -94,5 +94,36 @@ class SystemSecurityIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(delete(path))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/api/v1/users",
+            "/api/v1/roles",
+            "/api/v1/permissions"
+    })
+    @DisplayName("GET: trả về 403 khi user đã đăng nhập nhưng không có quyền admin/RBAC")
+    void adminEndpoints_userRoleGet_returnsForbidden(String path) throws Exception {
+        // Act & Assert
+        mockMvc.perform(get(path)
+                        .header("Authorization", "Bearer " + userToken()))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "/api/v1/users",
+            "/api/v1/roles",
+            "/api/v1/permissions",
+            "/api/v1/coupons"
+    })
+    @DisplayName("POST: trả về 403 khi user đã đăng nhập nhưng không có quyền tạo dữ liệu admin")
+    void adminEndpoints_userRolePost_returnsForbidden(String path) throws Exception {
+        // Act & Assert
+        mockMvc.perform(post(path)
+                        .header("Authorization", "Bearer " + userToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
     }
 }

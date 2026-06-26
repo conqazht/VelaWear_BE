@@ -16,7 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.brand.dto.BrandResponse;
@@ -87,14 +91,17 @@ class BrandServiceImplTest {
         @DisplayName("getAll - trả về danh sách brand chưa bị xóa")
         void getAll_existingBrands_returnsResponses() {
             // Arrange
-            when(brandRepository.findAllByDeletedAtIsNull()).thenReturn(List.of(brand(1L, "Nike", "nike")));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(brandRepository.findAllByDeletedAtIsNull(pageable))
+                    .thenReturn(new PageImpl<>(List.of(brand(1L, "Nike", "nike")), pageable, 1));
 
             // Act
-            List<BrandResponse> responses = brandService.getAll();
+            ResultPaginationDTO responses = brandService.getAll(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).slug()).isEqualTo("nike");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("slug").containsExactly("nike");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test

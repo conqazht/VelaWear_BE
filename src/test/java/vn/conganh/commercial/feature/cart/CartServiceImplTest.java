@@ -18,7 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
@@ -110,14 +114,17 @@ class CartServiceImplTest {
         @DisplayName("getAllCarts - trả về danh sách cart")
         void getAllCarts_existingCarts_returnsResponses() {
             // Arrange
-            when(cartRepository.findAll()).thenReturn(List.of(cart(10L, user(1L))));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(cartRepository.findAll(pageable))
+                    .thenReturn(new PageImpl<>(List.of(cart(10L, user(1L))), pageable, 1));
 
             // Act
-            List<CartResponse> responses = cartService.getAllCarts();
+            ResultPaginationDTO responses = cartService.getAllCarts(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).userId()).isEqualTo(1L);
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("userId").containsExactly(1L);
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test

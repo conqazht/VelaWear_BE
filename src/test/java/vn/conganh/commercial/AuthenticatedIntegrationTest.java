@@ -18,11 +18,19 @@ public abstract class AuthenticatedIntegrationTest extends AbstractIntegrationTe
     private JwtEncoder jwtEncoder;
 
     protected String adminToken() {
+        return tokenWithRoles("admin@velawear.local", 1L, List.of("ROLE_ADMIN"));
+    }
+
+    protected String userToken() {
+        return tokenWithRoles("user@velawear.local", 2L, List.of("ROLE_USER"));
+    }
+
+    protected String tokenWithRoles(String subject, Long userId, List<String> roles) {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
-                .subject("admin@velawear.local")
-                .claim("userId", 1L)
-                .claim("roles", List.of("ROLE_ADMIN"))
+                .subject(subject)
+                .claim("userId", userId)
+                .claim("roles", roles)
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(900))
                 .build();

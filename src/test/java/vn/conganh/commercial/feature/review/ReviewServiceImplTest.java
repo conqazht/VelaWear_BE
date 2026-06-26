@@ -19,7 +19,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.Order;
@@ -172,33 +176,43 @@ class ReviewServiceImplTest {
         @DisplayName("getReviewsByOrderId - trả về review theo order")
         void getReviewsByOrderId_existingReviews_returnsResponses() {
             // Arrange
+            Pageable pageable = PageRequest.of(0, 10);
             User user = user(1L);
-            when(reviewRepository.findByOrderItemOrderId(10L))
-                    .thenReturn(List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))));
+            when(reviewRepository.findByOrderItemOrderId(10L, pageable))
+                    .thenReturn(new PageImpl<>(
+                            List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
+                            pageable,
+                            1));
 
             // Act
-            List<ReviewResponse> responses = reviewService.getReviewsByOrderId(10L);
+            ResultPaginationDTO responses = reviewService.getReviewsByOrderId(10L, pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).orderId()).isEqualTo(10L);
-            assertThat(responses.get(0).orderItemId()).isEqualTo(20L);
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("orderId").containsExactly(10L);
+            assertThat(responses.result()).extracting("orderItemId").containsExactly(20L);
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test
         @DisplayName("getReviewsByOrderItemId - trả về review theo order item")
         void getReviewsByOrderItemId_existingReviews_returnsResponses() {
             // Arrange
+            Pageable pageable = PageRequest.of(0, 10);
             User user = user(1L);
-            when(reviewRepository.findByOrderItemId(20L))
-                    .thenReturn(List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))));
+            when(reviewRepository.findByOrderItemId(20L, pageable))
+                    .thenReturn(new PageImpl<>(
+                            List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
+                            pageable,
+                            1));
 
             // Act
-            List<ReviewResponse> responses = reviewService.getReviewsByOrderItemId(20L);
+            ResultPaginationDTO responses = reviewService.getReviewsByOrderItemId(20L, pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).productName()).isEqualTo("Classic Shirt");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("productName").containsExactly("Classic Shirt");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
     }
 

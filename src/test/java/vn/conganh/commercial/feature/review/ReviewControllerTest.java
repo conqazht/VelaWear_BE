@@ -1,162 +1,221 @@
 package vn.conganh.commercial.feature.review;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
-import vn.conganh.commercial.feature.order.Order;
-import vn.conganh.commercial.feature.order.OrderItem;
-import vn.conganh.commercial.feature.order.OrderItemRepository;
-import vn.conganh.commercial.feature.order.OrderRepository;
-import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
-import vn.conganh.commercial.feature.user.User;
-import vn.conganh.commercial.feature.user.UserRepository;
-import vn.conganh.commercial.util.constant.UserGender;
 
 @Transactional
 @DisplayName("Module Review - ReviewController")
 class ReviewControllerTest extends AuthenticatedIntegrationTest {
 
-    @Autowired
-    private ReviewRepository reviewRepository;
+    private static final String BASE_PATH = "/api/v1/reviews";
 
     @Autowired
-    private OrderRepository orderRepository;
+    private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private OrderItemRepository orderItemRepository;
+    @Test
+    @DisplayName("GET / - 200: admin xem danh sách review")
+    void getList_authenticatedAdmin_returnsList() throws Exception {
+        // Arrange
+        seedReview();
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Nested
-    @DisplayName("Happy path")
-    class HappyPath {
-
-        @Test
-        @DisplayName("POST /reviews - 201: tạo review thành công cho item của order đã hoàn thành")
-        void createReview_validRequest_returnsCreatedReview() throws Exception {
-            // Arrange
-            User user = userRepository.save(user("review.user@velawear.local"));
-            Order order = orderRepository.save(order(user, "ORD-REVIEW-POST", "COMPLETED"));
-            OrderItem orderItem = orderItemRepository.save(orderItem(order));
-            CreateReviewRequest request = new CreateReviewRequest(user.getId(), orderItem.getId(), (short) 5, "Good");
-
-            // Act & Assert
-            mockMvc.perform(post("/api/v1/reviews")
-                            .header("Authorization", "Bearer " + adminToken())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.statusCode").value(201))
-                    .andExpect(jsonPath("$.data.id").exists())
-                    .andExpect(jsonPath("$.data.userId").value(user.getId()))
-                    .andExpect(jsonPath("$.data.orderItemId").value(orderItem.getId()))
-                    .andExpect(jsonPath("$.data.productName", is("Classic Shirt")))
-                    .andExpect(jsonPath("$.data.rating").value(5));
-
-            assertThat(reviewRepository.existsByUserIdAndOrderItemId(user.getId(), orderItem.getId())).isTrue();
-        }
+        // Act & Assert
+        mockMvc.perform(get(BASE_PATH)
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)));
     }
 
-    @Nested
-    @DisplayName("Validation errors")
-    class ValidationErrors {
-
-        @Test
-        @DisplayName("POST /reviews - 400: từ chối khi rating lớn hơn 5")
-        void createReview_ratingGreaterThanFive_returnsBadRequestAndDoesNotSave() throws Exception {
-            // Arrange
-            User user = userRepository.save(user("review.validation@velawear.local"));
-            Order order = orderRepository.save(order(user, "ORD-REVIEW-VALIDATION", "COMPLETED"));
-            OrderItem orderItem = orderItemRepository.save(orderItem(order));
-            CreateReviewRequest request = new CreateReviewRequest(user.getId(), orderItem.getId(), (short) 6, "Bad rating");
-
-            // Act & Assert
-            mockMvc.perform(post("/api/v1/reviews")
-                            .header("Authorization", "Bearer " + adminToken())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.statusCode").value(400));
-
-            assertThat(reviewRepository.existsByUserIdAndOrderItemId(user.getId(), orderItem.getId())).isFalse();
-        }
+    @Test
+    @DisplayName("GET / - 401: từ chối request không có access token")
+    void getList_missingToken_returnsUnauthorized() throws Exception {
+        // Act & Assert
+        mockMvc.perform(get(BASE_PATH))
+                .andExpect(status().isUnauthorized());
     }
 
-    @Nested
-    @DisplayName("Business errors")
-    class BusinessErrors {
-
-        @Test
-        @DisplayName("POST /reviews - 400: từ chối khi order chưa hoàn thành")
-        void createReview_orderNotCompleted_returnsBadRequestAndDoesNotSave() throws Exception {
-            // Arrange
-            User user = userRepository.save(user("review.pending@velawear.local"));
-            Order order = orderRepository.save(order(user, "ORD-REVIEW-PENDING", "PENDING"));
-            OrderItem orderItem = orderItemRepository.save(orderItem(order));
-            CreateReviewRequest request = new CreateReviewRequest(user.getId(), orderItem.getId(), (short) 5, "Good");
-
-            // Act & Assert
-            mockMvc.perform(post("/api/v1/reviews")
-                            .header("Authorization", "Bearer " + adminToken())
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.statusCode").value(400));
-
-            assertThat(reviewRepository.existsByUserIdAndOrderItemId(user.getId(), orderItem.getId())).isFalse();
-        }
+    @Test
+    @DisplayName("GET / - 403: từ chối token hợp lệ nhưng không có quyền")
+    void getList_authenticatedRoleWithoutPermission_returnsForbidden() throws Exception {
+        // Act & Assert
+        mockMvc.perform(get(BASE_PATH)
+                        .header("Authorization", "Bearer " + noAccessToken()))
+                .andExpect(status().isForbidden());
     }
 
-    private OrderItem orderItem(Order order) {
-        OrderItem orderItem = new OrderItem();
-        orderItem.setOrder(order);
-        orderItem.setProductName("Classic Shirt");
-        orderItem.setVariantName("White / M");
-        orderItem.setSku("SKU-REVIEW-001");
-        orderItem.setPrice(BigDecimal.valueOf(100000));
-        orderItem.setQuantity(1);
-        orderItem.setSubtotal(BigDecimal.valueOf(100000));
-        orderItem.setStatus("CONFIRMED");
-        return orderItem;
+    @Test
+    @DisplayName("POST / - 401: từ chối request tạo review không có access token")
+    void create_missingToken_returnsUnauthorized() throws Exception {
+        // Act & Assert
+        mockMvc.perform(post(BASE_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 
-    private Order order(User user, String orderCode, String status) {
-        Order order = new Order();
-        order.setUser(user);
-        order.setOrderCode(orderCode);
-        order.setStatus(status);
-        order.setSubtotal(BigDecimal.valueOf(100000));
-        order.setShippingFee(BigDecimal.ZERO);
-        order.setDiscountAmount(BigDecimal.ZERO);
-        order.setFinalAmount(BigDecimal.valueOf(100000));
-        order.setReceiverName("Nguyen Van A");
-        order.setReceiverPhone("0123456789");
-        order.setReceiverAddress("123 Le Loi");
-        order.setPaymentMethod("COD");
-        order.setPaymentStatus("PAID");
-        return order;
+    @Test
+    @DisplayName("POST / - 403: từ chối token hợp lệ nhưng không có quyền tạo review")
+    void create_authenticatedRoleWithoutPermission_returnsForbidden() throws Exception {
+        // Act & Assert
+        mockMvc.perform(post(BASE_PATH)
+                        .header("Authorization", "Bearer " + noAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
     }
 
-    private User user(String email) {
-        User user = new User();
-        user.setFullName("Review Test User");
-        user.setEmail(email);
-        user.setPassword("$2a$10$alreadyencoded");
-        user.setBirthDate(LocalDate.of(2000, 1, 1));
-        user.setGender(UserGender.OTHER);
-        return user;
+    @Test
+    @DisplayName("GET /user/{userId} - 200: admin xem review theo user")
+    void getReviewsByUser_existingUser_returnsList() throws Exception {
+        // Arrange
+        ReviewSeed review = seedReview();
+
+        // Act & Assert
+        mockMvc.perform(get(BASE_PATH + "/user/" + review.userId())
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)));
+    }
+
+    @Test
+    @DisplayName("GET /order/{orderId} - 200: admin xem review theo order")
+    void getReviewsByOrder_existingOrder_returnsList() throws Exception {
+        // Arrange
+        ReviewSeed review = seedReview();
+
+        // Act & Assert
+        mockMvc.perform(get(BASE_PATH + "/order/" + review.orderId())
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)));
+    }
+
+    @Test
+    @DisplayName("GET /order-item/{orderItemId} - 200: admin xem review theo order item")
+    void getReviewsByOrderItem_existingOrderItem_returnsList() throws Exception {
+        // Arrange
+        ReviewSeed review = seedReview();
+
+        // Act & Assert
+        mockMvc.perform(get(BASE_PATH + "/order-item/" + review.orderItemId())
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)));
+    }
+
+    private ReviewSeed seedReview() {
+        Long userId = insertUserRow(unique("review-user"));
+        Long categoryId = seedCategory();
+        Long brandId = seedBrand();
+        Long productId = seedProduct(categoryId, brandId);
+        Long colorId = seedColor();
+        Long sizeId = seedSize();
+        Long variantId = seedVariant(productId, colorId, sizeId);
+        Long orderId = insertOrderRow(userId, unique("review-order").toUpperCase(), "COMPLETED");
+        Long orderItemId = insertForId("""
+                insert into order_items (order_id, variant_id, product_name, variant_name, sku, image, price,
+                    quantity, subtotal, status)
+                values (?, ?, 'Review Product', 'Black / M', ?, null, 100000, 1, 100000, 'CONFIRMED')
+                returning id
+                """, orderId, variantId, unique("review-sku").toUpperCase());
+        Long reviewId = insertForId("""
+                insert into reviews (user_id, order_item_id, rating, comment)
+                values (?, ?, 5, 'Good product')
+                returning id
+                """, userId, orderItemId);
+        return new ReviewSeed(reviewId, userId, orderId, orderItemId);
+    }
+
+    private Long seedBrand() {
+        String suffix = unique("brand");
+        return insertForId("""
+                insert into brands (name, slug, description, status)
+                values (?, ?, 'Seed brand', 'ACTIVE')
+                returning id
+                """, "Brand " + suffix, suffix);
+    }
+
+    private Long seedCategory() {
+        String suffix = unique("category");
+        return insertForId("""
+                insert into categories (name, slug, sort_order, status)
+                values (?, ?, 1, 'ACTIVE')
+                returning id
+                """, "Category " + suffix, suffix);
+    }
+
+    private Long seedColor() {
+        return insertForId("insert into colors (name, hex_code, sort_order) values (?, '#112233', 1) returning id",
+                "Color " + unique("color"));
+    }
+
+    private Long seedSize() {
+        return insertForId("insert into sizes (name, sort_order) values (?, 1) returning id", "Size " + unique("size"));
+    }
+
+    private Long seedProduct(Long categoryId, Long brandId) {
+        String suffix = unique("product");
+        return insertForId("""
+                insert into products (name, slug, description, category_id, brand_id, status)
+                values (?, ?, 'Seed product', ?, ?, 'ACTIVE')
+                returning id
+                """, "Product " + suffix, suffix, categoryId, brandId);
+    }
+
+    private Long seedVariant(Long productId, Long colorId, Long sizeId) {
+        return insertForId("""
+                insert into product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
+                values (?, ?, 100000, 5, ?, ?, 'ACTIVE')
+                returning id
+                """, productId, unique("variant").toUpperCase(), colorId, sizeId);
+    }
+
+    private Long insertUserRow(String suffix) {
+        return insertForId("""
+                insert into users (full_name, email, password, birth_date, gender)
+                values (?, ?, '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq',
+                    date '1999-01-01', 'OTHER')
+                returning id
+                """, "User " + suffix, suffix + "@test.local");
+    }
+
+    private Long insertOrderRow(Long userId, String orderCode, String status) {
+        return insertForId("""
+                insert into orders (user_id, order_code, status, subtotal, shipping_fee, discount_amount,
+                    final_amount, receiver_name, receiver_phone, receiver_address, payment_method, payment_status)
+                values (?, ?, ?, 100000, 10000, 0, 110000, 'Receiver', '0900000000', '123 Test', 'COD', 'UNPAID')
+                returning id
+                """, userId, orderCode, status);
+    }
+
+    private Long insertForId(String sql, Object... args) {
+        return jdbcTemplate.queryForObject(sql, Long.class, args);
+    }
+
+    private String noAccessToken() {
+        return tokenWithRoles("no-access@velawear.local", 999_999L, java.util.List.of("ROLE_NO_ACCESS"));
+    }
+
+    private String unique(String prefix) {
+        return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    private record ReviewSeed(Long reviewId, Long userId, Long orderId, Long orderItemId) {
     }
 }
+

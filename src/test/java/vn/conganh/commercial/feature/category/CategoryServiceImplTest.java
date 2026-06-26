@@ -16,7 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.category.dto.CategoryResponse;
@@ -84,21 +88,24 @@ class CategoryServiceImplTest {
         @DisplayName("getAllCategories - trả về danh sách category")
         void getAllCategories_existingCategories_returnsResponses() {
             // Arrange
-            when(categoryRepository.findAll()).thenReturn(List.of(category(1L, "Shoes", "shoes")));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(categoryRepository.findAllByDeletedAtIsNull(pageable))
+                    .thenReturn(new PageImpl<>(List.of(category(1L, "Shoes", "shoes")), pageable, 1));
 
             // Act
-            List<CategoryResponse> responses = categoryService.getAllCategories();
+            ResultPaginationDTO responses = categoryService.getAllCategories(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).slug()).isEqualTo("shoes");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("slug").containsExactly("shoes");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test
         @DisplayName("getCategoryById - ném ResourceNotFoundException khi không tìm thấy category")
         void getCategoryById_missingCategory_throwsResourceNotFoundException() {
             // Arrange
-            when(categoryRepository.findById(99L)).thenReturn(Optional.empty());
+            when(categoryRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
             // Act & Assert
             assertThatThrownBy(() -> categoryService.getCategoryById(99L))
@@ -116,7 +123,7 @@ class CategoryServiceImplTest {
             // Arrange
             Category category = category(1L, "Old", "old");
             UpdateCategoryRequest request = new UpdateCategoryRequest(null, "New", 2, "INACTIVE");
-            when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
             when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             // Act

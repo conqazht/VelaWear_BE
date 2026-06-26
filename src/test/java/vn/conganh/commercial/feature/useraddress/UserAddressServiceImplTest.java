@@ -18,7 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
@@ -114,28 +118,34 @@ class UserAddressServiceImplTest {
         @DisplayName("getAllUserAddresses - trả về danh sách địa chỉ")
         void getAllUserAddresses_existingAddresses_returnsResponses() {
             // Arrange
-            when(userAddressRepository.findAll()).thenReturn(List.of(address(10L, user(1L), false)));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(userAddressRepository.findAll(pageable))
+                    .thenReturn(new PageImpl<>(List.of(address(10L, user(1L), false)), pageable, 1));
 
             // Act
-            List<UserAddressResponse> responses = userAddressService.getAllUserAddresses();
+            ResultPaginationDTO responses = userAddressService.getAllUserAddresses(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).userId()).isEqualTo(1L);
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("userId").containsExactly(1L);
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test
         @DisplayName("getUserAddressesByUserId - trả về địa chỉ theo user")
         void getUserAddressesByUserId_existingAddresses_returnsResponses() {
             // Arrange
-            when(userAddressRepository.findByUserId(1L)).thenReturn(List.of(address(10L, user(1L), true)));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(userAddressRepository.findByUserId(1L, pageable))
+                    .thenReturn(new PageImpl<>(List.of(address(10L, user(1L), true)), pageable, 1));
 
             // Act
-            List<UserAddressResponse> responses = userAddressService.getUserAddressesByUserId(1L);
+            ResultPaginationDTO responses = userAddressService.getUserAddressesByUserId(1L, pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).isDefault()).isTrue();
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("default").containsExactly(true);
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test

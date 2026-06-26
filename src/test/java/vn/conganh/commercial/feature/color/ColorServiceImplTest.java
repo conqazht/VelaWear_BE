@@ -16,7 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.color.dto.ColorResponse;
@@ -84,14 +88,17 @@ class ColorServiceImplTest {
         @DisplayName("getAll - trả về danh sách color")
         void getAll_existingColors_returnsResponses() {
             // Arrange
-            when(colorRepository.findAll()).thenReturn(List.of(color(1L, "Black")));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(colorRepository.findAll(pageable))
+                    .thenReturn(new PageImpl<>(List.of(color(1L, "Black")), pageable, 1));
 
             // Act
-            List<ColorResponse> responses = colorService.getAll();
+            ResultPaginationDTO responses = colorService.getAll(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).name()).isEqualTo("Black");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("name").containsExactly("Black");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test

@@ -19,7 +19,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.dto.CreateOrderRequest;
@@ -142,18 +146,20 @@ class OrderServiceImplTest {
         @DisplayName("getOrderStatusHistories - trả về lịch sử trạng thái khi order tồn tại")
         void getOrderStatusHistories_existingOrder_returnsHistoryResponses() {
             // Arrange
+            Pageable pageable = PageRequest.of(0, 10);
             Order order = order(10L, user(1L), "SHIPPING");
             when(orderRepository.existsById(10L)).thenReturn(true);
-            when(orderStatusHistoryRepository.findByOrderId(10L))
-                    .thenReturn(List.of(history(100L, order, "PENDING", "SHIPPING")));
+            when(orderStatusHistoryRepository.findByOrderId(10L, pageable))
+                    .thenReturn(new PageImpl<>(List.of(history(100L, order, "PENDING", "SHIPPING")), pageable, 1));
 
             // Act
-            List<OrderStatusHistoryResponse> responses = orderService.getOrderStatusHistories(10L);
+            ResultPaginationDTO responses = orderService.getOrderStatusHistories(10L, pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).fromStatus()).isEqualTo("PENDING");
-            assertThat(responses.get(0).toStatus()).isEqualTo("SHIPPING");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("fromStatus").containsExactly("PENDING");
+            assertThat(responses.result()).extracting("toStatus").containsExactly("SHIPPING");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
     }
 

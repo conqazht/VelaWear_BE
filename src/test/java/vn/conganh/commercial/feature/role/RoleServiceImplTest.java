@@ -16,7 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.role.dto.CreateRoleRequest;
@@ -84,14 +88,17 @@ class RoleServiceImplTest {
         @DisplayName("getAllRoles - trả về danh sách role")
         void getAllRoles_existingRoles_returnsResponses() {
             // Arrange
-            when(roleRepository.findAll()).thenReturn(List.of(role(1L, "ADMIN")));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(roleRepository.findAll(pageable))
+                    .thenReturn(new PageImpl<>(List.of(role(1L, "ADMIN")), pageable, 1));
 
             // Act
-            List<RoleResponse> responses = roleService.getAllRoles();
+            ResultPaginationDTO responses = roleService.getAllRoles(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).name()).isEqualTo("ADMIN");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("name").containsExactly("ADMIN");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test

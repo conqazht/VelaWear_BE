@@ -86,7 +86,7 @@ class ProductServiceImplTest {
             // Arrange
             Product product = product(1L, "Old", "old");
             UpdateProductRequest request = new UpdateProductRequest(3L, 4L, "New", "new desc", "INACTIVE");
-            when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
             when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             // Act
@@ -108,7 +108,7 @@ class ProductServiceImplTest {
         void deleteProduct_existingProduct_setsInactiveAndDeletedAt() {
             // Arrange
             Product product = product(1L, "Sneaker", "sneaker");
-            when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
 
             // Act
             productService.deleteProduct(1L);
@@ -123,7 +123,7 @@ class ProductServiceImplTest {
         @DisplayName("getProductById - ném ResourceNotFoundException khi không tìm thấy product")
         void getProductById_missingProduct_throwsResourceNotFoundException() {
             // Arrange
-            when(productRepository.findById(99L)).thenReturn(Optional.empty());
+            when(productRepository.findByIdAndDeletedAtIsNull(99L)).thenReturn(Optional.empty());
 
             // Act & Assert
             assertThatThrownBy(() -> productService.getProductById(99L))

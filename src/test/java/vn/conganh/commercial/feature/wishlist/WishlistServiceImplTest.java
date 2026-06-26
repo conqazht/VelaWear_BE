@@ -18,7 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.product.Product;
@@ -133,28 +137,34 @@ class WishlistServiceImplTest {
         @DisplayName("getAllWishlists - trả về danh sách wishlist")
         void getAllWishlists_existingWishlists_returnsResponses() {
             // Arrange
-            when(wishlistRepository.findAll()).thenReturn(List.of(wishlist(10L, user(1L), product(2L))));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(wishlistRepository.findAll(pageable))
+                    .thenReturn(new PageImpl<>(List.of(wishlist(10L, user(1L), product(2L))), pageable, 1));
 
             // Act
-            List<WishlistResponse> responses = wishlistService.getAllWishlists();
+            ResultPaginationDTO responses = wishlistService.getAllWishlists(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).productId()).isEqualTo(2L);
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("productId").containsExactly(2L);
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test
         @DisplayName("getWishlistsByUserId - trả về wishlist theo user")
         void getWishlistsByUserId_existingWishlists_returnsResponses() {
             // Arrange
-            when(wishlistRepository.findByUserId(1L)).thenReturn(List.of(wishlist(10L, user(1L), product(2L))));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(wishlistRepository.findByUserId(1L, pageable))
+                    .thenReturn(new PageImpl<>(List.of(wishlist(10L, user(1L), product(2L))), pageable, 1));
 
             // Act
-            List<WishlistResponse> responses = wishlistService.getWishlistsByUserId(1L);
+            ResultPaginationDTO responses = wishlistService.getWishlistsByUserId(1L, pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).userId()).isEqualTo(1L);
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("userId").containsExactly(1L);
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test

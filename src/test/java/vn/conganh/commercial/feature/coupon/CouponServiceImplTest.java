@@ -18,7 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.coupon.dto.CouponResponse;
@@ -103,14 +107,17 @@ class CouponServiceImplTest {
         @DisplayName("getAllCoupons - trả về danh sách coupon")
         void getAllCoupons_existingCoupons_returnsResponses() {
             // Arrange
-            when(couponRepository.findAll()).thenReturn(List.of(coupon(1L, "SALE10")));
+            Pageable pageable = PageRequest.of(0, 10);
+            when(couponRepository.findAll(pageable))
+                    .thenReturn(new PageImpl<>(List.of(coupon(1L, "SALE10")), pageable, 1));
 
             // Act
-            List<CouponResponse> responses = couponService.getAllCoupons();
+            ResultPaginationDTO responses = couponService.getAllCoupons(pageable);
 
             // Assert
-            assertThat(responses).hasSize(1);
-            assertThat(responses.get(0).code()).isEqualTo("SALE10");
+            assertThat(responses.result()).hasSize(1);
+            assertThat(responses.result()).extracting("code").containsExactly("SALE10");
+            assertThat(responses.meta().page()).isEqualTo(1);
         }
 
         @Test
