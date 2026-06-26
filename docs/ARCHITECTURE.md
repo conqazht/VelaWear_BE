@@ -77,14 +77,15 @@ Client
 2. Authenticated Request:
    Client → [Authorization: Bearer <access_token>]
    → SecurityFilterChain → oauth2ResourceServer
-   → JwtDecoder verifies token automatically (HS512)
+   → JwtDecoder verifies token automatically using HS512
    → SecurityContext populated with user info
    → Controller → Service → Repository → Response
 
 3. Token Refresh:
    Client → POST /api/v1/auth/refresh (refresh token)
-   → Validate refresh token → Issue new access token
-   → Return new tokens
+   → Verify refresh JWT (`type=refresh`) → Check DB hash/revoked/expires_at
+   → Rotate refresh token and issue new access token
+   → Return new tokens and set refresh cookie
 ```
 
 ### Permission Check Flow
@@ -140,7 +141,7 @@ Dependency rules:
 ### Security
 - JWT via Spring Security's oauth2-resource-server — no custom filter
 - Algorithm: HS512 (symmetric secret key)
-- Access token: 15 min / Refresh token: 7 days
+- Access token: 15 min / Refresh token: 3 days
 - Secret key loaded from environment variable, never hardcoded
 - Permission-based authorization: each Permission maps an API path + HTTP method to roles
 

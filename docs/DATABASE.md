@@ -344,7 +344,7 @@ Indexes:
 - `INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at)`
 
 Notes:
-- Store a SHA-256 hash of the refresh token, not the raw token.
+- Store a SHA-512 hash of the raw refresh JWT, not the raw token.
 - Cleanup job can delete expired or revoked rows based on token retention policy.
 - Prefer `ON DELETE RESTRICT` for `user_id`; revoke tokens when users are soft-deleted.
 

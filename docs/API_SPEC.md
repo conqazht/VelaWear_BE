@@ -31,25 +31,75 @@ Public endpoints:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/auth/login` | Login and receive access/refresh tokens |
-| POST | `/auth/register` | Register customer/user account |
-| POST | `/auth/refresh` | Rotate refresh token and issue new access token |
+| POST | `/api/v1/auth/login` | Login and receive access/refresh tokens |
+| POST | `/api/v1/auth/register` | Register customer/user account |
+| POST | `/api/v1/auth/refresh` | Rotate refresh token and issue new access token |
+| POST | `/api/v1/auth/logout` | Revoke refresh token |
 | GET | `/actuator/health` | Health check |
 | GET | `/v3/api-docs/**` | OpenAPI docs |
 | GET | `/swagger-ui/**` | Swagger UI |
 
-> Auth endpoints are planned but not implemented yet. Security is already configured with Spring Security oauth2-resource-server.
+> Auth endpoints are implemented. Access tokens and refresh tokens are signed with HS512.
+> Raw refresh JWTs are returned to clients, while the database stores only SHA-512 hashes for revoke/rotate.
+
+Auth token configuration:
+
+| Environment variable | Default | Description |
+|----------------------|---------|-------------|
+| `JWT_SECRET_KEY` | dev fallback only | HMAC signing secret. Required in production. |
+| `JWT_ACCESS_TOKEN_EXPIRATION` | `900` | Access token lifetime in seconds, 15 minutes by default. |
+| `JWT_REFRESH_TOKEN_EXPIRATION` | `259200` | Refresh token lifetime in seconds, 3 days by default. |
+
+Token algorithm:
+
+| Token | Algorithm |
+|-------|-----------|
+| Access token | `HS512` |
+| Refresh token | `HS512` |
+| Refresh token storage | `SHA-512` hash of raw refresh JWT |
 
 ---
 
 ## Response Format
 
-All successful responses follow:
+All successful single-resource responses follow:
 
 ```json
 {
   "statusCode": 200,
   "data": {},
+  "message": "Success",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+Collection endpoints should use the paginated response contract below. Current
+controller code may still return a plain array while pagination is being
+implemented, but the target API contract is `meta + result` for all list APIs.
+
+**Query parameters for paginated list endpoints:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `page` | integer | `1` | 1-based page number |
+| `pageSize` | integer | `10` | Number of records per page |
+| `sort` | string | module default | Sort expression, for example `createdAt,desc` |
+| `keyword` | string | optional | Generic keyword search when supported |
+
+**Paginated Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "meta": {
+      "page": 1,
+      "pageSize": 10,
+      "pages": 5,
+      "total": 50
+    },
+    "result": []
+  },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
 }
@@ -80,7 +130,16 @@ Validation errors include field details:
 }
 ```
 
-Application errors:
+Common application errors:
+
+| HTTP status | Meaning |
+|-------------|---------|
+| `400 Bad Request` | Validation or malformed request |
+| `401 Unauthorized` | Missing, expired, or invalid token |
+| `403 Forbidden` | Authenticated user lacks RBAC permission |
+| `404 Not Found` | Resource does not exist or was soft-deleted |
+| `409 Conflict` | Duplicate or invalid business state |
+| `500 Internal Server Error` | Unexpected server error |
 
 ```json
 {
@@ -93,9 +152,9 @@ Application errors:
 
 ---
 
-## 1. Auth Planned
+## 1. Auth Implemented
 
-### POST /auth/login Public
+### POST /api/v1/auth/login Public
 
 Login and receive JWT tokens.
 
@@ -109,6 +168,12 @@ Login and receive JWT tokens.
 ```
 
 **Success Response (200):**
+
+Headers:
+
+```http
+Set-Cookie: refresh_token=<refreshToken>; Max-Age=259200; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Lax
+```
 
 ```json
 {
@@ -130,11 +195,11 @@ Login and receive JWT tokens.
 |--------|------|
 | 400 | Missing email or password |
 | 401 | Invalid credentials |
-| 423 | User account is locked |
+| 401 | Soft-deleted user |
 
 ---
 
-### POST /auth/register Public
+### POST /api/v1/auth/register Public
 
 Register a storefront customer account.
 
@@ -143,10 +208,11 @@ Register a storefront customer account.
 ```json
 {
   "email": "customer@example.com",
-  "username": "customer01",
   "password": "password123",
   "fullName": "Nguyen Van A",
-  "phone": "0900000000"
+  "birthDate": "2000-01-01",
+  "avatar": null,
+  "gender": "MALE"
 }
 ```
 
@@ -156,14 +222,14 @@ Register a storefront customer account.
 {
   "statusCode": 201,
   "data": {
-    "id": "018fd0e8-6e0e-7d41-9f38-5962a3d4a132",
+    "id": 1,
     "email": "customer@example.com",
-    "username": "customer01",
     "fullName": "Nguyen Van A",
-    "phone": "0900000000",
-    "status": "ACTIVE",
-    "emailVerified": false,
-    "createdAt": "2026-06-14T14:00:00Z"
+    "birthDate": "2000-01-01",
+    "avatar": null,
+    "gender": "MALE",
+    "createdAt": "2026-06-14T14:00:00Z",
+    "updatedAt": "2026-06-14T14:00:00Z"
   },
   "message": "Created",
   "timestamp": "2026-06-14T21:00:00"
@@ -175,13 +241,18 @@ Register a storefront customer account.
 | Status | When |
 |--------|------|
 | 400 | Validation failed |
-| 409 | Email or username already exists |
+| 409 | Email already exists |
 
 ---
 
-### POST /auth/refresh Public
+### POST /api/v1/auth/refresh Public
 
-Get a new access token using refresh token.
+Rotate a valid refresh token and return a new access token plus a new refresh token.
+
+The refresh token can be supplied in either:
+
+- `HttpOnly` cookie named `refresh_token`, preferred for browser clients.
+- JSON request body, useful for mobile clients, API clients, and manual testing.
 
 **Request Body:**
 
@@ -192,6 +263,12 @@ Get a new access token using refresh token.
 ```
 
 **Success Response (200):**
+
+Headers:
+
+```http
+Set-Cookie: refresh_token=<newRefreshToken>; Max-Age=259200; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Lax
+```
 
 ```json
 {
@@ -216,11 +293,27 @@ Get a new access token using refresh token.
 
 ---
 
-### POST /auth/logout
+### POST /api/v1/auth/logout Public
 
 Invalidate refresh token.
 
+The refresh token can be supplied in either the `refresh_token` cookie or request body.
+
+**Request Body:**
+
+```json
+{
+  "refreshToken": "eyJ..."
+}
+```
+
 **Success Response (200):**
+
+Headers:
+
+```http
+Set-Cookie: refresh_token=; Max-Age=0; Path=/api/v1/auth; HttpOnly; Secure; SameSite=Lax
+```
 
 ```json
 {
@@ -233,9 +326,13 @@ Invalidate refresh token.
 
 ---
 
-### GET /auth/me
+### GET /api/v1/auth/me Bearer Implemented
 
 Get current authenticated user.
+
+**Error Responses:**
+
+- `401 Unauthorized` when access token is missing, expired, or invalid.
 
 **Success Response (200):**
 
@@ -243,12 +340,14 @@ Get current authenticated user.
 {
   "statusCode": 200,
   "data": {
-    "id": "018fd0e8-6e0e-7d41-9f38-5962a3d4a132",
-    "email": "admin@example.com",
-    "username": "admin",
+    "id": 1,
     "fullName": "System Admin",
-    "roles": ["SUPER_ADMIN"],
-    "permissions": ["USER_READ", "USER_WRITE", "ROLE_READ", "ROLE_WRITE"]
+    "email": "admin@example.com",
+    "birthDate": "1990-01-01",
+    "avatar": null,
+    "gender": "OTHER",
+    "createdAt": "2026-06-14T14:00:00Z",
+    "updatedAt": "2026-06-14T14:00:00Z"
   },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
@@ -268,18 +367,21 @@ List all users.
 ```json
 {
   "statusCode": 200,
-  "data": [
-    {
-      "id": 1,
-      "fullName": "System Admin",
-      "email": "admin@example.com",
-      "birthDate": "1990-01-01",
-      "avatar": null,
-      "gender": "OTHER",
-      "createdAt": "2026-06-14T14:00:00Z",
-      "updatedAt": "2026-06-14T14:00:00Z"
-    }
-  ],
+  "data": {
+    "meta": { "page": 1, "pageSize": 10, "pages": 1, "total": 1 },
+    "result": [
+      {
+        "id": 1,
+        "fullName": "System Admin",
+        "email": "admin@example.com",
+        "birthDate": "1990-01-01",
+        "avatar": null,
+        "gender": "OTHER",
+        "createdAt": "2026-06-14T14:00:00Z",
+        "updatedAt": "2026-06-14T14:00:00Z"
+      }
+    ]
+  },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
 }
@@ -381,17 +483,27 @@ List roles.
 ```json
 {
   "statusCode": 200,
-  "data": [
-    {
-      "id": "018fd0e8-6e0e-7d41-9f38-5962a3d4a201",
-      "code": "SUPER_ADMIN",
-      "name": "Super Admin",
-      "description": "Full system access.",
-      "systemRole": true,
-      "createdAt": "2026-06-14T14:00:00Z",
-      "updatedAt": "2026-06-14T14:00:00Z"
-    }
-  ],
+  "data": {
+    "meta": { "page": 1, "pageSize": 10, "pages": 1, "total": 1 },
+    "result": [
+      {
+        "id": 1,
+        "name": "ADMIN",
+        "description": "Full system access",
+        "permissions": [
+          {
+            "id": 1,
+            "name": "CREATE_USER",
+            "apiPath": "/api/v1/users",
+            "method": "POST",
+            "module": "USER"
+          }
+        ],
+        "createdAt": "2026-06-14T14:00:00Z",
+        "updatedAt": "2026-06-14T14:00:00Z"
+      }
+    ]
+  },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
 }
@@ -470,16 +582,20 @@ List permissions.
 ```json
 {
   "statusCode": 200,
-  "data": [
-    {
-      "id": "018fd0e8-6e0e-7d41-9f38-5962a3d4a301",
-      "code": "CATALOG_WRITE",
-      "name": "Write catalog",
-      "module": "CATALOG",
-      "description": "Create and update categories, products, and variants.",
-      "createdAt": "2026-06-14T14:00:00Z"
-    }
-  ],
+  "data": {
+    "meta": { "page": 1, "pageSize": 10, "pages": 1, "total": 10 },
+    "result": [
+      {
+        "id": 1,
+        "name": "CREATE_USER",
+        "apiPath": "/api/v1/users",
+        "method": "POST",
+        "module": "USER",
+        "createdAt": "2026-06-14T14:00:00Z",
+        "updatedAt": null
+      }
+    ]
+  },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
 }
@@ -550,19 +666,18 @@ List product categories.
 ```json
 {
   "statusCode": 200,
-  "data": [
-    {
-      "id": "018fd0e8-6e0e-7d41-9f38-5962a3d4a401",
-      "parentId": null,
-      "name": "Electronics",
-      "slug": "electronics",
-      "description": "Electronic products.",
-      "sortOrder": 0,
-      "active": true,
-      "createdAt": "2026-06-14T14:00:00Z",
-      "updatedAt": "2026-06-14T14:00:00Z"
-    }
-  ],
+  "data": {
+    "meta": { "page": 1, "pageSize": 10, "pages": 1, "total": 1 },
+    "result": [
+      {
+        "id": 1,
+        "parentId": null,
+        "name": "Shoes",
+        "createdAt": "2026-06-14T14:00:00Z",
+        "updatedAt": "2026-06-14T14:00:00Z"
+      }
+    ]
+  },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
 }
@@ -631,21 +746,21 @@ List base products.
 ```json
 {
   "statusCode": 200,
-  "data": [
-    {
-      "id": "018fd0e8-6e0e-7d41-9f38-5962a3d4a501",
-      "categoryId": "018fd0e8-6e0e-7d41-9f38-5962a3d4a401",
-      "sku": "PHONE-001",
-      "name": "Smartphone A",
-      "slug": "smartphone-a",
-      "description": "Base product for Smartphone A.",
-      "status": "ACTIVE",
-      "basePrice": 12000000.00,
-      "currency": "VND",
-      "createdAt": "2026-06-14T14:00:00Z",
-      "updatedAt": "2026-06-14T14:00:00Z"
-    }
-  ],
+  "data": {
+    "meta": { "page": 1, "pageSize": 10, "pages": 1, "total": 1 },
+    "result": [
+      {
+        "id": 1,
+        "name": "Running Shoes",
+        "description": "Lightweight daily running shoes.",
+        "categoryId": 1,
+        "brandId": 1,
+        "status": "ACTIVE",
+        "createdAt": "2026-06-14T14:00:00Z",
+        "updatedAt": "2026-06-14T14:00:00Z"
+      }
+    ]
+  },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
 }
@@ -661,14 +776,12 @@ Create product.
 
 ```json
 {
-  "categoryId": "018fd0e8-6e0e-7d41-9f38-5962a3d4a401",
-  "sku": "PHONE-001",
-  "name": "Smartphone A",
-  "slug": "smartphone-a",
-  "description": "Base product for Smartphone A.",
-  "status": "ACTIVE",
-  "basePrice": 12000000.00,
-  "currency": "VND"
+  "categoryId": 1,
+  "brandId": 1,
+  "name": "Running Shoes",
+  "slug": "running-shoes",
+  "description": "Base product for lightweight daily running shoes.",
+  "status": "ACTIVE"
 }
 ```
 
@@ -677,25 +790,23 @@ Create product.
 | Status | When |
 |--------|------|
 | 400 | Validation failed |
-| 400 | Product sku already exists |
 | 400 | Product slug already exists |
 
 ---
 
 ### PUT /products/{id}
 
-Update product fields. `sku` and `slug` are immutable through this endpoint.
+Update product fields. `slug` is immutable through this endpoint.
 
 **Request Body:**
 
 ```json
 {
-  "categoryId": "018fd0e8-6e0e-7d41-9f38-5962a3d4a401",
-  "name": "Smartphone A 2026",
+  "categoryId": 1,
+  "brandId": 1,
+  "name": "Running Shoes 2026",
   "description": "Updated product description.",
-  "status": "ACTIVE",
-  "basePrice": 11500000.00,
-  "currency": "VND"
+  "status": "ACTIVE"
 }
 ```
 
@@ -707,64 +818,142 @@ Soft archive product by setting `status = ARCHIVED` and `deleted_at = now`.
 
 ---
 
-## 7. Commercial Features Planned
+## 7. Business Modules Implemented
 
-The database schema already contains these modules, but APIs are not implemented yet.
+The following business modules already expose controllers. All list endpoints
+should align to the paginated response contract defined in `Response Format`.
 
-### Customers
-
-Planned endpoints:
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/customers` | List customers |
-| GET | `/customers/{id}` | Get customer |
-| POST | `/customers` | Create customer |
-| PUT | `/customers/{id}` | Update customer |
-| DELETE | `/customers/{id}` | Soft delete/block customer |
-
-### Addresses
-
-Planned endpoints:
+### Catalog Supporting Data
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/customers/{customerId}/addresses` | List customer addresses |
-| POST | `/customers/{customerId}/addresses` | Add address |
-| PUT | `/addresses/{id}` | Update address |
-| DELETE | `/addresses/{id}` | Delete address |
+| GET | `/brands` | List brands |
+| GET | `/brands/{id}` | Get brand |
+| POST | `/brands` | Create brand |
+| PUT | `/brands/{id}` | Update brand |
+| DELETE | `/brands/{id}` | Delete brand |
+| GET | `/sizes` | List sizes |
+| GET | `/sizes/{id}` | Get size |
+| POST | `/sizes` | Create size |
+| PUT | `/sizes/{id}` | Update size |
+| DELETE | `/sizes/{id}` | Delete size |
+| GET | `/colors` | List colors |
+| GET | `/colors/{id}` | Get color |
+| POST | `/colors` | Create color |
+| PUT | `/colors/{id}` | Update color |
+| DELETE | `/colors/{id}` | Delete color |
 
-### Product Variants, Images, Inventory
+### Product Variants
 
-Planned endpoints:
+Product variant is the sellable SKU. Variant price can differ by color and size.
+`Product` stores base catalog information; `ProductVariant` stores `price`,
+`salePrice`, `stockQuantity`, `color`, and `size`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/products/{productId}/variants` | List variants |
-| POST | `/products/{productId}/variants` | Create variant |
-| GET | `/products/{productId}/images` | List images |
-| POST | `/products/{productId}/images` | Add image |
-| GET | `/inventory` | List stock records |
-| PUT | `/inventory/{id}` | Adjust stock |
+| GET | `/product-variants` | List product variants |
+| GET | `/product-variants/{id}` | Get product variant |
+| POST | `/product-variants` | Create product variant |
+| PUT | `/product-variants/{id}` | Update product variant |
+| DELETE | `/product-variants/{id}` | Delete product variant |
 
-### Cart, Orders, Payments, Shipments
+**Create/Update Request Body:**
 
-Planned endpoints:
+```json
+{
+  "productId": 1,
+  "sku": "RUN-SHOE-BLACK-40",
+  "price": 1200000.00,
+  "salePrice": 990000.00,
+  "stockQuantity": 50,
+  "colorId": 1,
+  "sizeId": 1,
+  "status": "ACTIVE"
+}
+```
+
+**Response Example:**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "id": 1,
+    "product": { "id": 1, "name": "Running Shoes" },
+    "sku": "RUN-SHOE-BLACK-40",
+    "price": 1200000.00,
+    "salePrice": 990000.00,
+    "stockQuantity": 50,
+    "color": { "id": 1, "name": "Black" },
+    "size": { "id": 1, "name": "40" },
+    "status": "ACTIVE",
+    "createdAt": "2026-06-14T14:00:00Z",
+    "updatedAt": "2026-06-14T14:00:00Z"
+  },
+  "message": "Success",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+### User Addresses
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/cart` | Get current customer cart |
-| POST | `/cart/items` | Add item to cart |
-| PUT | `/cart/items/{id}` | Update cart item quantity |
-| DELETE | `/cart/items/{id}` | Remove cart item |
-| POST | `/orders` | Checkout/create order |
+| GET | `/user-addresses` | List addresses, optionally filter by `userId` |
+| GET | `/user-addresses/{id}` | Get address |
+| POST | `/user-addresses` | Create address |
+| PUT | `/user-addresses/{id}` | Update address |
+| DELETE | `/user-addresses/{id}` | Delete address |
+
+### Coupon, Cart, Wishlist
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/coupons` | List coupons |
+| GET | `/coupons/{id}` | Get coupon |
+| POST | `/coupons` | Create coupon |
+| PUT | `/coupons/{id}` | Update coupon |
+| DELETE | `/coupons/{id}` | Delete coupon |
+| GET | `/carts` | List carts |
+| GET | `/carts/{id}` | Get cart |
+| GET | `/carts/user/{userId}` | Get cart by user |
+| POST | `/carts` | Create cart |
+| DELETE | `/carts/{id}` | Delete cart |
+| GET | `/wishlists` | List wishlists, optionally filter by `userId` and `productId` |
+| GET | `/wishlists/{id}` | Get wishlist item |
+| POST | `/wishlists` | Create wishlist item |
+| DELETE | `/wishlists/{id}` | Delete wishlist item |
+
+### Orders, Payments, Reviews
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/orders` | List orders |
-| GET | `/orders/{id}` | Get order detail |
-| PUT | `/orders/{id}/status` | Update order status |
-| POST | `/payments` | Create payment record |
-| PUT | `/payments/{id}/status` | Update payment status |
-| POST | `/shipments` | Create shipment |
-| PUT | `/shipments/{id}/status` | Update shipment status |
+| GET | `/orders/{id}` | Get order by id |
+| GET | `/orders/code/{orderCode}` | Get order by business code |
+| GET | `/orders/user/{userId}` | List orders by user |
+| GET | `/orders/{id}/status-histories` | List status history of an order |
+| POST | `/orders` | Create order |
+| PUT | `/orders/{id}` | Update order |
+| DELETE | `/orders/{id}` | Delete order |
+| GET | `/payments` | List payments |
+| GET | `/payments/{id}` | Get payment |
+| POST | `/payments` | Create payment |
+| PUT | `/payments/{id}` | Update payment |
+| DELETE | `/payments/{id}` | Delete payment |
+| GET | `/reviews` | List reviews |
+| GET | `/reviews/user/{userId}` | List reviews by user |
+| GET | `/reviews/order/{orderId}` | List reviews by order |
+| GET | `/reviews/order-item/{orderItemId}` | List reviews by order item |
+| POST | `/reviews` | Create review |
+
+### Still Planned
+
+| Module | Planned scope |
+|--------|---------------|
+| Product images | Image upload/listing APIs |
+| Inventory | Stock records and stock adjustment APIs |
+| Shipments | Shipment creation and shipment status tracking |
 
 ---
 
@@ -772,11 +961,11 @@ Planned endpoints:
 
 | Method | Endpoint | Auth | Status | Description |
 |--------|----------|------|--------|-------------|
-| POST | `/auth/login` | Public | Planned | Login |
-| POST | `/auth/register` | Public | Planned | Register |
-| POST | `/auth/refresh` | Public | Planned | Refresh token |
-| POST | `/auth/logout` | Bearer | Planned | Logout |
-| GET | `/auth/me` | Bearer | Planned | Current user |
+| POST | `/api/v1/auth/login` | Public | Implemented | Login |
+| POST | `/api/v1/auth/register` | Public | Implemented | Register |
+| POST | `/api/v1/auth/refresh` | Public | Implemented | Refresh token |
+| POST | `/api/v1/auth/logout` | Public | Implemented | Logout |
+| GET | `/api/v1/auth/me` | Bearer | Implemented | Current user |
 | GET | `/users` | Bearer | Implemented | List users |
 | GET | `/users/{id}` | Bearer | Implemented | Get user |
 | POST | `/users` | Bearer | Implemented | Create user |
@@ -802,3 +991,60 @@ Planned endpoints:
 | POST | `/products` | Bearer | Implemented | Create product |
 | PUT | `/products/{id}` | Bearer | Implemented | Update product |
 | DELETE | `/products/{id}` | Bearer | Implemented | Soft archive product |
+| GET | `/brands` | Bearer | Implemented | List brands |
+| GET | `/brands/{id}` | Bearer | Implemented | Get brand |
+| POST | `/brands` | Bearer | Implemented | Create brand |
+| PUT | `/brands/{id}` | Bearer | Implemented | Update brand |
+| DELETE | `/brands/{id}` | Bearer | Implemented | Delete brand |
+| GET | `/sizes` | Bearer | Implemented | List sizes |
+| GET | `/sizes/{id}` | Bearer | Implemented | Get size |
+| POST | `/sizes` | Bearer | Implemented | Create size |
+| PUT | `/sizes/{id}` | Bearer | Implemented | Update size |
+| DELETE | `/sizes/{id}` | Bearer | Implemented | Delete size |
+| GET | `/colors` | Bearer | Implemented | List colors |
+| GET | `/colors/{id}` | Bearer | Implemented | Get color |
+| POST | `/colors` | Bearer | Implemented | Create color |
+| PUT | `/colors/{id}` | Bearer | Implemented | Update color |
+| DELETE | `/colors/{id}` | Bearer | Implemented | Delete color |
+| GET | `/product-variants` | Bearer | Implemented | List product variants |
+| GET | `/product-variants/{id}` | Bearer | Implemented | Get product variant |
+| POST | `/product-variants` | Bearer | Implemented | Create product variant |
+| PUT | `/product-variants/{id}` | Bearer | Implemented | Update product variant |
+| DELETE | `/product-variants/{id}` | Bearer | Implemented | Delete product variant |
+| GET | `/user-addresses` | Bearer | Implemented | List user addresses, optional `userId` filter |
+| GET | `/user-addresses/{id}` | Bearer | Implemented | Get user address |
+| POST | `/user-addresses` | Bearer | Implemented | Create user address |
+| PUT | `/user-addresses/{id}` | Bearer | Implemented | Update user address |
+| DELETE | `/user-addresses/{id}` | Bearer | Implemented | Delete user address |
+| GET | `/coupons` | Bearer | Implemented | List coupons |
+| GET | `/coupons/{id}` | Bearer | Implemented | Get coupon |
+| POST | `/coupons` | Bearer | Implemented | Create coupon |
+| PUT | `/coupons/{id}` | Bearer | Implemented | Update coupon |
+| DELETE | `/coupons/{id}` | Bearer | Implemented | Delete coupon |
+| GET | `/carts` | Bearer | Implemented | List carts |
+| GET | `/carts/{id}` | Bearer | Implemented | Get cart |
+| GET | `/carts/user/{userId}` | Bearer | Implemented | Get cart by user |
+| POST | `/carts` | Bearer | Implemented | Create cart |
+| DELETE | `/carts/{id}` | Bearer | Implemented | Delete cart |
+| GET | `/wishlists` | Bearer | Implemented | List wishlists, optional `userId`/`productId` filters |
+| GET | `/wishlists/{id}` | Bearer | Implemented | Get wishlist item |
+| POST | `/wishlists` | Bearer | Implemented | Create wishlist item |
+| DELETE | `/wishlists/{id}` | Bearer | Implemented | Delete wishlist item |
+| GET | `/orders` | Bearer | Implemented | List orders |
+| GET | `/orders/{id}` | Bearer | Implemented | Get order by id |
+| GET | `/orders/code/{orderCode}` | Bearer | Implemented | Get order by code |
+| GET | `/orders/user/{userId}` | Bearer | Implemented | List orders by user |
+| GET | `/orders/{id}/status-histories` | Bearer | Implemented | List order status histories |
+| POST | `/orders` | Bearer | Implemented | Create order |
+| PUT | `/orders/{id}` | Bearer | Implemented | Update order |
+| DELETE | `/orders/{id}` | Bearer | Implemented | Delete order |
+| GET | `/payments` | Bearer | Implemented | List payments |
+| GET | `/payments/{id}` | Bearer | Implemented | Get payment |
+| POST | `/payments` | Bearer | Implemented | Create payment |
+| PUT | `/payments/{id}` | Bearer | Implemented | Update payment |
+| DELETE | `/payments/{id}` | Bearer | Implemented | Delete payment |
+| GET | `/reviews` | Bearer | Implemented | List reviews |
+| GET | `/reviews/user/{userId}` | Bearer | Implemented | List reviews by user |
+| GET | `/reviews/order/{orderId}` | Bearer | Implemented | List reviews by order |
+| GET | `/reviews/order-item/{orderItemId}` | Bearer | Implemented | List reviews by order item |
+| POST | `/reviews` | Bearer | Implemented | Create review |

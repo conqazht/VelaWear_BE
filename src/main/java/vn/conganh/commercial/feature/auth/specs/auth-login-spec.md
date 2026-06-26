@@ -5,7 +5,7 @@
 **When** client sends `POST /api/v1/auth/login` with `{"email":"user@example.com","password":"Password123!"}`
 **Then** response status is 200
 **And** `data.accessToken` is a non-empty JWT string
-**And** `data.refreshToken` is a non-empty UUID string
+**And** `data.refreshToken` is a non-empty JWT string
 **And** `data.expiresIn` is 900 (seconds)
 **And** refresh token is persisted in `refresh_tokens` table with `revoked=false`
 
@@ -48,5 +48,5 @@
 **Then** decode the `accessToken` JWT and verify:
 - `sub` = "user@example.com"
 - `userId` = 1
-- `roles` contains "USER"
+- `roles` contains "ROLE_USER"
 - `exp` is approximately 15 minutes from now

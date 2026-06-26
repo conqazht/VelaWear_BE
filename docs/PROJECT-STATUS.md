@@ -1,5 +1,16 @@
 # Project Status
 
+## 2026-06-26
+
+### Completed
+
+- Refactored Auth to implement `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/logout`.
+- Register now creates a user and assigns the default `USER` role.
+- Login and refresh issue HS512 JWT access tokens with 15-minute expiry.
+- Refresh tokens are HS512 JWTs stored with SHA-512 hashing, revoked on logout, and rotated on refresh with a 3-day expiry.
+- Production JWT configuration now requires `JWT_SECRET_KEY` from environment variables, with token TTLs configurable through env.
+- Added Auth context documentation and aligned API spec with implemented Auth endpoints.
+
 ## 2026-06-23
 
 ### Completed
