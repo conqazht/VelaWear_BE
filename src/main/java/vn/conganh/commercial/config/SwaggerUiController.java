@@ -34,6 +34,10 @@ public class SwaggerUiController {
                         tagsSorter: "alpha",
                         tryItOutEnabled: true,
                         validatorUrl: "",
+                        requestInterceptor: (request) => {
+                            request.credentials = "include";
+                            return request;
+                        },
                         responseInterceptor: (response) => {
                             saveAccessTokenFromAuthResponse(response);
                             return response;

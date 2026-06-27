@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.auth;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -27,6 +28,7 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Tag(name = "Authentication", description = "Authentication and token management endpoints")
 public class AuthController {
 
     private static final String REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
@@ -44,7 +46,7 @@ public class AuthController {
                 request,
                 httpRequest.getHeader("User-Agent"),
                 extractClientIp(httpRequest));
-        setRefreshTokenCookie(httpResponse, response.refreshToken());
+        setRefreshTokenCookie(httpRequest, httpResponse, response.refreshToken());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -60,7 +62,7 @@ public class AuthController {
             HttpServletResponse httpResponse) {
         TokenResponse response = authService.refreshToken(
                 new RefreshTokenRequest(extractRefreshToken(request, httpRequest)));
-        setRefreshTokenCookie(httpResponse, response.refreshToken());
+        setRefreshTokenCookie(httpRequest, httpResponse, response.refreshToken());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -105,17 +107,28 @@ public class AuthController {
                 .orElse(null);
     }
 
-    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+    private void setRefreshTokenCookie(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            String refreshToken) {
         response.setHeader("Set-Cookie",
                 REFRESH_TOKEN_COOKIE_NAME + "=" + refreshToken
-                        + "; HttpOnly; Secure; SameSite=Lax; Path=" + COOKIE_PATH
+                        + "; HttpOnly; SameSite=Lax; Path=" + COOKIE_PATH
+                        + secureCookieAttribute(request)
                         + "; Max-Age=" + jwtProperties.refreshTokenExpiration());
     }
 
     private void clearRefreshTokenCookie(HttpServletResponse response) {
         response.setHeader("Set-Cookie",
                 REFRESH_TOKEN_COOKIE_NAME + "=; Max-Age=0; Path=" + COOKIE_PATH
-                        + "; HttpOnly; Secure; SameSite=Lax");
+                        + "; HttpOnly; SameSite=Lax");
+    }
+
+    private String secureCookieAttribute(HttpServletRequest request) {
+        if (request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"))) {
+            return "; Secure";
+        }
+        return "";
     }
 
     private String extractClientIp(HttpServletRequest request) {
