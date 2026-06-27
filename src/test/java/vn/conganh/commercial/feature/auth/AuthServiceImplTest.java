@@ -236,24 +236,22 @@ class AuthServiceImplTest {
     class RefreshTokenGroup {
 
         @Test
-        @DisplayName("refreshToken - rotate refresh token và trả về access token mới")
-        void refreshToken_validRefreshToken_returnsNewTokenPair() {
+        @DisplayName("refreshToken - giữ nguyên refresh token và trả về access token mới")
+        void refreshToken_validRefreshToken_returnsNewAccessTokenAndSameRefreshToken() {
             // Arrange
             User user = user(1L);
             RefreshToken refreshToken = refreshToken(user, validRefreshJwt(user));
             when(refreshTokenService.findValidRefreshToken(refreshToken.getToken())).thenReturn(refreshToken);
-            when(userHasRoleRepository.findRolesByUserId(1L)).thenReturn(List.of(role(1L, "ADMIN")));
+            when(userRepository.findRolesByUserId(1L)).thenReturn(List.of(role(1L, "ADMIN")));
 
             // Act
             TokenResponse response = authService.refreshToken(new RefreshTokenRequest(refreshToken.getToken()));
 
             // Assert
-            assertThat(refreshToken.isRevoked()).isTrue();
+            assertThat(refreshToken.isRevoked()).isFalse();
             assertThat(response.accessToken()).isNotBlank();
-            assertThat(response.refreshToken()).isNotBlank();
-            verify(refreshTokenService).createRefreshToken(argThat(request ->
-                    "Chrome".equals(request.deviceInfo())
-                            && "127.0.0.1".equals(request.ipAddress())));
+            assertThat(response.refreshToken()).isEqualTo(refreshToken.getToken());
+            verify(refreshTokenService, never()).createRefreshToken(any());
         }
     }
 
@@ -286,7 +284,7 @@ class AuthServiceImplTest {
             User user = user(1L);
             Role role = role(2L, "SUPER_ADMIN");
             when(userRepository.findByEmailAndDeletedAtIsNull("admin@example.com")).thenReturn(Optional.of(user));
-            when(userHasRoleRepository.findRolesByUserId(1L)).thenReturn(List.of(role));
+            when(userRepository.findRolesByUserId(1L)).thenReturn(List.of(role));
 
             // Act
             UserResponse response = authService.getMe("admin@example.com");

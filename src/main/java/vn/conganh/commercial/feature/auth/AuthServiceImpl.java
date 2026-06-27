@@ -124,17 +124,15 @@ public class AuthServiceImpl implements AuthService {
         validateRefreshJwt(request.refreshToken());
         RefreshToken existingToken = refreshTokenService.findValidRefreshToken(request.refreshToken());
         User user = existingToken.getUser();
-        existingToken.setRevoked(true);
 
-        List<String> roles = userHasRoleRepository.findRolesByUserId(user.getId()).stream()
+        List<String> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
         String accessToken = generateAccessToken(user.getEmail(), user.getId(), roles);
-        String refreshToken = createRefreshToken(user, existingToken.getDeviceInfo(), existingToken.getIpAddress());
 
         log.info("[VelaWear/Auth] - REFRESH_TOKEN: userId: {}", user.getId());
 
-        return new TokenResponse(accessToken, refreshToken, jwtProperties.accessTokenExpiration());
+        return new TokenResponse(accessToken, request.refreshToken(), jwtProperties.accessTokenExpiration());
     }
 
     @Override
@@ -149,7 +147,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
 
-        List<UserResponse.RoleSummaryResponse> roles = userHasRoleRepository.findRolesByUserId(user.getId()).stream()
+        List<UserResponse.RoleSummaryResponse> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(UserResponse.RoleSummaryResponse::fromEntity)
                 .toList();
         return UserResponse.fromEntity(user, roles);

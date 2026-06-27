@@ -111,8 +111,8 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
         }
 
         @Test
-        @DisplayName("POST /auth/refresh - 200: rotate refresh token và trả về token mới")
-        void refreshToken_validRefreshToken_returnsNewTokenPairAndRevokesOldToken() throws Exception {
+        @DisplayName("POST /auth/refresh - 200: giữ nguyên refresh token và trả về token mới")
+        void refreshToken_validRefreshToken_returnsSameRefreshTokenAndNewAccessToken() throws Exception {
             // Arrange
             userRepository.save(user("auth.refresh@velawear.local", "Password123!"));
             String oldRefreshToken = loginAndExtractRefreshToken("auth.refresh@velawear.local", "Password123!");
@@ -126,14 +126,14 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                     .andExpect(jsonPath("$.statusCode").value(200))
                     .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
                     .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
-                    .andExpect(jsonPath("$.data.refreshToken").value(is(org.hamcrest.Matchers.not(oldRefreshToken))))
+                    .andExpect(jsonPath("$.data.refreshToken").value(is(oldRefreshToken)))
                     .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
                     .andExpect(jsonPath("$.data.expiresIn").value(900))
                     .andExpect(header().string(HttpHeaders.SET_COOKIE,
-                            org.hamcrest.Matchers.containsString("refresh_token=")));
+                            org.hamcrest.Matchers.containsString("refresh_token=" + oldRefreshToken)));
 
-            assertThat(refreshTokenRepository.count()).isEqualTo(refreshTokenCountBefore + 1);
-            assertThat(countRevokedRefreshTokens()).isGreaterThanOrEqualTo(1);
+            assertThat(refreshTokenRepository.count()).isEqualTo(refreshTokenCountBefore);
+            assertThat(countRevokedRefreshTokens()).isEqualTo(0);
         }
 
         @Test
