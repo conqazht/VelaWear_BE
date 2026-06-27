@@ -3,10 +3,11 @@ package vn.conganh.commercial.feature.role;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import vn.conganh.commercial.feature.permission.Permission;
 
-public interface RoleRepository extends JpaRepository<Role, Long> {
+public interface RoleRepository extends JpaRepository<Role, Long>, JpaSpecificationExecutor<Role> {
 
     Optional<Role> findByName(String name);
 
@@ -20,4 +21,3 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
             """)
     List<Permission> findPermissionsByRoleId(Long roleId);
 }
-

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
@@ -91,11 +93,11 @@ class RoleServiceImplTest {
         void getAllRoles_existingRoles_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(roleRepository.findAll(pageable))
+            when(roleRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(role(1L, "ADMIN")), pageable, 1));
 
             // Act
-            ResultPaginationDTO responses = roleService.getAllRoles(pageable);
+            ResultPaginationDTO responses = roleService.getAllRoles(null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);

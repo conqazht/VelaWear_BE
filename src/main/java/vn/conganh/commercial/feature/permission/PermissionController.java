@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
+import vn.conganh.commercial.feature.permission.dto.PermissionFilterRequest;
 import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
 
@@ -30,8 +31,10 @@ public class PermissionController {
     private final PermissionService permissionService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getPermissions(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(permissionService.getAllPermissions(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getPermissions(
+            @ParameterObject PermissionFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(permissionService.getAllPermissions(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")

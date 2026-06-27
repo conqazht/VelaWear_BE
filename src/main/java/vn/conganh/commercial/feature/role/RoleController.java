@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.role.dto.CreateRoleRequest;
+import vn.conganh.commercial.feature.role.dto.RoleFilterRequest;
 import vn.conganh.commercial.feature.role.dto.RoleResponse;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 
@@ -30,8 +31,10 @@ public class RoleController {
     private final RoleService roleService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getRoles(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(roleService.getAllRoles(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getRoles(
+            @ParameterObject RoleFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(roleService.getAllRoles(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")
