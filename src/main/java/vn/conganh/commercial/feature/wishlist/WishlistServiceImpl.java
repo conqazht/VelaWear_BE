@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.wishlist;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -12,7 +14,9 @@ import vn.conganh.commercial.feature.product.ProductRepository;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
+import vn.conganh.commercial.feature.wishlist.dto.WishlistFilterRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
+import vn.conganh.commercial.util.FilterSpecifications;
 
 @Service
 @RequiredArgsConstructor
@@ -24,22 +28,32 @@ public class WishlistServiceImpl implements WishlistService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllWishlists(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(wishlistRepository.findAll(pageable)
+    public ResultPaginationDTO getAllWishlists(WishlistFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(wishlistRepository.findAll(Specification.where(WishlistSpecification.build(filter)), pageable)
                 .map(WishlistResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getWishlistsByUserId(Long userId, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(wishlistRepository.findByUserId(userId, pageable)
+    public ResultPaginationDTO getWishlistsByUserId(Long userId, WishlistFilterRequest filter, Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId("userId", userId, filter == null ? null : filter.userId());
+        WishlistFilterRequest scopedFilter = filter == null
+                ? new WishlistFilterRequest(userId, null, null, null)
+                : filter.withUserId(userId);
+
+        return ResultPaginationDTO.fromPage(wishlistRepository.findAll(Specification.where(WishlistSpecification.build(scopedFilter)), pageable)
                 .map(WishlistResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getWishlistsByProductId(Long productId, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(wishlistRepository.findByProductId(productId, pageable)
+    public ResultPaginationDTO getWishlistsByProductId(Long productId, WishlistFilterRequest filter, Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId("productId", productId, filter == null ? null : filter.productId());
+        WishlistFilterRequest scopedFilter = filter == null
+                ? new WishlistFilterRequest(null, productId, null, null)
+                : filter.withProductId(productId);
+
+        return ResultPaginationDTO.fromPage(wishlistRepository.findAll(Specification.where(WishlistSpecification.build(scopedFilter)), pageable)
                 .map(WishlistResponse::fromEntity));
     }
 

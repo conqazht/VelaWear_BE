@@ -13,11 +13,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
+import vn.conganh.commercial.feature.wishlist.dto.WishlistFilterRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 
 @RestController
@@ -30,16 +30,9 @@ public class WishlistController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getWishlists(
-            @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) Long productId,
+            @ParameterObject WishlistFilterRequest filter,
             @ParameterObject Pageable pageable) {
-        if (userId != null) {
-            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByUserId(userId, pageable)));
-        }
-        if (productId != null) {
-            return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByProductId(productId, pageable)));
-        }
-        return ResponseEntity.ok(ApiResponse.success(wishlistService.getAllWishlists(pageable)));
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getAllWishlists(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")
