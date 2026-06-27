@@ -384,7 +384,14 @@ List all users.
         "avatar": null,
         "gender": "OTHER",
         "createdAt": "2026-06-14T14:00:00Z",
-        "updatedAt": "2026-06-14T14:00:00Z"
+        "updatedAt": "2026-06-14T14:00:00Z",
+        "roles": [
+          {
+            "id": 1,
+            "name": "SUPER_ADMIN"
+          }
+        ],
+        "permissions": []
       }
     ]
   },

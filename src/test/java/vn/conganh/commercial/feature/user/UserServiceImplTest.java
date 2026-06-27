@@ -147,8 +147,11 @@ class UserServiceImplTest {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
             User user = activeUser(1L, "user@example.com");
+            Role role = role(2L, "ADMIN");
             when(userRepository.findAllByDeletedAtIsNull(pageable))
                     .thenReturn(new PageImpl<>(List.of(user), pageable, 1));
+            when(userHasRoleRepository.findAllWithRoleByUserIdIn(List.of(1L)))
+                    .thenReturn(List.of(userHasRole(user, role)));
 
             // Act
             ResultPaginationDTO responses = userService.getAllUsers(pageable);
@@ -157,6 +160,13 @@ class UserServiceImplTest {
             assertThat(responses.result()).hasSize(1);
             assertThat(responses.result()).extracting("id").containsExactly(1L);
             assertThat(responses.result()).extracting("email").containsExactly("user@example.com");
+            assertThat(responses.result())
+                    .extracting("roles")
+                    .asList()
+                    .first()
+                    .asList()
+                    .extracting("name")
+                    .containsExactly("ADMIN");
             assertThat(responses.meta().page()).isEqualTo(1);
         }
 
@@ -166,6 +176,7 @@ class UserServiceImplTest {
             // Arrange
             User user = activeUser(1L, "user@example.com");
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
+            when(userHasRoleRepository.findAllWithRoleByUserIdIn(List.of(1L))).thenReturn(List.of());
 
             // Act
             UserResponse response = userService.getUserById(1L);
@@ -183,7 +194,8 @@ class UserServiceImplTest {
             Role role = role(2L, "ADMIN");
             Permission permission = permission(3L, "CREATE_USER", "/api/v1/users", "POST", "USER");
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
-            when(userHasRoleRepository.findRolesByUserId(1L)).thenReturn(List.of(role));
+            when(userHasRoleRepository.findAllWithRoleByUserIdIn(List.of(1L)))
+                    .thenReturn(List.of(userHasRole(user, role)));
             when(userHasRoleRepository.findEffectivePermissionsByUserId(1L)).thenReturn(List.of(permission));
 
             // Act
@@ -325,6 +337,13 @@ class UserServiceImplTest {
         ReflectionTestUtils.setField(role, "id", id);
         role.setName(name);
         return role;
+    }
+
+    private UserHasRole userHasRole(User user, Role role) {
+        UserHasRole userHasRole = new UserHasRole();
+        userHasRole.setUser(user);
+        userHasRole.setRole(role);
+        return userHasRole;
     }
 
     private Permission permission(Long id, String name, String apiPath, String method, String module) {

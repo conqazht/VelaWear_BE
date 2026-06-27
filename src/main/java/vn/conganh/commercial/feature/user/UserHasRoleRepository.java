@@ -17,6 +17,15 @@ public interface UserHasRoleRepository extends JpaRepository<UserHasRole, Long> 
     List<Role> findRolesByUserId(Long userId);
 
     @Query("""
+            select uhr
+            from UserHasRole uhr
+            join fetch uhr.role
+            where uhr.user.id in :userIds
+            order by uhr.user.id, uhr.role.id
+            """)
+    List<UserHasRole> findAllWithRoleByUserIdIn(List<Long> userIds);
+
+    @Query("""
             select distinct rhp.permission
             from UserHasRole uhr
             join RoleHasPermission rhp on rhp.role.id = uhr.role.id
