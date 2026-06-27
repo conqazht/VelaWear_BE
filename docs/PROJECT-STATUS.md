@@ -10,6 +10,7 @@
 - Added explicit RBAC join queries for admin user-role, user effective-permission, and role-permission detail views.
 - Added focused service tests for auth `/me` roles, admin user RBAC detail, and role permission detail.
 - Updated user list/detail responses to include role summaries consistently with `/api/v1/auth/me`.
+- Added dev seed `example.com` accounts for MANAGER, STAFF, and USER role testing.
 - Refactored Auth to implement `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/logout`.
 - Register now creates a user and assigns the default `USER` role.
 - Login and refresh issue HS512 JWT access tokens with 15-minute expiry.

@@ -2,6 +2,9 @@ INSERT INTO users (full_name, email, password, birth_date, avatar, gender)
 VALUES
     ('System Admin', 'admin@gmail.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
     ('Example Admin', 'admin@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
+    ('Example Manager', 'manager@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
+    ('Example Staff', 'staff@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
+    ('Example User', 'user@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
     ('VelaWear Admin', 'admin@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1995-01-10', NULL, 'OTHER'),
     ('VelaWear Staff', 'staff@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1998-05-20', NULL, 'FEMALE'),
     ('Demo Customer', 'user@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '2000-09-15', NULL, 'MALE')
@@ -24,14 +27,21 @@ INSERT INTO user_role (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 JOIN roles r ON r.name = 'STAFF'
-WHERE u.email = 'staff@velawear.local'
+WHERE u.email IN ('staff@example.com', 'staff@velawear.local')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO user_role (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+JOIN roles r ON r.name = 'MANAGER'
+WHERE u.email = 'manager@example.com'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO user_role (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 JOIN roles r ON r.name = 'USER'
-WHERE u.email = 'user@velawear.local'
+WHERE u.email IN ('user@example.com', 'user@velawear.local')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO permissions (name, api_path, method, module)
