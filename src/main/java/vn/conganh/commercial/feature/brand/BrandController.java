@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.brand.dto.BrandFilterRequest;
 import vn.conganh.commercial.feature.brand.dto.BrandResponse;
 import vn.conganh.commercial.feature.brand.dto.CreateBrandRequest;
 import vn.conganh.commercial.feature.brand.dto.UpdateBrandRequest;
@@ -30,8 +31,10 @@ public class BrandController {
     private final BrandService brandService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(brandService.getAll(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(
+            @ParameterObject BrandFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(brandService.getAll(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")

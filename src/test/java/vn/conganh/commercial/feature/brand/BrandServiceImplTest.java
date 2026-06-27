@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.brand;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
@@ -92,11 +94,11 @@ class BrandServiceImplTest {
         void getAll_existingBrands_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(brandRepository.findAllByDeletedAtIsNull(pageable))
+            when(brandRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(brand(1L, "Nike", "nike")), pageable, 1));
 
             // Act
-            ResultPaginationDTO responses = brandService.getAll(pageable);
+            ResultPaginationDTO responses = brandService.getAll(null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);
