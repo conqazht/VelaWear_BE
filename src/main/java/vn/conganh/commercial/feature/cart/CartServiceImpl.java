@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.cart;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -7,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.cart.dto.CartFilterRequest;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 import vn.conganh.commercial.feature.user.User;
@@ -21,8 +24,8 @@ public class CartServiceImpl implements CartService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllCarts(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(cartRepository.findAll(pageable)
+    public ResultPaginationDTO getAllCarts(CartFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(cartRepository.findAll(Specification.where(CartSpecification.build(filter)), pageable)
                 .map(CartResponse::fromEntity));
     }
 

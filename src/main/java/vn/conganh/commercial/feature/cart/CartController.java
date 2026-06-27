@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.cart.dto.CartFilterRequest;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 
@@ -28,8 +29,10 @@ public class CartController {
     private final CartService cartService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCarts(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(cartService.getAllCarts(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCarts(
+            @ParameterObject CartFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(cartService.getAllCarts(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")

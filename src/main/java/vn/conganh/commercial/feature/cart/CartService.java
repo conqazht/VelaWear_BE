@@ -2,12 +2,13 @@ package vn.conganh.commercial.feature.cart;
 
 import org.springframework.data.domain.Pageable;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.cart.dto.CartFilterRequest;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 
 public interface CartService {
 
-    ResultPaginationDTO getAllCarts(Pageable pageable);
+    ResultPaginationDTO getAllCarts(CartFilterRequest filter, Pageable pageable);
 
     CartResponse getCartById(Long id);
 
