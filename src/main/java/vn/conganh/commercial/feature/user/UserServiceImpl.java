@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.user;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -17,6 +19,7 @@ import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
 import lombok.RequiredArgsConstructor;
+import vn.conganh.commercial.feature.user.dto.UserFilterRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @Service
@@ -28,8 +31,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllUsers(Pageable pageable) {
-        Page<User> users = userRepository.findAllByDeletedAtIsNull(pageable);
+    public ResultPaginationDTO getAllUsers(UserFilterRequest filter, Pageable pageable) {
+        Page<User> users = userRepository.findAll(Specification.where(UserSpecification.build(filter)), pageable);
         Map<Long, List<UserResponse.RoleSummaryResponse>> rolesByUserId = rolesByUserId(users.getContent());
 
         return ResultPaginationDTO.fromPage(users.map(user ->

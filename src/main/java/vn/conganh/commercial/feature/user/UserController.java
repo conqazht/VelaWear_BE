@@ -19,6 +19,7 @@ import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
+import vn.conganh.commercial.feature.user.dto.UserFilterRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @RestController
@@ -30,8 +31,10 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getUsers(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getUsers(
+            @ParameterObject UserFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")

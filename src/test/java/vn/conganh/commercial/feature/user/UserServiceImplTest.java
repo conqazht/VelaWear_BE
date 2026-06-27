@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
@@ -144,13 +146,13 @@ class UserServiceImplTest {
             Pageable pageable = PageRequest.of(0, 10);
             User user = activeUser(1L, "user@example.com");
             Role role = role(2L, "ADMIN");
-            when(userRepository.findAllByDeletedAtIsNull(pageable))
+            when(userRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(user), pageable, 1));
             when(userRepository.findAllWithRoleByUserIdIn(List.of(1L)))
                     .thenReturn(List.of(userHasRole(user, role)));
 
             // Act
-            ResultPaginationDTO responses = userService.getAllUsers(pageable);
+            ResultPaginationDTO responses = userService.getAllUsers(null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);
