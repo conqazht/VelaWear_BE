@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.useraddress;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -10,7 +12,9 @@ import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.useraddress.dto.CreateUserAddressRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UpdateUserAddressRequest;
+import vn.conganh.commercial.feature.useraddress.dto.UserAddressFilterRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UserAddressResponse;
+import vn.conganh.commercial.util.FilterSpecifications;
 
 @Service
 @RequiredArgsConstructor
@@ -21,15 +25,20 @@ public class UserAddressServiceImpl implements UserAddressService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllUserAddresses(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(userAddressRepository.findAll(pageable)
+    public ResultPaginationDTO getAllUserAddresses(UserAddressFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(userAddressRepository.findAll(Specification.where(UserAddressSpecification.build(filter)), pageable)
                 .map(UserAddressResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getUserAddressesByUserId(Long userId, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(userAddressRepository.findByUserId(userId, pageable)
+    public ResultPaginationDTO getUserAddressesByUserId(Long userId, UserAddressFilterRequest filter, Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId("userId", userId, filter == null ? null : filter.userId());
+        UserAddressFilterRequest scopedFilter = filter == null
+                ? new UserAddressFilterRequest(userId, null, null, null, null, null, null)
+                : filter.withUserId(userId);
+
+        return ResultPaginationDTO.fromPage(userAddressRepository.findAll(Specification.where(UserAddressSpecification.build(scopedFilter)), pageable)
                 .map(UserAddressResponse::fromEntity));
     }
 

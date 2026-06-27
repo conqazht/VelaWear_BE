@@ -14,12 +14,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.useraddress.dto.CreateUserAddressRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UpdateUserAddressRequest;
+import vn.conganh.commercial.feature.useraddress.dto.UserAddressFilterRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UserAddressResponse;
 
 @RestController
@@ -32,12 +32,9 @@ public class UserAddressController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getUserAddresses(
-            @RequestParam(required = false) Long userId,
+            @ParameterObject UserAddressFilterRequest filter,
             @ParameterObject Pageable pageable) {
-        if (userId != null) {
-            return ResponseEntity.ok(ApiResponse.success(userAddressService.getUserAddressesByUserId(userId, pageable)));
-        }
-        return ResponseEntity.ok(ApiResponse.success(userAddressService.getAllUserAddresses(pageable)));
+        return ResponseEntity.ok(ApiResponse.success(userAddressService.getAllUserAddresses(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")

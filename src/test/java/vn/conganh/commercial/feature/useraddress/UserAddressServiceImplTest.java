@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.useraddress;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
@@ -119,11 +121,11 @@ class UserAddressServiceImplTest {
         void getAllUserAddresses_existingAddresses_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(userAddressRepository.findAll(pageable))
+            when(userAddressRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(address(10L, user(1L), false)), pageable, 1));
 
             // Act
-            ResultPaginationDTO responses = userAddressService.getAllUserAddresses(pageable);
+            ResultPaginationDTO responses = userAddressService.getAllUserAddresses(null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);
@@ -136,11 +138,11 @@ class UserAddressServiceImplTest {
         void getUserAddressesByUserId_existingAddresses_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(userAddressRepository.findByUserId(1L, pageable))
+            when(userAddressRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(address(10L, user(1L), true)), pageable, 1));
 
             // Act
-            ResultPaginationDTO responses = userAddressService.getUserAddressesByUserId(1L, pageable);
+            ResultPaginationDTO responses = userAddressService.getUserAddressesByUserId(1L, null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);

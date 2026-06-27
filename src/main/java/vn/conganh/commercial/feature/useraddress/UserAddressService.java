@@ -4,13 +4,14 @@ import org.springframework.data.domain.Pageable;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.useraddress.dto.CreateUserAddressRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UpdateUserAddressRequest;
+import vn.conganh.commercial.feature.useraddress.dto.UserAddressFilterRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UserAddressResponse;
 
 public interface UserAddressService {
 
-    ResultPaginationDTO getAllUserAddresses(Pageable pageable);
+    ResultPaginationDTO getAllUserAddresses(UserAddressFilterRequest filter, Pageable pageable);
 
-    ResultPaginationDTO getUserAddressesByUserId(Long userId, Pageable pageable);
+    ResultPaginationDTO getUserAddressesByUserId(Long userId, UserAddressFilterRequest filter, Pageable pageable);
 
     UserAddressResponse getUserAddressById(Long id);
 
