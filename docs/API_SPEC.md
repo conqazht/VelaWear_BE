@@ -73,18 +73,16 @@ All successful single-resource responses follow:
 }
 ```
 
-Collection endpoints should use the paginated response contract below. Current
-controller code may still return a plain array while pagination is being
-implemented, but the target API contract is `meta + result` for all list APIs.
+Collection endpoints that return `ResultPaginationDTO` use the paginated
+response contract below.
 
 **Query parameters for paginated list endpoints:**
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `page` | integer | `1` | 1-based page number |
-| `pageSize` | integer | `10` | Number of records per page |
-| `sort` | string | module default | Sort expression, for example `createdAt,desc` |
-| `keyword` | string | optional | Generic keyword search when supported |
+| `size` | integer | `10` | Number of records per page |
+| `sort` | string | Spring default | Spring `Pageable` sort expression, for example `createdAt,desc` |
 
 **Paginated Response (200):**
 
@@ -149,6 +147,49 @@ Common application errors:
   "timestamp": "2026-06-14T21:00:00"
 }
 ```
+
+
+## Dynamic List Filters
+
+All existing paginated `GET` list endpoints accept feature-specific query
+parameters in addition to `page`, `size`, and `sort`.
+
+Filter behavior:
+
+- Null or blank query values are ignored.
+- String filters use trimmed case-insensitive contains matching.
+- IDs, enums, and booleans use exact matching.
+- Numeric and date ranges are inclusive.
+- Invalid enum values, malformed dates, and `from > to` ranges return `400 Bad Request`.
+- Soft-deleted rows are always excluded for users, brands, categories, products, and product variants.
+- Path-scoped list endpoints enforce the path id; a conflicting query id returns `400 Bad Request`.
+- Sorting is delegated to Spring `Pageable`; there is no custom `sortBy` or `sortDir` parser.
+
+Supported filters:
+
+| Endpoint | Query filters |
+|----------|---------------|
+| `GET /brands` | `name`, `slug`, `status`, `createdFrom`, `createdTo` |
+| `GET /categories` | `parentId`, `name`, `slug`, `status`, `createdFrom`, `createdTo` |
+| `GET /colors` | `name`, `hexCode` |
+| `GET /sizes` | `name` |
+| `GET /products` | `categoryId`, `brandId`, `name`, `slug`, `status`, `createdFrom`, `createdTo` |
+| `GET /product-variants` | `productId`, `colorId`, `sizeId`, `sku`, `status`, `priceFrom`, `priceTo`, `salePriceFrom`, `salePriceTo`, `stockFrom`, `stockTo`, `createdFrom`, `createdTo` |
+| `GET /coupons` | `code`, `type`, `status`, `valueFrom`, `valueTo`, `minOrderAmountFrom`, `minOrderAmountTo`, `maxDiscountFrom`, `maxDiscountTo`, `usageLimitFrom`, `usageLimitTo`, `usedCountFrom`, `usedCountTo`, `startFrom`, `startTo`, `endFrom`, `endTo` |
+| `GET /users` | `fullName`, `email`, `gender`, `birthDateFrom`, `birthDateTo`, `createdFrom`, `createdTo`, `updatedFrom`, `updatedTo` |
+| `GET /roles` | `name`, `description`, `createdFrom`, `createdTo`, `updatedFrom`, `updatedTo` |
+| `GET /permissions` | `name`, `apiPath`, `method`, `module`, `createdFrom`, `createdTo`, `updatedFrom`, `updatedTo` |
+| `GET /user-addresses` | `userId`, `receiverName`, `phone`, `province`, `district`, `ward`, `isDefault` |
+| `GET /carts` | `userId`, `createdFrom`, `createdTo` |
+| `GET /orders` | `userId`, `orderCode`, `status`, `paymentMethod`, `paymentStatus`, `receiverName`, `receiverPhone`, `finalAmountFrom`, `finalAmountTo`, `createdFrom`, `createdTo`, `updatedFrom`, `updatedTo` |
+| `GET /orders/user/{userId}` | Same as `/orders`, but `userId` is enforced from the path |
+| `GET /orders/{id}/status-histories` | `fromStatus`, `toStatus`, `changedBy`, `reason`, `createdFrom`, `createdTo`; `orderId` is enforced from the path |
+| `GET /payments` | `orderId`, `provider`, `transactionCode`, `status`, `amountFrom`, `amountTo`, `paidFrom`, `paidTo`, `createdFrom`, `createdTo`, `updatedFrom`, `updatedTo` |
+| `GET /reviews` | `userId`, `orderId`, `orderItemId`, `ratingFrom`, `ratingTo`, `comment`, `createdFrom`, `createdTo` |
+| `GET /reviews/user/{userId}` | Same as `/reviews`, but `userId` is enforced from the path |
+| `GET /reviews/order/{orderId}` | Same as `/reviews`, but `orderId` is enforced from the path |
+| `GET /reviews/order-item/{orderItemId}` | Same as `/reviews`, but `orderItemId` is enforced from the path |
+| `GET /wishlists` | `userId`, `productId`, `createdFrom`, `createdTo` |
 
 ---
 

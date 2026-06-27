@@ -1,5 +1,16 @@
 # Project Status
 
+## 2026-06-27
+
+### Completed
+
+- Added dynamic filtering for all existing paginated `GET` list APIs that return `ResultPaginationDTO`.
+- Implemented per-feature filter request records and `PredicateSpecification` builders following `docs/decisions/filter-strategy.md`.
+- Extended filtered repositories with `JpaSpecificationExecutor` and kept Spring-resolved `Pageable` for pagination/sorting.
+- Enforced null/blank ignore behavior, case-insensitive string contains, exact ID/enum/boolean matching, inclusive ranges, invalid range `400`, soft-delete exclusion, and scoped path/query ID conflict `400`.
+- Added practical PostgreSQL filter indexes in `V6__add_filter_indexes.sql`.
+- Updated API and database docs with filter query params and index coverage.
+
 ## 2026-06-26
 
 ### Completed

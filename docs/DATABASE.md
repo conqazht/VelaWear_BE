@@ -808,46 +808,91 @@ Notes:
 | Table | Index | Fields | Purpose |
 |-------|-------|--------|---------|
 | users | `idx_users_deleted_at` | `deleted_at` | Soft-delete cleanup/anonymization job |
+| users | `idx_users_gender` | `gender` | Filter users by gender |
+| users | `idx_users_birth_date` | `birth_date` | Filter users by birth date range |
+| users | `idx_users_created_at` | `created_at` | Filter users by creation date |
+| users | `idx_users_updated_at` | `updated_at` | Filter users by update date |
+| roles | `idx_roles_created_at` | `created_at` | Filter roles by creation date |
+| roles | `idx_roles_updated_at` | `updated_at` | Filter roles by update date |
 | user_role | `idx_user_role_role_id` | `role_id` | Fast role-to-user lookup |
 | permissions | `idx_permissions_module` | `module` | Filter permissions by module |
+| permissions | `idx_permissions_method` | `method` | Filter permissions by HTTP method |
+| permissions | `idx_permissions_created_at` | `created_at` | Filter permissions by creation date |
+| permissions | `idx_permissions_updated_at` | `updated_at` | Filter permissions by update date |
 | permission_role | `idx_permission_role_role_id` | `role_id` | Fast role-to-permission lookup |
 | refresh_tokens | `idx_refresh_tokens_user_id` | `user_id` | Lookup tokens by user |
 | refresh_tokens | `idx_refresh_tokens_expires_at` | `expires_at` | Expired token cleanup job |
 | user_addresses | `idx_user_addresses_user_id` | `user_id` | Lookup addresses by user |
+| user_addresses | `idx_user_addresses_is_default` | `is_default` | Filter default shipping addresses |
 | brands | `idx_brands_deleted_at` | `deleted_at` | Soft-delete cleanup job |
+| brands | `idx_brands_status` | `status` | Filter brands by status |
+| brands | `idx_brands_created_at` | `created_at` | Filter brands by creation date |
 | categories | `idx_categories_parent_id` | `parent_id` | Load category tree |
 | categories | `idx_categories_deleted_at` | `deleted_at` | Soft-delete cleanup job |
+| categories | `idx_categories_status` | `status` | Filter categories by status |
+| categories | `idx_categories_created_at` | `created_at` | Filter categories by creation date |
 | products | `idx_products_category_id` | `category_id` | Filter products by category |
 | products | `idx_products_brand_id` | `brand_id` | Filter products by brand |
 | products | `idx_products_deleted_at` | `deleted_at` | Soft-delete cleanup/report retention job |
+| products | `idx_products_status` | `status` | Filter products by status |
+| products | `idx_products_created_at` | `created_at` | Filter products by creation date |
 | product_variants | `idx_product_variants_product_id` | `product_id` | Lookup variants by product |
 | product_variants | `idx_product_variants_color_id` | `color_id` | Filter variants by color |
 | product_variants | `idx_product_variants_size_id` | `size_id` | Filter variants by size |
 | product_variants | `idx_product_variants_deleted_at` | `deleted_at` | Soft-delete cleanup/report retention job |
+| product_variants | `idx_product_variants_status` | `status` | Filter variants by status |
+| product_variants | `idx_product_variants_price` | `price` | Filter variants by price range |
+| product_variants | `idx_product_variants_sale_price` | `sale_price` | Filter variants by sale price range |
+| product_variants | `idx_product_variants_stock_quantity` | `stock_quantity` | Filter variants by stock range |
+| product_variants | `idx_product_variants_created_at` | `created_at` | Filter variants by creation date |
 | product_images | `idx_product_images_product_id` | `product_id` | Lookup images by product |
 | product_images | `idx_product_images_variant_id` | `variant_id` | Lookup images by variant |
 | product_attributes | `idx_product_attributes_product_id` | `product_id` | Lookup attributes by product |
 | cart_items | `idx_cart_items_variant_id` | `variant_id` | Lookup cart rows by variant |
 | coupons | `idx_coupons_valid_range` | `start_date`, `end_date` | Validate coupon date window |
+| coupons | `idx_coupons_type` | `type` | Filter coupons by type |
+| coupons | `idx_coupons_status` | `status` | Filter coupons by status |
+| coupons | `idx_coupons_value` | `value` | Filter coupons by value range |
+| coupons | `idx_coupons_min_order_amount` | `min_order_amount` | Filter coupons by minimum order amount |
+| coupons | `idx_coupons_max_discount` | `max_discount` | Filter coupons by maximum discount |
+| coupons | `idx_coupons_usage_limit` | `usage_limit` | Filter coupons by usage limit range |
+| coupons | `idx_coupons_used_count` | `used_count` | Filter coupons by used count range |
+| coupons | `idx_coupons_end_date` | `end_date` | Filter coupons by end date range |
+| carts | `idx_carts_created_at` | `created_at` | Filter carts by creation date |
 | orders | `idx_orders_user_id` | `user_id` | Lookup orders by user |
+| orders | `idx_orders_status` | `status` | Filter orders by status |
+| orders | `idx_orders_payment_method` | `payment_method` | Filter orders by payment method |
+| orders | `idx_orders_payment_status` | `payment_status` | Filter orders by payment status |
+| orders | `idx_orders_final_amount` | `final_amount` | Filter orders by final amount range |
+| orders | `idx_orders_created_at` | `created_at` | Filter orders by creation date |
+| orders | `idx_orders_updated_at` | `updated_at` | Filter orders by update date |
 | order_items | `idx_order_items_order_id` | `order_id` | Lookup items by order |
 | order_items | `idx_order_items_variant_id` | `variant_id` | Product/variant sales history |
 | order_items | `idx_order_items_status` | `status` | Filter item-level state |
 | payments | `idx_payments_order_id` | `order_id` | Lookup payments by order |
+| payments | `idx_payments_provider` | `provider` | Filter payments by provider |
+| payments | `idx_payments_status` | `status` | Filter payments by status |
+| payments | `idx_payments_amount` | `amount` | Filter payments by amount range |
+| payments | `idx_payments_paid_at` | `paid_at` | Filter payments by paid date |
+| payments | `idx_payments_created_at` | `created_at` | Filter payments by creation date |
+| payments | `idx_payments_updated_at` | `updated_at` | Filter payments by update date |
 | payment_transactions | `idx_payment_transactions_payment_id` | `payment_id` | Lookup transactions by payment |
 | coupon_usages | `idx_coupon_usages_coupon_id` | `coupon_id` | Lookup usage by coupon |
 | coupon_usages | `idx_coupon_usages_user_id` | `user_id` | Lookup usage by user |
 | coupon_usages | `idx_coupon_usages_used_at` | `used_at` | Coupon usage reports |
-| reviews | `idx_reviews_product_id` | `product_id` | Product review listing |
 | reviews | `idx_reviews_user_id` | `user_id` | User review listing |
 | reviews | `idx_reviews_order_item_id` | `order_item_id` | Verify review source order item |
+| reviews | `idx_reviews_rating` | `rating` | Filter reviews by rating range |
+| reviews | `idx_reviews_created_at` | `created_at` | Filter reviews by creation date |
 | review_images | `idx_review_images_review_id` | `review_id` | Lookup images by review |
 | inventory_logs | `idx_inventory_logs_variant_id` | `variant_id` | Variant stock history |
 | inventory_logs | `idx_inventory_logs_reference` | `reference_type`, `reference_id` | Trace inventory change source |
 | wishlists | `idx_wishlists_product_id` | `product_id` | Product popularity reports |
+| wishlists | `idx_wishlists_created_at` | `created_at` | Filter wishlists by creation date |
 | order_status_histories | `idx_order_status_histories_order_id` | `order_id` | Load order status timeline |
 | order_status_histories | `idx_order_status_histories_changed_by` | `changed_by` | Audit staff/system changes |
 | order_status_histories | `idx_order_status_histories_created_at` | `created_at` | Status history reports |
+| order_status_histories | `idx_order_status_histories_to_status` | `to_status` | Filter status history by destination status |
 
 Notes:
 - PostgreSQL automatically creates backing indexes for primary key and unique constraints; those are not repeated in this Index Summary.
