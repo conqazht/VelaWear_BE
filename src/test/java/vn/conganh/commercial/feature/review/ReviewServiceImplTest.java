@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
@@ -178,14 +180,14 @@ class ReviewServiceImplTest {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
             User user = user(1L);
-            when(reviewRepository.findByOrderItemOrderId(10L, pageable))
+            when(reviewRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(
                             List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
                             pageable,
                             1));
 
             // Act
-            ResultPaginationDTO responses = reviewService.getReviewsByOrderId(10L, pageable);
+            ResultPaginationDTO responses = reviewService.getReviewsByOrderId(10L, null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);
@@ -200,14 +202,14 @@ class ReviewServiceImplTest {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
             User user = user(1L);
-            when(reviewRepository.findByOrderItemId(20L, pageable))
+            when(reviewRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(
                             List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
                             pageable,
                             1));
 
             // Act
-            ResultPaginationDTO responses = reviewService.getReviewsByOrderItemId(20L, pageable);
+            ResultPaginationDTO responses = reviewService.getReviewsByOrderItemId(20L, null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);

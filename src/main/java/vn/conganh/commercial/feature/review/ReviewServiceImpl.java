@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.review;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -10,9 +12,11 @@ import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
 import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
+import vn.conganh.commercial.feature.review.dto.ReviewFilterRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.util.FilterSpecifications;
 
 @Service
 @RequiredArgsConstructor
@@ -24,29 +28,44 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllReviews(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(reviewRepository.findAll(pageable)
+    public ResultPaginationDTO getAllReviews(ReviewFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(filter)), pageable)
                 .map(this::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getReviewsByUserId(Long userId, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(reviewRepository.findByUserId(userId, pageable)
+    public ResultPaginationDTO getReviewsByUserId(Long userId, ReviewFilterRequest filter, Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId("userId", userId, filter == null ? null : filter.userId());
+        ReviewFilterRequest scopedFilter = filter == null
+                ? new ReviewFilterRequest(userId, null, null, null, null, null, null, null)
+                : filter.withUserId(userId);
+
+        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
                 .map(this::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getReviewsByOrderId(Long orderId, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(reviewRepository.findByOrderItemOrderId(orderId, pageable)
+    public ResultPaginationDTO getReviewsByOrderId(Long orderId, ReviewFilterRequest filter, Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId("orderId", orderId, filter == null ? null : filter.orderId());
+        ReviewFilterRequest scopedFilter = filter == null
+                ? new ReviewFilterRequest(null, orderId, null, null, null, null, null, null)
+                : filter.withOrderId(orderId);
+
+        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
                 .map(this::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getReviewsByOrderItemId(Long orderItemId, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(reviewRepository.findByOrderItemId(orderItemId, pageable)
+    public ResultPaginationDTO getReviewsByOrderItemId(Long orderItemId, ReviewFilterRequest filter, Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId("orderItemId", orderItemId, filter == null ? null : filter.orderItemId());
+        ReviewFilterRequest scopedFilter = filter == null
+                ? new ReviewFilterRequest(null, null, orderItemId, null, null, null, null, null)
+                : filter.withOrderItemId(orderItemId);
+
+        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
                 .map(this::toResponse));
     }
 

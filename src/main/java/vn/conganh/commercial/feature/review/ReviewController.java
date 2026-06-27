@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
+import vn.conganh.commercial.feature.review.dto.ReviewFilterRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewResponse;
 
 @RestController
@@ -27,29 +28,34 @@ public class ReviewController {
     private final ReviewService reviewService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviews(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(reviewService.getAllReviews(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviews(
+            @ParameterObject ReviewFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getAllReviews(filter, pageable)));
     }
 
     @GetMapping(path = "/user/{userId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByUser(
             @PathVariable Long userId,
+            @ParameterObject ReviewFilterRequest filter,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByUserId(userId, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByUserId(userId, filter, pageable)));
     }
 
     @GetMapping(path = "/order/{orderId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByOrder(
             @PathVariable Long orderId,
+            @ParameterObject ReviewFilterRequest filter,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderId(orderId, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderId(orderId, filter, pageable)));
     }
 
     @GetMapping(path = "/order-item/{orderItemId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByOrderItem(
             @PathVariable Long orderItemId,
+            @ParameterObject ReviewFilterRequest filter,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderItemId(orderItemId, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderItemId(orderItemId, filter, pageable)));
     }
 
     @PostMapping
