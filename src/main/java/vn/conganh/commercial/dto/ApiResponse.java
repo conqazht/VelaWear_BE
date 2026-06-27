@@ -3,6 +3,9 @@ package vn.conganh.commercial.dto;
 import java.time.LocalDateTime;
 import org.springframework.http.HttpStatus;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+@JsonInclude(JsonInclude.Include.NON_NULL)
+
 public record ApiResponse<T>(
         int statusCode,
         T data,
