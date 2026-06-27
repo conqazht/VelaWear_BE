@@ -4,12 +4,22 @@
 
 ### Completed
 
+- Fixed local Swagger auth refresh behavior by allowing the refresh-token cookie on HTTP localhost while still
+  adding `Secure` for HTTPS requests, and configured Swagger UI requests to include cookies.
+- Updated `/api/v1/auth/me` to include role summaries (`id`, `name`) in the user response.
+- Added explicit RBAC join queries for admin user-role, user effective-permission, and role-permission detail views.
+- Added focused service tests for auth `/me` roles, admin user RBAC detail, and role permission detail.
 - Refactored Auth to implement `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/logout`.
 - Register now creates a user and assigns the default `USER` role.
 - Login and refresh issue HS512 JWT access tokens with 15-minute expiry.
 - Refresh tokens are HS512 JWTs stored with SHA-512 hashing, revoked on logout, and rotated on refresh with a 3-day expiry.
 - Production JWT configuration now requires `JWT_SECRET_KEY` from environment variables, with token TTLs configurable through env.
 - Added Auth context documentation and aligned API spec with implemented Auth endpoints.
+- Implemented JWT-protected file upload via `POST /api/v1/files`.
+- Added config-driven local upload storage with environment-backed `app.upload` properties.
+- Added static `/uploads/**` resource serving and RBAC seed permission `UPLOAD_FILE`.
+- Added upload validation for folder, extension, size, file name, and path traversal.
+- Updated `docs/API_SPEC.md` with the file upload endpoint and added focused service tests.
 
 ## 2026-06-23
 

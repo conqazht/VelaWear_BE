@@ -347,7 +347,13 @@ Get current authenticated user.
     "avatar": null,
     "gender": "OTHER",
     "createdAt": "2026-06-14T14:00:00Z",
-    "updatedAt": "2026-06-14T14:00:00Z"
+    "updatedAt": "2026-06-14T14:00:00Z",
+    "roles": [
+      {
+        "id": 1,
+        "name": "SUPER_ADMIN"
+      }
+    ]
   },
   "message": "Success",
   "timestamp": "2026-06-14T21:00:00"
@@ -391,7 +397,8 @@ List all users.
 
 ### GET /users/{id}
 
-Get a single user by numeric ID.
+Get a single user by numeric ID. Detail responses include role summaries and effective permissions resolved
+through `user_role` and `permission_role`.
 
 **Errors:**
 
@@ -513,7 +520,7 @@ List roles.
 
 ### GET /roles/{id}
 
-Get role by UUID.
+Get role by numeric ID. Detail responses include permissions assigned through `permission_role`.
 
 **Errors:**
 
@@ -818,7 +825,54 @@ Soft archive product by setting `status = ARCHIVED` and `deleted_at = now`.
 
 ---
 
-## 7. Business Modules Implemented
+## 7. Files Implemented
+
+### POST /files
+
+Upload an image file for later use as a user avatar or company logo.
+
+**Auth:** Bearer
+
+**Content-Type:** `multipart/form-data`
+
+**Form Data:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | File | Yes | Image file. Allowed extensions and size are configured by `app.upload`. |
+| `folder` | String | Yes | Target folder. Allowed values are configured by `app.upload.allowed-folders`. |
+
+**Success Response (201):**
+
+```json
+{
+  "statusCode": 201,
+  "data": {
+    "fileName": "1709123456789_photo.jpg",
+    "folder": "avatars",
+    "fileUrl": "/uploads/avatars/1709123456789_photo.jpg",
+    "size": 24576,
+    "uploadedAt": "2026-06-26T09:00:00Z"
+  },
+  "message": "Created",
+  "timestamp": "2026-06-26T09:00:00"
+}
+```
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| 400 | Missing file/folder, invalid folder, invalid extension, invalid file name, or business size validation failed |
+| 401 | Missing or invalid JWT |
+| 403 | Authenticated user does not have `UPLOAD_FILE` permission |
+| 413 | Servlet multipart size limit exceeded |
+
+Client uses the returned `fileName` to update the related entity, for example `avatar` on `PUT /users/{id}`.
+
+---
+
+## 8. Business Modules Implemented
 
 The following business modules already expose controllers. All list endpoints
 should align to the paginated response contract defined in `Response Format`.
@@ -991,6 +1045,7 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
 | POST | `/products` | Bearer | Implemented | Create product |
 | PUT | `/products/{id}` | Bearer | Implemented | Update product |
 | DELETE | `/products/{id}` | Bearer | Implemented | Soft archive product |
+| POST | `/files` | Bearer | Implemented | Upload image file |
 | GET | `/brands` | Bearer | Implemented | List brands |
 | GET | `/brands/{id}` | Bearer | Implemented | Get brand |
 | POST | `/brands` | Bearer | Implemented | Create brand |
