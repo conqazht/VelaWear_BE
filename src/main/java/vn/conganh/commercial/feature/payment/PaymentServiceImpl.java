@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.payment;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -8,6 +10,7 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderRepository;
+import vn.conganh.commercial.feature.payment.dto.PaymentFilterRequest;
 import vn.conganh.commercial.feature.payment.dto.PaymentResponse;
 
 @Service
@@ -19,8 +22,8 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllPayments(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(paymentRepository.findAll(pageable)
+    public ResultPaginationDTO getAllPayments(PaymentFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(paymentRepository.findAll(Specification.where(PaymentSpecification.build(filter)), pageable)
                 .map(PaymentResponse::fromEntity));
     }
 

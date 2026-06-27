@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.payment.dto.PaymentFilterRequest;
 import vn.conganh.commercial.feature.payment.dto.PaymentResponse;
 
 @RestController
@@ -28,8 +29,10 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getPayments(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getPayments(
+            @ParameterObject PaymentFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(paymentService.getAllPayments(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")
