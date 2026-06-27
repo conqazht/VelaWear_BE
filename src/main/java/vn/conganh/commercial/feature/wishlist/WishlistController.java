@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.wishlist;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,7 +32,7 @@ public class WishlistController {
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getWishlists(
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) Long productId,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         if (userId != null) {
             return ResponseEntity.ok(ApiResponse.success(wishlistService.getWishlistsByUserId(userId, pageable)));
         }

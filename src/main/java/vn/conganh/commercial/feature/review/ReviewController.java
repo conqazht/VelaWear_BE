@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.review;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,28 +27,28 @@ public class ReviewController {
     private final ReviewService reviewService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviews(Pageable pageable) {
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviews(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getAllReviews(pageable)));
     }
 
     @GetMapping(path = "/user/{userId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByUser(
             @PathVariable Long userId,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByUserId(userId, pageable)));
     }
 
     @GetMapping(path = "/order/{orderId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByOrder(
             @PathVariable Long orderId,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderId(orderId, pageable)));
     }
 
     @GetMapping(path = "/order-item/{orderItemId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByOrderItem(
             @PathVariable Long orderItemId,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByOrderItemId(orderItemId, pageable)));
     }
 

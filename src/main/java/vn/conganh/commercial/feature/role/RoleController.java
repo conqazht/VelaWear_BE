@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.role;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,7 @@ public class RoleController {
     private final RoleService roleService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getRoles(Pageable pageable) {
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getRoles(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(roleService.getAllRoles(pageable)));
     }
 

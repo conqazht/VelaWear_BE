@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.category;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,7 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCategories(Pageable pageable) {
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCategories(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories(pageable)));
     }
 

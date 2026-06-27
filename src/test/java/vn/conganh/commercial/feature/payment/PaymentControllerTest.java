@@ -14,6 +14,8 @@ import jakarta.persistence.PersistenceContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,10 +23,37 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
+import vn.conganh.commercial.TestDataFactory;
 
 @Transactional
 @DisplayName("Module Payment - PaymentController")
 class PaymentControllerTest extends AuthenticatedIntegrationTest {
+
+        @Autowired
+    private TestDataFactory testDataFactory;
+
+    private String adminToken;
+    private String forbiddenToken;
+
+    @BeforeEach
+    void setUp() {
+        testDataFactory.seedPermissions("PAYMENT", BASE_PATH, "GET", "POST");
+        testDataFactory.seedPermissions("PAYMENT", BASE_PATH + "/{id}", "DELETE", "GET", "PUT");
+
+        adminToken = testDataFactory.jwtWithPermission();
+        forbiddenToken = testDataFactory.jwtWithoutPermission();
+    }
+
+    @AfterEach
+    void tearDown() {
+        testDataFactory.cleanup();
+    }
+
+    @Override
+    protected String adminToken() {
+        return adminToken;
+    }
+
 
     private static final Long MISSING_ID = 999_999_999L;
     private static final String BASE_PATH = "/api/v1/payments";
@@ -442,7 +471,7 @@ class PaymentControllerTest extends AuthenticatedIntegrationTest {
     }
 
     private String noAccessToken() {
-        return tokenWithRoles("no-access@velawear.local", 999_999L, java.util.List.of("ROLE_NO_ACCESS"));
+        return forbiddenToken;
     }
 
     private Long insertUserRow(String suffix) {

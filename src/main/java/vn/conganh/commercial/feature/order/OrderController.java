@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.order;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,7 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrders(Pageable pageable) {
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrders(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(pageable)));
     }
 
@@ -46,14 +47,14 @@ public class OrderController {
     @GetMapping(path = "/user/{userId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrdersByUser(
             @PathVariable Long userId,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByUserId(userId, pageable)));
     }
 
     @GetMapping(path = "/{id}/status-histories")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrderStatusHistories(
             @PathVariable Long id,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStatusHistories(id, pageable)));
     }
 

@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.productvariant;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,7 @@ public class ProductVariantController {
     private final ProductVariantService productVariantService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(Pageable pageable) {
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(productVariantService.getAll(pageable)));
     }
 

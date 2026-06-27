@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,10 +16,39 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
+import vn.conganh.commercial.TestDataFactory;
 
 @Transactional
 @DisplayName("Module Review - ReviewController")
 class ReviewControllerTest extends AuthenticatedIntegrationTest {
+
+        @Autowired
+    private TestDataFactory testDataFactory;
+
+    private String adminToken;
+    private String forbiddenToken;
+
+    @BeforeEach
+    void setUp() {
+        testDataFactory.seedPermissions("REVIEW", BASE_PATH, "GET", "POST");
+        testDataFactory.seedPermissions("REVIEW", BASE_PATH + "/order-item/{orderItemId}", "GET");
+        testDataFactory.seedPermissions("REVIEW", BASE_PATH + "/order/{orderId}", "GET");
+        testDataFactory.seedPermissions("REVIEW", BASE_PATH + "/user/{userId}", "GET");
+
+        adminToken = testDataFactory.jwtWithPermission();
+        forbiddenToken = testDataFactory.jwtWithoutPermission();
+    }
+
+    @AfterEach
+    void tearDown() {
+        testDataFactory.cleanup();
+    }
+
+    @Override
+    protected String adminToken() {
+        return adminToken;
+    }
+
 
     private static final String BASE_PATH = "/api/v1/reviews";
 
@@ -208,7 +239,7 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
     }
 
     private String noAccessToken() {
-        return tokenWithRoles("no-access@velawear.local", 999_999L, java.util.List.of("ROLE_NO_ACCESS"));
+        return forbiddenToken;
     }
 
     private String unique(String prefix) {
