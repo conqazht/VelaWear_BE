@@ -29,7 +29,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
-import vn.conganh.commercial.feature.permission.Permission;
 import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
@@ -184,16 +183,14 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("getUserById - trả về roles và effective permissions cho admin")
-        void getUserById_existingActiveUser_returnsRolesAndEffectivePermissions() {
+        @DisplayName("getUserById - trả về roles cho user")
+        void getUserById_existingActiveUser_returnsRoles() {
             // Arrange
             User user = activeUser(1L, "user@example.com");
             Role role = role(2L, "ADMIN");
-            Permission permission = permission(3L, "CREATE_USER", "/api/v1/users", "POST", "USER");
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
             when(userRepository.findAllWithRoleByUserIdIn(List.of(1L)))
                     .thenReturn(List.of(userHasRole(user, role)));
-            when(userRepository.findEffectivePermissionsByUserId(1L)).thenReturn(List.of(permission));
 
             // Act
             UserResponse response = userService.getUserById(1L);
@@ -202,14 +199,6 @@ class UserServiceImplTest {
             assertThat(response.roles())
                     .extracting(UserResponse.RoleSummaryResponse::id, UserResponse.RoleSummaryResponse::name)
                     .containsExactly(tuple(2L, "ADMIN"));
-            assertThat(response.permissions())
-                    .extracting(
-                            UserResponse.PermissionSummaryResponse::id,
-                            UserResponse.PermissionSummaryResponse::name,
-                            UserResponse.PermissionSummaryResponse::apiPath,
-                            UserResponse.PermissionSummaryResponse::method,
-                            UserResponse.PermissionSummaryResponse::module)
-                    .containsExactly(tuple(3L, "CREATE_USER", "/api/v1/users", "POST", "USER"));
         }
 
         @Test
@@ -341,15 +330,5 @@ class UserServiceImplTest {
         userHasRole.setUser(user);
         userHasRole.setRole(role);
         return userHasRole;
-    }
-
-    private Permission permission(Long id, String name, String apiPath, String method, String module) {
-        Permission permission = new Permission();
-        ReflectionTestUtils.setField(permission, "id", id);
-        permission.setName(name);
-        permission.setApiPath(apiPath);
-        permission.setMethod(method);
-        permission.setModule(module);
-        return permission;
     }
 }

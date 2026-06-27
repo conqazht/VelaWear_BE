@@ -3,7 +3,6 @@ package vn.conganh.commercial.feature.user.dto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import vn.conganh.commercial.feature.permission.Permission;
 import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.util.constant.UserGender;
@@ -17,22 +16,16 @@ public record UserResponse(
         UserGender gender,
         Instant createdAt,
         Instant updatedAt,
-        List<RoleSummaryResponse> roles,
-        List<PermissionSummaryResponse> permissions
+        List<RoleSummaryResponse> roles
 ) {
 
     public static UserResponse fromEntity(User user) {
-        return fromEntity(user, List.of(), List.of());
-    }
-
-    public static UserResponse fromEntity(User user, List<RoleSummaryResponse> roles) {
-        return fromEntity(user, roles, List.of());
+        return fromEntity(user, List.of());
     }
 
     public static UserResponse fromEntity(
             User user,
-            List<RoleSummaryResponse> roles,
-            List<PermissionSummaryResponse> permissions) {
+            List<RoleSummaryResponse> roles) {
         return new UserResponse(
                 user.getId(),
                 user.getFullName(),
@@ -42,8 +35,7 @@ public record UserResponse(
                 user.getGender(),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
-                roles,
-                permissions);
+                roles);
     }
 
     public record RoleSummaryResponse(
@@ -53,24 +45,6 @@ public record UserResponse(
 
         public static RoleSummaryResponse fromEntity(Role role) {
             return new RoleSummaryResponse(role.getId(), role.getName());
-        }
-    }
-
-    public record PermissionSummaryResponse(
-            Long id,
-            String name,
-            String apiPath,
-            String method,
-            String module
-    ) {
-
-        public static PermissionSummaryResponse fromEntity(Permission permission) {
-            return new PermissionSummaryResponse(
-                    permission.getId(),
-                    permission.getName(),
-                    permission.getApiPath(),
-                    permission.getMethod(),
-                    permission.getModule());
         }
     }
 }

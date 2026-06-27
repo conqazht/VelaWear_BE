@@ -42,11 +42,7 @@ public class UserServiceImpl implements UserService {
         User user = findActiveUser(id);
         List<UserResponse.RoleSummaryResponse> roles =
                 rolesByUserId(List.of(user)).getOrDefault(user.getId(), List.of());
-        List<UserResponse.PermissionSummaryResponse> permissions =
-                userRepository.findEffectivePermissionsByUserId(user.getId()).stream()
-                        .map(UserResponse.PermissionSummaryResponse::fromEntity)
-                        .toList();
-        return UserResponse.fromEntity(user, roles, permissions);
+        return UserResponse.fromEntity(user, roles);
     }
 
     @Override
