@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.size.dto.CreateSizeRequest;
+import vn.conganh.commercial.feature.size.dto.SizeFilterRequest;
 import vn.conganh.commercial.feature.size.dto.SizeResponse;
 import vn.conganh.commercial.feature.size.dto.UpdateSizeRequest;
 
@@ -30,8 +31,10 @@ public class SizeController {
     private final SizeService sizeService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(sizeService.getAll(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(
+            @ParameterObject SizeFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(sizeService.getAll(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")

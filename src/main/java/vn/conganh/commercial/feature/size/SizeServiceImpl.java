@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.size;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -8,6 +10,7 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.size.dto.CreateSizeRequest;
+import vn.conganh.commercial.feature.size.dto.SizeFilterRequest;
 import vn.conganh.commercial.feature.size.dto.SizeResponse;
 import vn.conganh.commercial.feature.size.dto.UpdateSizeRequest;
 
@@ -19,8 +22,8 @@ public class SizeServiceImpl implements SizeService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAll(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(sizeRepository.findAll(pageable)
+    public ResultPaginationDTO getAll(SizeFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(sizeRepository.findAll(Specification.where(SizeSpecification.build(filter)), pageable)
                 .map(SizeResponse::fromEntity));
     }
 

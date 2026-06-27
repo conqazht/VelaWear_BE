@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.size;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
@@ -88,11 +90,11 @@ class SizeServiceImplTest {
         void getAll_existingSizes_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(sizeRepository.findAll(pageable))
+            when(sizeRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(size(1L, "XL")), pageable, 1));
 
             // Act
-            ResultPaginationDTO responses = sizeService.getAll(pageable);
+            ResultPaginationDTO responses = sizeService.getAll(null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);
