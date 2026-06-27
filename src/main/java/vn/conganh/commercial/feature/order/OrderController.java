@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.order;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
+@Tag(name = "Orders", description = "Order management and status history endpoints")
 public class OrderController {
 
     private final OrderService orderService;

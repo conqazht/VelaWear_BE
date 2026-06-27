@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.role;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 @RestController
 @RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
+@Tag(name = "Roles", description = "Role and RBAC assignment endpoints")
 public class RoleController {
 
     private final RoleService roleService;

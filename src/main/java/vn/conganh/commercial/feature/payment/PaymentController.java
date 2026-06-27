@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.payment;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +21,7 @@ import vn.conganh.commercial.feature.payment.dto.PaymentResponse;
 @RestController
 @RequestMapping("/api/v1/payments")
 @RequiredArgsConstructor
+@Tag(name = "Payments", description = "Payment management endpoints")
 public class PaymentController {
 
     private final PaymentService paymentService;

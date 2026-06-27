@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.productvariant;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.productvariant.dto.UpdateProductVariantRequ
 @RestController
 @RequestMapping("/api/v1/product-variants")
 @RequiredArgsConstructor
+@Tag(name = "Product Variants", description = "Sellable product variant and inventory endpoints")
 public class ProductVariantController {
 
     private final ProductVariantService productVariantService;

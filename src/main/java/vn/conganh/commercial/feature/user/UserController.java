@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.user;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
+@Tag(name = "Users", description = "User account and profile management endpoints")
 public class UserController {
 
     private final UserService userService;

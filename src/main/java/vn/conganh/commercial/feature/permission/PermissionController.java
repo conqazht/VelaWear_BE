@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.permission;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
 @RestController
 @RequestMapping("/api/v1/permissions")
 @RequiredArgsConstructor
+@Tag(name = "Permissions", description = "Permission and RBAC endpoint management")
 public class PermissionController {
 
     private final PermissionService permissionService;

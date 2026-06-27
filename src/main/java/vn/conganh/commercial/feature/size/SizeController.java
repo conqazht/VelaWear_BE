@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.size;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.size.dto.UpdateSizeRequest;
 @RestController
 @RequestMapping("/api/v1/sizes")
 @RequiredArgsConstructor
+@Tag(name = "Sizes", description = "Product size management endpoints")
 public class SizeController {
 
     private final SizeService sizeService;

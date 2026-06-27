@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.useraddress;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ import vn.conganh.commercial.feature.useraddress.dto.UserAddressResponse;
 @RestController
 @RequestMapping("/api/v1/user-addresses")
 @RequiredArgsConstructor
+@Tag(name = "User Addresses", description = "User shipping address management endpoints")
 public class UserAddressController {
 
     private final UserAddressService userAddressService;

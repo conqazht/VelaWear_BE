@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.category;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.category.dto.UpdateCategoryRequest;
 @RestController
 @RequestMapping("/api/v1/categories")
 @RequiredArgsConstructor
+@Tag(name = "Categories", description = "Product category management endpoints")
 public class CategoryController {
 
     private final CategoryService categoryService;

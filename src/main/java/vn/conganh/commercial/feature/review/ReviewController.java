@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.review;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +20,7 @@ import vn.conganh.commercial.feature.review.dto.ReviewResponse;
 @RestController
 @RequestMapping("/api/v1/reviews")
 @RequiredArgsConstructor
+@Tag(name = "Reviews", description = "Customer review management endpoints")
 public class ReviewController {
 
     private final ReviewService reviewService;

@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.brand;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.brand.dto.UpdateBrandRequest;
 @RestController
 @RequestMapping("/api/v1/brands")
 @RequiredArgsConstructor
+@Tag(name = "Brands", description = "Brand catalog management endpoints")
 public class BrandController {
 
     private final BrandService brandService;

@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.product;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
+@Tag(name = "Products", description = "Product catalog management endpoints")
 public class ProductController {
 
     private final ProductService productService;

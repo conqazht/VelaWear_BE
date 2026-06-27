@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.cart;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +21,7 @@ import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 @RestController
 @RequestMapping("/api/v1/carts")
 @RequiredArgsConstructor
+@Tag(name = "Carts", description = "Shopping cart management endpoints")
 public class CartController {
 
     private final CartService cartService;

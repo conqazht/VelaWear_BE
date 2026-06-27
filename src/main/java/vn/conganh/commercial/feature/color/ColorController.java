@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.color;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +23,7 @@ import vn.conganh.commercial.feature.color.dto.UpdateColorRequest;
 @RestController
 @RequestMapping("/api/v1/colors")
 @RequiredArgsConstructor
+@Tag(name = "Colors", description = "Product color management endpoints")
 public class ColorController {
 
     private final ColorService colorService;

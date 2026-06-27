@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.wishlist;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,7 @@ import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 @RestController
 @RequestMapping("/api/v1/wishlists")
 @RequiredArgsConstructor
+@Tag(name = "Wishlists", description = "Customer wishlist management endpoints")
 public class WishlistController {
 
     private final WishlistService wishlistService;
