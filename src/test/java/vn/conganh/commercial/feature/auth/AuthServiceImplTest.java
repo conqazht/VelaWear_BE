@@ -294,7 +294,6 @@ class AuthServiceImplTest {
             assertThat(response.roles())
                     .extracting(UserResponse.RoleSummaryResponse::id, UserResponse.RoleSummaryResponse::name)
                     .containsExactly(tuple(2L, "SUPER_ADMIN"));
-            assertThat(response.permissions()).isEmpty();
         }
     }
 

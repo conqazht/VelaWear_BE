@@ -50,6 +50,14 @@ public class SwaggerUiController {
                     }
 
                     function saveAccessTokenFromAuthResponse(response) {
+                        if (response.url && response.url.endsWith("/api/v1/auth/logout") && response.status >= 200 && response.status < 300) {
+                            localStorage.removeItem(tokenStorageKey);
+                            if (window.ui && window.ui.authActions) {
+                                window.ui.authActions.logout([securitySchemeName]);
+                            }
+                            return;
+                        }
+
                         if (!isAuthTokenEndpoint(response)) {
                             return;
                         }

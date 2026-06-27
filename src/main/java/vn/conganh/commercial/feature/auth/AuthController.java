@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.auth;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -7,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,6 +30,7 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Authentication", description = "Authentication and token management endpoints")
 public class AuthController {
 
@@ -56,23 +59,41 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @Operation(
+            summary = "Refresh access token",
+            description = "Refresh the access token using the 'refresh_token' cookie or request body."
+    )
     public ResponseEntity<ApiResponse<TokenResponse>> refreshToken(
             @RequestBody(required = false) RefreshTokenRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
-        TokenResponse response = authService.refreshToken(
-                new RefreshTokenRequest(extractRefreshToken(request, httpRequest)));
+        String token = null;
+        if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
+            token = request.refreshToken();
+        } else {
+            token = extractRefreshToken(httpRequest);
+        }
+        TokenResponse response = authService.refreshToken(new RefreshTokenRequest(token));
         setRefreshTokenCookie(httpRequest, httpResponse, response.refreshToken());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/logout")
+    @Operation(
+            summary = "Logout user",
+            description = "Logout and revoke the refresh token cookie."
+    )
     public ResponseEntity<ApiResponse<Void>> logout(
-            @RequestBody(required = false) RefreshTokenRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
-        String refreshToken = extractRefreshToken(request, httpRequest);
-        authService.logout(new RefreshTokenRequest(refreshToken));
+        String token = extractRefreshTokenFromCookie(httpRequest);
+        if (token != null && !token.isBlank()) {
+            try {
+                authService.logout(new RefreshTokenRequest(token));
+            } catch (Exception e) {
+                log.warn("[VelaWear/Auth] Failed to revoke refresh token during logout", e);
+            }
+        }
         clearRefreshTokenCookie(httpResponse);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
@@ -82,16 +103,11 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(authService.getMe(jwt.getSubject())));
     }
 
-    private String extractRefreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
+    private String extractRefreshToken(HttpServletRequest httpRequest) {
         String refreshToken = extractRefreshTokenFromCookie(httpRequest);
         if (refreshToken != null) {
             return refreshToken;
         }
-
-        if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
-            return request.refreshToken();
-        }
-
         throw new UnauthorizedException("Refresh token is required");
     }
 

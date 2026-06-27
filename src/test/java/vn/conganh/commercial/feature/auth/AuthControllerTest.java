@@ -21,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
+import jakarta.servlet.http.Cookie;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
@@ -120,8 +121,7 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/refresh")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(new RefreshTokenRequest(oldRefreshToken))))
+                            .cookie(new Cookie("refresh_token", oldRefreshToken)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.statusCode").value(200))
                     .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
@@ -145,14 +145,45 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/logout")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(new RefreshTokenRequest(refreshToken))))
+                            .cookie(new Cookie("refresh_token", refreshToken)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.statusCode").value(200))
                     .andExpect(header().string(HttpHeaders.SET_COOKIE,
                             org.hamcrest.Matchers.containsString("Max-Age=0")));
 
             assertThat(countRevokedRefreshTokens()).isGreaterThanOrEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("POST /auth/logout - 200: thành công ngay cả khi không cung cấp refresh token")
+        void logout_noRefreshToken_returnsOkAndClearsCookie() throws Exception {
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/auth/logout")
+                            .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statusCode").value(200))
+                    .andExpect(header().string(HttpHeaders.SET_COOKIE,
+                            org.hamcrest.Matchers.containsString("Max-Age=0")));
+        }
+
+        @Test
+        @DisplayName("POST /auth/refresh - 401: từ chối refresh token sau khi đã logout")
+        void refresh_afterLogout_returnsUnauthorized() throws Exception {
+            // Arrange
+            userRepository.save(user("auth.logout.refresh@velawear.local", "Password123!"));
+            String refreshToken = loginAndExtractRefreshToken("auth.logout.refresh@velawear.local", "Password123!");
+
+            // Logout (thu hồi token)
+            mockMvc.perform(post("/api/v1/auth/logout")
+                            .cookie(new Cookie("refresh_token", refreshToken)))
+                    .andExpect(status().isOk());
+
+            // Act & Assert (thử dùng token đã thu hồi để refresh)
+            mockMvc.perform(post("/api/v1/auth/refresh")
+                            .cookie(new Cookie("refresh_token", refreshToken)))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.statusCode").value(401))
+                    .andExpect(jsonPath("$.message").value("Refresh token is revoked"));
         }
 
         @Test
@@ -256,13 +287,9 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
         @Test
         @DisplayName("POST /auth/refresh - 401: từ chối khi refresh token không hợp lệ")
         void refreshToken_invalidRefreshToken_returnsUnauthorized() throws Exception {
-            // Arrange
-            RefreshTokenRequest request = new RefreshTokenRequest("missing-refresh-token");
-
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/refresh")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
+                            .cookie(new Cookie("refresh_token", "missing-refresh-token")))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.statusCode").value(401));
         }
