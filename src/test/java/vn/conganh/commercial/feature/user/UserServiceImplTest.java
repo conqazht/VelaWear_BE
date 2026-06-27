@@ -44,16 +44,13 @@ class UserServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
-    private UserHasRoleRepository userHasRoleRepository;
-
-    @Mock
     private PasswordEncoder passwordEncoder;
 
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserServiceImpl(userRepository, userHasRoleRepository, passwordEncoder);
+        userService = new UserServiceImpl(userRepository, passwordEncoder);
     }
 
     @Nested
@@ -150,7 +147,7 @@ class UserServiceImplTest {
             Role role = role(2L, "ADMIN");
             when(userRepository.findAllByDeletedAtIsNull(pageable))
                     .thenReturn(new PageImpl<>(List.of(user), pageable, 1));
-            when(userHasRoleRepository.findAllWithRoleByUserIdIn(List.of(1L)))
+            when(userRepository.findAllWithRoleByUserIdIn(List.of(1L)))
                     .thenReturn(List.of(userHasRole(user, role)));
 
             // Act
@@ -176,7 +173,7 @@ class UserServiceImplTest {
             // Arrange
             User user = activeUser(1L, "user@example.com");
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
-            when(userHasRoleRepository.findAllWithRoleByUserIdIn(List.of(1L))).thenReturn(List.of());
+            when(userRepository.findAllWithRoleByUserIdIn(List.of(1L))).thenReturn(List.of());
 
             // Act
             UserResponse response = userService.getUserById(1L);
@@ -194,9 +191,9 @@ class UserServiceImplTest {
             Role role = role(2L, "ADMIN");
             Permission permission = permission(3L, "CREATE_USER", "/api/v1/users", "POST", "USER");
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
-            when(userHasRoleRepository.findAllWithRoleByUserIdIn(List.of(1L)))
+            when(userRepository.findAllWithRoleByUserIdIn(List.of(1L)))
                     .thenReturn(List.of(userHasRole(user, role)));
-            when(userHasRoleRepository.findEffectivePermissionsByUserId(1L)).thenReturn(List.of(permission));
+            when(userRepository.findEffectivePermissionsByUserId(1L)).thenReturn(List.of(permission));
 
             // Act
             UserResponse response = userService.getUserById(1L);

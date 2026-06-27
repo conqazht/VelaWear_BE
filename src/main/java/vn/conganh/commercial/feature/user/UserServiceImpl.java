@@ -24,7 +24,6 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
-    private final UserHasRoleRepository userHasRoleRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -44,7 +43,7 @@ public class UserServiceImpl implements UserService {
         List<UserResponse.RoleSummaryResponse> roles =
                 rolesByUserId(List.of(user)).getOrDefault(user.getId(), List.of());
         List<UserResponse.PermissionSummaryResponse> permissions =
-                userHasRoleRepository.findEffectivePermissionsByUserId(user.getId()).stream()
+                userRepository.findEffectivePermissionsByUserId(user.getId()).stream()
                         .map(UserResponse.PermissionSummaryResponse::fromEntity)
                         .toList();
         return UserResponse.fromEntity(user, roles, permissions);
@@ -102,7 +101,7 @@ public class UserServiceImpl implements UserService {
                 .map(User::getId)
                 .toList();
 
-        return userHasRoleRepository.findAllWithRoleByUserIdIn(userIds).stream()
+        return userRepository.findAllWithRoleByUserIdIn(userIds).stream()
                 .collect(Collectors.groupingBy(
                         userHasRole -> userHasRole.getUser().getId(),
                         Collectors.mapping(

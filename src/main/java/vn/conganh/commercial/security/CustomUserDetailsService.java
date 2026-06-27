@@ -8,7 +8,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import vn.conganh.commercial.feature.user.User;
-import vn.conganh.commercial.feature.user.UserHasRoleRepository;
 import vn.conganh.commercial.feature.user.UserRepository;
 
 @Service
@@ -16,14 +15,13 @@ import vn.conganh.commercial.feature.user.UserRepository;
 public class CustomUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
-    private final UserHasRoleRepository userHasRoleRepository;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
-        List<SimpleGrantedAuthority> authorities = userHasRoleRepository.findRolesByUserId(user.getId()).stream()
+        List<SimpleGrantedAuthority> authorities = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))
                 .toList();
 
