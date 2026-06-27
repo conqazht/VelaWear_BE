@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.category.dto.CategoryFilterRequest;
 import vn.conganh.commercial.feature.category.dto.CategoryResponse;
 import vn.conganh.commercial.feature.category.dto.CreateCategoryRequest;
 import vn.conganh.commercial.feature.category.dto.UpdateCategoryRequest;
@@ -30,8 +31,10 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCategories(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCategories(
+            @ParameterObject CategoryFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getAllCategories(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")

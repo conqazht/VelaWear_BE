@@ -2,13 +2,14 @@ package vn.conganh.commercial.feature.category;
 
 import org.springframework.data.domain.Pageable;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.category.dto.CategoryFilterRequest;
 import vn.conganh.commercial.feature.category.dto.CategoryResponse;
 import vn.conganh.commercial.feature.category.dto.CreateCategoryRequest;
 import vn.conganh.commercial.feature.category.dto.UpdateCategoryRequest;
 
 public interface CategoryService {
 
-    ResultPaginationDTO getAllCategories(Pageable pageable);
+    ResultPaginationDTO getAllCategories(CategoryFilterRequest filter, Pageable pageable);
 
     CategoryResponse getCategoryById(Long id);
 

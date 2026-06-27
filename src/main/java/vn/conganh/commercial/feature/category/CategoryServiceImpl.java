@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.category;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -8,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.category.dto.CategoryFilterRequest;
 import vn.conganh.commercial.feature.category.dto.CategoryResponse;
 import vn.conganh.commercial.feature.category.dto.CreateCategoryRequest;
 import vn.conganh.commercial.feature.category.dto.UpdateCategoryRequest;
@@ -20,8 +23,8 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllCategories(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(categoryRepository.findAllByDeletedAtIsNull(pageable)
+    public ResultPaginationDTO getAllCategories(CategoryFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(categoryRepository.findAll(Specification.where(CategorySpecification.build(filter)), pageable)
                 .map(CategoryResponse::fromEntity));
     }
 
