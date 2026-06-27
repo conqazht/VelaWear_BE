@@ -3,12 +3,13 @@ package vn.conganh.commercial.feature.product;
 import org.springframework.data.domain.Pageable;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
+import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 
 public interface ProductService {
 
-    ResultPaginationDTO getAllProducts(Pageable pageable);
+    ResultPaginationDTO getAllProducts(ProductFilterRequest filter, Pageable pageable);
 
     ProductResponse getProductById(Long id);
 

@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.product;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -9,6 +11,7 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
+import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 
@@ -20,8 +23,8 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllProducts(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(productRepository.findAllByDeletedAtIsNull(pageable)
+    public ResultPaginationDTO getAllProducts(ProductFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(productRepository.findAll(Specification.where(ProductSpecification.build(filter)), pageable)
                 .map(ProductResponse::fromEntity));
     }
 
