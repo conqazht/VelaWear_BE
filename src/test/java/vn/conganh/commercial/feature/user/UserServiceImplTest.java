@@ -2,6 +2,7 @@ package vn.conganh.commercial.feature.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.inOrder;
@@ -28,6 +29,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.permission.Permission;
+import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
@@ -41,13 +44,16 @@ class UserServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
+    private UserHasRoleRepository userHasRoleRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserServiceImpl(userRepository, passwordEncoder);
+        userService = new UserServiceImpl(userRepository, userHasRoleRepository, passwordEncoder);
     }
 
     @Nested
@@ -170,6 +176,34 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("getUserById - trả về roles và effective permissions cho admin")
+        void getUserById_existingActiveUser_returnsRolesAndEffectivePermissions() {
+            // Arrange
+            User user = activeUser(1L, "user@example.com");
+            Role role = role(2L, "ADMIN");
+            Permission permission = permission(3L, "CREATE_USER", "/api/v1/users", "POST", "USER");
+            when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
+            when(userHasRoleRepository.findRolesByUserId(1L)).thenReturn(List.of(role));
+            when(userHasRoleRepository.findEffectivePermissionsByUserId(1L)).thenReturn(List.of(permission));
+
+            // Act
+            UserResponse response = userService.getUserById(1L);
+
+            // Assert
+            assertThat(response.roles())
+                    .extracting(UserResponse.RoleSummaryResponse::id, UserResponse.RoleSummaryResponse::name)
+                    .containsExactly(tuple(2L, "ADMIN"));
+            assertThat(response.permissions())
+                    .extracting(
+                            UserResponse.PermissionSummaryResponse::id,
+                            UserResponse.PermissionSummaryResponse::name,
+                            UserResponse.PermissionSummaryResponse::apiPath,
+                            UserResponse.PermissionSummaryResponse::method,
+                            UserResponse.PermissionSummaryResponse::module)
+                    .containsExactly(tuple(3L, "CREATE_USER", "/api/v1/users", "POST", "USER"));
+        }
+
+        @Test
         @DisplayName("getUserById - ném ResourceNotFoundException khi user không tồn tại")
         void getUserById_missingUser_throwsResourceNotFoundException() {
             // Arrange
@@ -284,5 +318,22 @@ class UserServiceImplTest {
         user.setBirthDate(LocalDate.of(2000, 1, 1));
         user.setGender(UserGender.MALE);
         return user;
+    }
+
+    private Role role(Long id, String name) {
+        Role role = new Role();
+        ReflectionTestUtils.setField(role, "id", id);
+        role.setName(name);
+        return role;
+    }
+
+    private Permission permission(Long id, String name, String apiPath, String method, String module) {
+        Permission permission = new Permission();
+        ReflectionTestUtils.setField(permission, "id", id);
+        permission.setName(name);
+        permission.setApiPath(apiPath);
+        permission.setMethod(method);
+        permission.setModule(module);
+        return permission;
     }
 }

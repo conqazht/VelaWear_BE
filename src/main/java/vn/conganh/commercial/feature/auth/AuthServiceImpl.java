@@ -73,7 +73,7 @@ public class AuthServiceImpl implements AuthService {
 
         String email = authentication.getName();
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
 
         List<String> roles = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -126,7 +126,7 @@ public class AuthServiceImpl implements AuthService {
         User user = existingToken.getUser();
         existingToken.setRevoked(true);
 
-        List<String> roles = roleRepository.findAllByUserId(user.getId()).stream()
+        List<String> roles = userHasRoleRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
         String accessToken = generateAccessToken(user.getEmail(), user.getId(), roles);
@@ -148,7 +148,11 @@ public class AuthServiceImpl implements AuthService {
     public UserResponse getMe(String email) {
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
-        return UserResponse.fromEntity(user);
+
+        List<UserResponse.RoleSummaryResponse> roles = userHasRoleRepository.findRolesByUserId(user.getId()).stream()
+                .map(UserResponse.RoleSummaryResponse::fromEntity)
+                .toList();
+        return UserResponse.fromEntity(user, roles);
     }
 
     private String generateAccessToken(String email, Long userId, List<String> roles) {

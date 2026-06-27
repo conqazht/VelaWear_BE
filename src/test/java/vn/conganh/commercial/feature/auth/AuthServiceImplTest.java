@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
@@ -241,7 +242,7 @@ class AuthServiceImplTest {
             User user = user(1L);
             RefreshToken refreshToken = refreshToken(user, validRefreshJwt(user));
             when(refreshTokenService.findValidRefreshToken(refreshToken.getToken())).thenReturn(refreshToken);
-            when(roleRepository.findAllByUserId(1L)).thenReturn(List.of(role(1L, "ADMIN")));
+            when(userHasRoleRepository.findRolesByUserId(1L)).thenReturn(List.of(role(1L, "ADMIN")));
 
             // Act
             TokenResponse response = authService.refreshToken(new RefreshTokenRequest(refreshToken.getToken()));
@@ -271,6 +272,31 @@ class AuthServiceImplTest {
 
             // Assert
             verify(refreshTokenService).revokeRefreshToken("raw-refresh-token");
+        }
+    }
+
+    @Nested
+    @DisplayName("Get me")
+    class GetMe {
+
+        @Test
+        @DisplayName("getMe - trả về thông tin user kèm roles")
+        void getMe_existingUser_returnsUserWithRoles() {
+            // Arrange
+            User user = user(1L);
+            Role role = role(2L, "SUPER_ADMIN");
+            when(userRepository.findByEmailAndDeletedAtIsNull("admin@example.com")).thenReturn(Optional.of(user));
+            when(userHasRoleRepository.findRolesByUserId(1L)).thenReturn(List.of(role));
+
+            // Act
+            UserResponse response = authService.getMe("admin@example.com");
+
+            // Assert
+            assertThat(response.id()).isEqualTo(1L);
+            assertThat(response.roles())
+                    .extracting(UserResponse.RoleSummaryResponse::id, UserResponse.RoleSummaryResponse::name)
+                    .containsExactly(tuple(2L, "SUPER_ADMIN"));
+            assertThat(response.permissions()).isEmpty();
         }
     }
 

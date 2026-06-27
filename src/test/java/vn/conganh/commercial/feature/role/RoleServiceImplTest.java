@@ -2,6 +2,7 @@ package vn.conganh.commercial.feature.role;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.permission.Permission;
 import vn.conganh.commercial.feature.role.dto.CreateRoleRequest;
 import vn.conganh.commercial.feature.role.dto.RoleResponse;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
@@ -111,6 +113,29 @@ class RoleServiceImplTest {
             assertThatThrownBy(() -> roleService.getRoleById(99L))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
+
+        @Test
+        @DisplayName("getRoleById - trả về permissions của role")
+        void getRoleById_existingRole_returnsPermissions() {
+            // Arrange
+            Role role = role(1L, "ADMIN");
+            Permission permission = permission(2L, "UPLOAD_FILE", "/api/v1/files", "POST", "FILE");
+            when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
+            when(roleRepository.findPermissionsByRoleId(1L)).thenReturn(List.of(permission));
+
+            // Act
+            RoleResponse response = roleService.getRoleById(1L);
+
+            // Assert
+            assertThat(response.permissions())
+                    .extracting(
+                            permissionResponse -> permissionResponse.id(),
+                            permissionResponse -> permissionResponse.name(),
+                            permissionResponse -> permissionResponse.apiPath(),
+                            permissionResponse -> permissionResponse.method(),
+                            permissionResponse -> permissionResponse.module())
+                    .containsExactly(tuple(2L, "UPLOAD_FILE", "/api/v1/files", "POST", "FILE"));
+        }
     }
 
     @Nested
@@ -141,5 +166,15 @@ class RoleServiceImplTest {
         role.setName(name);
         role.setDescription("desc");
         return role;
+    }
+
+    private Permission permission(Long id, String name, String apiPath, String method, String module) {
+        Permission permission = new Permission();
+        ReflectionTestUtils.setField(permission, "id", id);
+        permission.setName(name);
+        permission.setApiPath(apiPath);
+        permission.setMethod(method);
+        permission.setModule(module);
+        return permission;
     }
 }

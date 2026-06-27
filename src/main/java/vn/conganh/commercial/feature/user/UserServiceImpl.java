@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.user;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +20,7 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final UserHasRoleRepository userHasRoleRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -31,7 +33,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserResponse getUserById(Long id) {
-        return UserResponse.fromEntity(findActiveUser(id));
+        User user = findActiveUser(id);
+        List<UserResponse.RoleSummaryResponse> roles = userHasRoleRepository.findRolesByUserId(user.getId()).stream()
+                .map(UserResponse.RoleSummaryResponse::fromEntity)
+                .toList();
+        List<UserResponse.PermissionSummaryResponse> permissions =
+                userHasRoleRepository.findEffectivePermissionsByUserId(user.getId()).stream()
+                        .map(UserResponse.PermissionSummaryResponse::fromEntity)
+                        .toList();
+        return UserResponse.fromEntity(user, roles, permissions);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.role;
 
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -7,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.role.dto.CreateRoleRequest;
 import vn.conganh.commercial.feature.role.dto.RoleResponse;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
@@ -27,7 +29,11 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional(readOnly = true)
     public RoleResponse getRoleById(Long id) {
-        return RoleResponse.fromEntity(findRole(id));
+        Role role = findRole(id);
+        List<PermissionResponse> permissions = roleRepository.findPermissionsByRoleId(role.getId()).stream()
+                .map(PermissionResponse::fromEntity)
+                .toList();
+        return RoleResponse.fromEntity(role, permissions);
     }
 
     @Override

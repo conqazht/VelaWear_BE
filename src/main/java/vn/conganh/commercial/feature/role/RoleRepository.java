@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import vn.conganh.commercial.feature.permission.Permission;
 
 public interface RoleRepository extends JpaRepository<Role, Long> {
 
@@ -12,10 +13,11 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
     boolean existsByName(String name);
 
     @Query("""
-            select r
-            from UserHasRole uhr
-            join uhr.role r
-            where uhr.user.id = :userId
+            select rhp.permission
+            from RoleHasPermission rhp
+            where rhp.role.id = :roleId
+            order by rhp.permission.module, rhp.permission.name
             """)
-    List<Role> findAllByUserId(Long userId);
+    List<Permission> findPermissionsByRoleId(Long roleId);
 }
+

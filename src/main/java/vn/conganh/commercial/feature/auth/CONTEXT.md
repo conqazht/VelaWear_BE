@@ -21,6 +21,7 @@ Auth exposes public endpoints under `/api/v1/auth`:
   never as raw tokens.
 - Login and refresh also set the raw refresh token into an `HttpOnly` cookie.
 - Logout clears the refresh token cookie.
+- `/me` returns the authenticated user's profile with role summaries (`id`, `name`) loaded from `user_role`.
 
 ## Refresh Rotation
 
