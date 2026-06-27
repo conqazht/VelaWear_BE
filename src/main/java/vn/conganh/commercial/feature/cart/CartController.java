@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.cart;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +28,7 @@ public class CartController {
     private final CartService cartService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCarts(Pageable pageable) {
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCarts(@ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(cartService.getAllCarts(pageable)));
     }
 
