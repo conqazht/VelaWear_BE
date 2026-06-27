@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.coupon.dto.CouponFilterRequest;
 import vn.conganh.commercial.feature.coupon.dto.CouponResponse;
 import vn.conganh.commercial.feature.coupon.dto.CreateCouponRequest;
 import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
@@ -30,8 +31,10 @@ public class CouponController {
     private final CouponService couponService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCoupons(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(couponService.getAllCoupons(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCoupons(
+            @ParameterObject CouponFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(couponService.getAllCoupons(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")
