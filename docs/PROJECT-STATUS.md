@@ -201,3 +201,13 @@
 - Added nullable `reference_type` and `reference_id` to `inventory_logs` for source tracing, with a paired-null check and reference lookup index.
 - Changed reviews to reference `order_items` through `order_item_id` instead of referencing only `orders`, so each review is tied to the exact purchased item.
 - Changed business history foreign keys from cascade delete to restrict delete for `order_items -> orders`, `payment_transactions -> payments`, and `order_status_histories -> orders`.
+
+## 2026-06-27
+
+### Completed
+
+- Refactored `/api/v1/auth/refresh` and `/api/v1/auth/logout` to run on cookie-based refresh tokens.
+- Restored optional request body for `/refresh` to support manual token entry in Swagger UI, while keeping `/logout` parameterless.
+- Custom-configured Swagger UI response interceptor to clear credentials from `localStorage` and programmatically log out of Swagger UI without page reload.
+- Handled Spring Data `PropertyReferenceException` and database-level `InvalidDataAccessApiUsageException` in `GlobalExceptionHandler` to gracefully return `400 Bad Request` instead of `500 Internal Server Error` on invalid query sorts.
+- Added Flyway migration `V5__seed_missing_permissions.sql` to seed all 23 missing REST endpoints permissions, correct invalid HTTP methods, and assign full permissions to the `ADMIN` role and logical sub-permissions to `MANAGER`, `STAFF`, and `USER` roles.
