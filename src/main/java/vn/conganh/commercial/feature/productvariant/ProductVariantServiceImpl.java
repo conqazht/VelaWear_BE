@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.productvariant;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -12,6 +14,7 @@ import vn.conganh.commercial.feature.color.Color;
 import vn.conganh.commercial.feature.color.ColorRepository;
 import vn.conganh.commercial.feature.product.ProductRepository;
 import vn.conganh.commercial.feature.productvariant.dto.CreateProductVariantRequest;
+import vn.conganh.commercial.feature.productvariant.dto.ProductVariantFilterRequest;
 import vn.conganh.commercial.feature.productvariant.dto.ProductVariantResponse;
 import vn.conganh.commercial.feature.productvariant.dto.UpdateProductVariantRequest;
 import vn.conganh.commercial.feature.size.Size;
@@ -28,8 +31,8 @@ public class ProductVariantServiceImpl implements ProductVariantService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAll(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(productVariantRepository.findAllByDeletedAtIsNull(pageable)
+    public ResultPaginationDTO getAll(ProductVariantFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(productVariantRepository.findAll(Specification.where(ProductVariantSpecification.build(filter)), pageable)
                 .map(ProductVariantResponse::fromEntity));
     }
 

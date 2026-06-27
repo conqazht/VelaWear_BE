@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.productvariant.dto.CreateProductVariantRequest;
+import vn.conganh.commercial.feature.productvariant.dto.ProductVariantFilterRequest;
 import vn.conganh.commercial.feature.productvariant.dto.ProductVariantResponse;
 import vn.conganh.commercial.feature.productvariant.dto.UpdateProductVariantRequest;
 
@@ -30,8 +31,10 @@ public class ProductVariantController {
     private final ProductVariantService productVariantService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(productVariantService.getAll(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(
+            @ParameterObject ProductVariantFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(productVariantService.getAll(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")
