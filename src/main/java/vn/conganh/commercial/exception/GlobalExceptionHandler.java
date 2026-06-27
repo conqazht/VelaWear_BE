@@ -9,11 +9,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import vn.conganh.commercial.dto.ApiResponse;
@@ -45,6 +47,25 @@ public class GlobalExceptionHandler {
                         (first, second) -> first));
         return ResponseEntity.badRequest()
                 .body(new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), errors, "Validation failed", java.time.LocalDateTime.now()));
+    }
+
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleBind(BindException exception) {
+        Map<String, String> errors = exception.getBindingResult().getFieldErrors().stream()
+                .collect(Collectors.toMap(
+                        FieldError::getField,
+                        FieldError::getDefaultMessage,
+                        (first, second) -> first));
+        return ResponseEntity.badRequest()
+                .body(new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), errors, "Validation failed", java.time.LocalDateTime.now()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Invalid request parameter: " + exception.getName()));
     }
 
     @ExceptionHandler({MissingServletRequestPartException.class, MissingServletRequestParameterException.class})
