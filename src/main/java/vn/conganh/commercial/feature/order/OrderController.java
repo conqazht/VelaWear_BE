@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.order.dto.CreateOrderRequest;
+import vn.conganh.commercial.feature.order.dto.OrderFilterRequest;
 import vn.conganh.commercial.feature.order.dto.OrderResponse;
+import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryFilterRequest;
 import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
 
 @RestController
@@ -30,8 +32,10 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrders(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrders(
+            @ParameterObject OrderFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getAllOrders(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")
@@ -47,15 +51,17 @@ public class OrderController {
     @GetMapping(path = "/user/{userId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrdersByUser(
             @PathVariable Long userId,
+            @ParameterObject OrderFilterRequest filter,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByUserId(userId, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(orderService.getOrdersByUserId(userId, filter, pageable)));
     }
 
     @GetMapping(path = "/{id}/status-histories")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getOrderStatusHistories(
             @PathVariable Long id,
+            @ParameterObject OrderStatusHistoryFilterRequest filter,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStatusHistories(id, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStatusHistories(id, filter, pageable)));
     }
 
     @PostMapping

@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -22,11 +24,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.dto.CreateOrderRequest;
+import vn.conganh.commercial.feature.order.dto.OrderFilterRequest;
 import vn.conganh.commercial.feature.order.dto.OrderResponse;
 import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryResponse;
 import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
@@ -149,17 +153,43 @@ class OrderServiceImplTest {
             Pageable pageable = PageRequest.of(0, 10);
             Order order = order(10L, user(1L), "SHIPPING");
             when(orderRepository.existsById(10L)).thenReturn(true);
-            when(orderStatusHistoryRepository.findByOrderId(10L, pageable))
+            when(orderStatusHistoryRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(history(100L, order, "PENDING", "SHIPPING")), pageable, 1));
 
             // Act
-            ResultPaginationDTO responses = orderService.getOrderStatusHistories(10L, pageable);
+            ResultPaginationDTO responses = orderService.getOrderStatusHistories(10L, null, pageable);
 
             // Assert
             assertThat(responses.result()).hasSize(1);
             assertThat(responses.result()).extracting("fromStatus").containsExactly("PENDING");
             assertThat(responses.result()).extracting("toStatus").containsExactly("SHIPPING");
             assertThat(responses.meta().page()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("getOrdersByUserId - từ chối query userId khác path userId")
+        void getOrdersByUserId_conflictingQueryUserId_throwsInvalidRequestException() {
+            // Arrange
+            OrderFilterRequest filter = new OrderFilterRequest(
+                    2L,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    BigDecimal.ZERO,
+                    BigDecimal.TEN,
+                    null,
+                    null,
+                    null,
+                    null);
+
+            // Act & Assert
+            assertThatThrownBy(() -> orderService.getOrdersByUserId(1L, filter, PageRequest.of(0, 10)))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("userId");
+            verifyNoInteractions(orderRepository, userRepository, orderStatusHistoryRepository);
         }
     }
 

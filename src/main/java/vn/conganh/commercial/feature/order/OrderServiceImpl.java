@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.order;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -9,11 +11,14 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.dto.CreateOrderRequest;
+import vn.conganh.commercial.feature.order.dto.OrderFilterRequest;
 import vn.conganh.commercial.feature.order.dto.OrderResponse;
+import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryFilterRequest;
 import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
 import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.util.FilterSpecifications;
 
 @Service
 @RequiredArgsConstructor
@@ -25,8 +30,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAllOrders(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(orderRepository.findAll(pageable)
+    public ResultPaginationDTO getAllOrders(OrderFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(orderRepository.findAll(Specification.where(OrderSpecification.build(filter)), pageable)
                 .map(OrderResponse::fromEntity));
     }
 
@@ -48,19 +53,28 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getOrdersByUserId(Long userId, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(orderRepository.findByUserId(userId, pageable)
+    public ResultPaginationDTO getOrdersByUserId(Long userId, OrderFilterRequest filter, Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId("userId", userId, filter == null ? null : filter.userId());
+        OrderFilterRequest scopedFilter = filter == null
+                ? new OrderFilterRequest(
+                        userId, null, null, null, null, null, null, null, null, null, null, null, null)
+                : filter.withUserId(userId);
+
+        return ResultPaginationDTO.fromPage(orderRepository.findAll(Specification.where(OrderSpecification.build(scopedFilter)), pageable)
                 .map(OrderResponse::fromEntity));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getOrderStatusHistories(Long id, Pageable pageable) {
+    public ResultPaginationDTO getOrderStatusHistories(
+            Long id,
+            OrderStatusHistoryFilterRequest filter,
+            Pageable pageable) {
         if (!orderRepository.existsById(id)) {
             throw new ResourceNotFoundException("Order", "id", id);
         }
 
-        return ResultPaginationDTO.fromPage(orderStatusHistoryRepository.findByOrderId(id, pageable)
+        return ResultPaginationDTO.fromPage(orderStatusHistoryRepository.findAll(Specification.where(OrderStatusHistorySpecification.build(id, filter)), pageable)
                 .map(OrderStatusHistoryResponse::fromEntity));
     }
 
