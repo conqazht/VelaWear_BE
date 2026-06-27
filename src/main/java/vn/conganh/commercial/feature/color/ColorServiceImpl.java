@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.color;
 
+import org.springframework.data.jpa.domain.Specification;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -7,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.color.dto.ColorFilterRequest;
 import vn.conganh.commercial.feature.color.dto.ColorResponse;
 import vn.conganh.commercial.feature.color.dto.CreateColorRequest;
 import vn.conganh.commercial.feature.color.dto.UpdateColorRequest;
@@ -19,8 +22,8 @@ public class ColorServiceImpl implements ColorService {
 
     @Override
     @Transactional(readOnly = true)
-    public ResultPaginationDTO getAll(Pageable pageable) {
-        return ResultPaginationDTO.fromPage(colorRepository.findAll(pageable)
+    public ResultPaginationDTO getAll(ColorFilterRequest filter, Pageable pageable) {
+        return ResultPaginationDTO.fromPage(colorRepository.findAll(Specification.where(ColorSpecification.build(filter)), pageable)
                 .map(ColorResponse::fromEntity));
     }
 

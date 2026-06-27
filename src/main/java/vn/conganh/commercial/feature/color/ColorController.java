@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.color.dto.ColorFilterRequest;
 import vn.conganh.commercial.feature.color.dto.ColorResponse;
 import vn.conganh.commercial.feature.color.dto.CreateColorRequest;
 import vn.conganh.commercial.feature.color.dto.UpdateColorRequest;
@@ -30,8 +31,10 @@ public class ColorController {
     private final ColorService colorService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(colorService.getAll(pageable)));
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(
+            @ParameterObject ColorFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(colorService.getAll(filter, pageable)));
     }
 
     @GetMapping(path = "/{id}")
