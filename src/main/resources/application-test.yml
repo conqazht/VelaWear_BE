@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   jpa:
     hibernate:
       ddl-auto: validate
@@ -10,3 +14,18 @@ spring:
 jwt:
   access-token-expiration: 900
   refresh-token-expiration: 259200
+
+app:
+  upload:
+    base-dir: target/test-uploads
+    url-prefix: /uploads
+    max-size-bytes: 5242880
+    allowed-extensions:
+      - jpg
+      - jpeg
+      - png
+      - webp
+    allowed-folders:
+      - avatars
+      - products
+      - reviews

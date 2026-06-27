@@ -5,6 +5,10 @@ spring:
     name: VelaWear
   profiles:
     active: ${SPRING_PROFILES_ACTIVE}
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   jpa:
     open-in-view: false
     properties:
@@ -36,6 +40,20 @@ jwt:
   secret-key: ${JWT_SECRET_KEY}
   access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
+
+app:
+  upload:
+    base-dir: ./uploads
+    url-prefix: /uploads
+    max-size-bytes: 5242880
+    allowed-extensions:
+      - jpg
+      - jpeg
+      - png
+      - webp
+    allowed-folders:
+      - avatars
+      - logos
 
 springdoc:
   api-docs:

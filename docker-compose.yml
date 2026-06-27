@@ -3,15 +3,16 @@ services:
     image: postgres:16-alpine
     container_name: commercial-postgres
     environment:
-      POSTGRES_DB: commercial
-      POSTGRES_USER: commercial
-      POSTGRES_PASSWORD: commercial
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - commercial_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U commercial -d commercial"]
+      test:
+        ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME} -h localhost"]
       interval: 10s
       timeout: 5s
       retries: 5

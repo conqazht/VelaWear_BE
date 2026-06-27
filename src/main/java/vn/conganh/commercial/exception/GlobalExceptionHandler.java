@@ -6,11 +6,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import vn.conganh.commercial.dto.ApiResponse;
 
 @RestControllerAdvice
@@ -40,6 +43,18 @@ public class GlobalExceptionHandler {
                         (first, second) -> first));
         return ResponseEntity.badRequest()
                 .body(new ApiResponse<>(HttpStatus.BAD_REQUEST.value(), errors, "Validation failed", java.time.LocalDateTime.now()));
+    }
+
+    @ExceptionHandler({MissingServletRequestPartException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<ApiResponse<Void>> handleMissingMultipartRequest(Exception exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Required upload parameter is missing"));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error(HttpStatus.PAYLOAD_TOO_LARGE.value(), "Uploaded file exceeds maximum allowed size"));
     }
 
     @ExceptionHandler(Exception.class)
