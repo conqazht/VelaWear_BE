@@ -36,15 +36,7 @@ public class SecurityConfig {
             "/swagger-ui.html",
             "/actuator/health",
             "/actuator/info",
-            "/uploads/**",
-            "/api/v1/products",
-            "/api/v1/products/**",
-            "/api/v1/categories",
-            "/api/v1/categories/**",
-            "/api/v1/brands",
-            "/api/v1/brands/**",
-            "/api/v1/product-variants",
-            "/api/v1/product-variants/**"
+            "/uploads/**"
     };
 
     @Bean
@@ -59,6 +51,15 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(WHITELIST).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/v1/products",
+                                "/api/v1/products/**",
+                                "/api/v1/categories",
+                                "/api/v1/categories/**",
+                                "/api/v1/brands",
+                                "/api/v1/brands/**",
+                                "/api/v1/product-variants",
+                                "/api/v1/product-variants/**").permitAll()
                         .requestMatchers("/api/v1/auth/me").authenticated()
                         .anyRequest().access(permissionAuthorizationManager))
                 .oauth2ResourceServer(oauth2 -> oauth2

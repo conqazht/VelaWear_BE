@@ -45,6 +45,15 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(productService.getAllProducts(filter, pageable, resolvedLocale)));
     }
 
+    @GetMapping(path = "/slug/{slug}")
+    public ResponseEntity<ApiResponse<ProductResponse>> getProductBySlug(
+            @PathVariable String slug,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+        String resolvedLocale = catalogLocaleResolver.resolve(locale, acceptLanguage);
+        return ResponseEntity.ok(ApiResponse.success(productService.getProductBySlug(slug, resolvedLocale)));
+    }
+
     @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<ProductResponse>> getProduct(
             @PathVariable Long id,

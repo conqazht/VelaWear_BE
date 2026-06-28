@@ -82,20 +82,20 @@ class BrandControllerTest extends AuthenticatedIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET / - 401: từ chối request không có access token")
-    void getList_missingToken_returnsUnauthorized() throws Exception {
+    @DisplayName("GET / - 200: cho phép request không có access token")
+    void getList_missingToken_returnsOk() throws Exception {
         // Act & Assert
         mockMvc.perform(get(BASE_PATH))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
     }
 
     @Test
-    @DisplayName("GET / - 403: từ chối token hợp lệ nhưng không có quyền")
-    void getList_authenticatedRoleWithoutPermission_returnsForbidden() throws Exception {
+    @DisplayName("GET / - 200: cho phép token hợp lệ nhưng không có quyền")
+    void getList_authenticatedRoleWithoutPermission_returnsOk() throws Exception {
         // Act & Assert
         mockMvc.perform(get(BASE_PATH)
                         .header("Authorization", "Bearer " + noAccessToken()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -113,20 +113,20 @@ class BrandControllerTest extends AuthenticatedIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /{id} - 401: từ chối request không có access token")
-    void getById_missingToken_returnsUnauthorized() throws Exception {
+    @DisplayName("GET /{id} - 404: cho phép request không có access token nhưng không tìm thấy")
+    void getById_missingToken_returnsNotFound() throws Exception {
         // Act & Assert
         mockMvc.perform(get(BASE_PATH + "/" + MISSING_ID))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    @DisplayName("GET /{id} - 403: từ chối token hợp lệ nhưng không có quyền")
-    void getById_authenticatedRoleWithoutPermission_returnsForbidden() throws Exception {
+    @DisplayName("GET /{id} - 404: cho phép token không có quyền nhưng không tìm thấy")
+    void getById_authenticatedRoleWithoutPermission_returnsNotFound() throws Exception {
         // Act & Assert
         mockMvc.perform(get(BASE_PATH + "/" + MISSING_ID)
                         .header("Authorization", "Bearer " + noAccessToken()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNotFound());
     }
 
     @Test

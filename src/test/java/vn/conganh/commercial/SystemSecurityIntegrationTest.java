@@ -21,12 +21,8 @@ class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
             "/api/v1/roles",
             "/api/v1/permissions",
             // Module Catalog
-            "/api/v1/brands",
-            "/api/v1/categories",
             "/api/v1/colors",
             "/api/v1/sizes",
-            "/api/v1/products",
-            "/api/v1/product-variants",
             // Module Cart/Coupon/Order/Payment/Review
             "/api/v1/carts",
             "/api/v1/coupons",

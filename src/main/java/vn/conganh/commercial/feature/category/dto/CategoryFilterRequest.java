@@ -8,6 +8,7 @@ public record CategoryFilterRequest(
         String name,
         String slug,
         String status,
+        Boolean global,
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         LocalDate createdFrom,
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)

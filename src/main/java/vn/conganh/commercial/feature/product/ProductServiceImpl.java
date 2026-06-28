@@ -38,10 +38,13 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ResultPaginationDTO getAllProducts(ProductFilterRequest filter, Pageable pageable, String localeCode) {
-        Page<Product> products = productRepository.findAll(Specification.where(ProductSpecification.build(filter)), pageable);
+        String resolvedLocale = normalizeLocale(localeCode);
+        Page<Product> products = productRepository.findAll(
+                Specification.where(ProductSpecification.build(filter, resolvedLocale)),
+                pageable);
         Map<Long, ProductTranslation> translations = loadTranslations(
                 products.getContent().stream().map(Product::getId).toList(),
-                localeCode);
+                resolvedLocale);
         return ResultPaginationDTO.fromPage(products.map(product -> ProductResponse.fromEntity(
                 product,
                 translations.get(product.getId()))));
@@ -208,8 +211,6 @@ public class ProductServiceImpl implements ProductService {
         if (localeCode == null || localeCode.isBlank()) {
             return CatalogLocaleResolver.DEFAULT_LOCALE;
         }
-        String normalized = localeCode.trim().replace('_', '-').toLowerCase();
-        int regionSeparator = normalized.indexOf('-');
-        return regionSeparator > 0 ? normalized.substring(0, regionSeparator) : normalized;
+        return localeCode.trim().replace('_', '-').toLowerCase();
     }
 }

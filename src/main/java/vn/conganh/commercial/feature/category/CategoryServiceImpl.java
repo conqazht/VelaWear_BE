@@ -38,10 +38,13 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional(readOnly = true)
     public ResultPaginationDTO getAllCategories(CategoryFilterRequest filter, Pageable pageable, String localeCode) {
-        Page<Category> categories = categoryRepository.findAll(Specification.where(CategorySpecification.build(filter)), pageable);
+        String resolvedLocale = normalizeLocale(localeCode);
+        Page<Category> categories = categoryRepository.findAll(
+                Specification.where(CategorySpecification.build(filter, resolvedLocale)),
+                pageable);
         Map<Long, CategoryTranslation> translations = loadTranslations(
                 categories.getContent().stream().map(Category::getId).toList(),
-                localeCode);
+                resolvedLocale);
         return ResultPaginationDTO.fromPage(categories.map(category -> CategoryResponse.fromEntity(
                 category,
                 translations.get(category.getId()))));
@@ -188,8 +191,6 @@ public class CategoryServiceImpl implements CategoryService {
         if (localeCode == null || localeCode.isBlank()) {
             return CatalogLocaleResolver.DEFAULT_LOCALE;
         }
-        String normalized = localeCode.trim().replace('_', '-').toLowerCase();
-        int regionSeparator = normalized.indexOf('-');
-        return regionSeparator > 0 ? normalized.substring(0, regionSeparator) : normalized;
+        return localeCode.trim().replace('_', '-').toLowerCase();
     }
 }
