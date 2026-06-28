@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.category;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -36,11 +37,14 @@ class CategoryServiceImplTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private CategoryTranslationRepository categoryTranslationRepository;
+
     private CategoryServiceImpl categoryService;
 
     @BeforeEach
     void setUp() {
-        categoryService = new CategoryServiceImpl(categoryRepository);
+        categoryService = new CategoryServiceImpl(categoryRepository, categoryTranslationRepository);
     }
 
     @Nested
@@ -53,11 +57,15 @@ class CategoryServiceImplTest {
             // Arrange
             CreateCategoryRequest request = new CreateCategoryRequest(null, "Shoes", "shoes", 1, "ACTIVE");
             when(categoryRepository.existsBySlug("shoes")).thenReturn(false);
+            when(categoryTranslationRepository.existsByLocaleCodeAndSlug("vi", "shoes")).thenReturn(false);
             when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> {
                 Category category = invocation.getArgument(0);
                 ReflectionTestUtils.setField(category, "id", 1L);
                 return category;
             });
+            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi")).thenReturn(Optional.empty());
+            when(categoryTranslationRepository.save(any(CategoryTranslation.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
 
             // Act
             CategoryResponse response = categoryService.createCategory(request);
@@ -80,6 +88,20 @@ class CategoryServiceImplTest {
                     .isInstanceOf(InvalidRequestException.class);
             verify(categoryRepository, never()).save(any());
         }
+
+        @Test
+        @DisplayName("createCategory - không gọi save khi slug bản dịch vi đã tồn tại")
+        void createCategory_duplicateVietnameseTranslationSlug_throwsInvalidRequestExceptionAndDoesNotSave() {
+            // Arrange
+            CreateCategoryRequest request = new CreateCategoryRequest(null, "Shoes", "shoes", 1, "ACTIVE");
+            when(categoryRepository.existsBySlug("shoes")).thenReturn(false);
+            when(categoryTranslationRepository.existsByLocaleCodeAndSlug("vi", "shoes")).thenReturn(true);
+
+            // Act & Assert
+            assertThatThrownBy(() -> categoryService.createCategory(request))
+                    .isInstanceOf(InvalidRequestException.class);
+            verify(categoryRepository, never()).save(any());
+        }
     }
 
     @Nested
@@ -93,6 +115,8 @@ class CategoryServiceImplTest {
             Pageable pageable = PageRequest.of(0, 10);
             when(categoryRepository.findAll(any(Specification.class), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(category(1L, "Shoes", "shoes")), pageable, 1));
+            when(categoryTranslationRepository.findByCategoryIdInAndLocaleCode(anyCollection(), eq("vi")))
+                    .thenReturn(List.of());
 
             // Act
             ResultPaginationDTO responses = categoryService.getAllCategories(null, pageable);
@@ -127,6 +151,9 @@ class CategoryServiceImplTest {
             UpdateCategoryRequest request = new UpdateCategoryRequest(null, "New", 2, "INACTIVE");
             when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
             when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi")).thenReturn(Optional.empty());
+            when(categoryTranslationRepository.save(any(CategoryTranslation.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
 
             // Act
             CategoryResponse response = categoryService.updateCategory(1L, request);
@@ -138,6 +165,48 @@ class CategoryServiceImplTest {
         }
     }
 
+    @Nested
+    @DisplayName("Read localized category")
+    class ReadLocalizedCategory {
+
+        @Test
+        @DisplayName("getCategoryById - fallback về bản dịch vi khi locale yêu cầu bị thiếu")
+        void getCategoryById_missingRequestedTranslation_fallsBackToVietnamese() {
+            // Arrange
+            Category category = category(1L, "Core name", "core-slug");
+            CategoryTranslation vi = categoryTranslation(1L, "vi", "Tên danh mục", "ten-danh-muc");
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "en")).thenReturn(Optional.empty());
+            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+
+            // Act
+            CategoryResponse response = categoryService.getCategoryById(1L, "en");
+
+            // Assert
+            assertThat(response.name()).isEqualTo("Tên danh mục");
+            assertThat(response.slug()).isEqualTo("ten-danh-muc");
+        }
+
+        @Test
+        @DisplayName("getCategoryBySlug - tìm theo slug bản dịch")
+        void getCategoryBySlug_localizedSlug_returnsLocalizedResponse() {
+            // Arrange
+            Category category = category(1L, "Core name", "core-slug");
+            CategoryTranslation vi = categoryTranslation(1L, "vi", "Tên danh mục", "ten-danh-muc");
+            when(categoryTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-danh-muc"))
+                    .thenReturn(Optional.of(vi));
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+
+            // Act
+            CategoryResponse response = categoryService.getCategoryBySlug("ten-danh-muc", "vi");
+
+            // Assert
+            assertThat(response.name()).isEqualTo("Tên danh mục");
+            assertThat(response.slug()).isEqualTo("ten-danh-muc");
+        }
+    }
+
     private Category category(Long id, String name, String slug) {
         Category category = new Category();
         ReflectionTestUtils.setField(category, "id", id);
@@ -146,5 +215,17 @@ class CategoryServiceImplTest {
         category.setSortOrder(1);
         category.setStatus("ACTIVE");
         return category;
+    }
+
+    private CategoryTranslation categoryTranslation(Long categoryId, String localeCode, String name, String slug) {
+        CategoryTranslation translation = new CategoryTranslation();
+        translation.setCategoryId(categoryId);
+        translation.setLocaleCode(localeCode);
+        translation.setName(name);
+        translation.setSlug(slug);
+        translation.setDescription("Mô tả");
+        translation.setSeoTitle(name);
+        translation.setSeoDescription("SEO");
+        return translation;
     }
 }

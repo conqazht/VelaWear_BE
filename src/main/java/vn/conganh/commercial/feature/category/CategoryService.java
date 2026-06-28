@@ -11,7 +11,13 @@ public interface CategoryService {
 
     ResultPaginationDTO getAllCategories(CategoryFilterRequest filter, Pageable pageable);
 
+    ResultPaginationDTO getAllCategories(CategoryFilterRequest filter, Pageable pageable, String localeCode);
+
     CategoryResponse getCategoryById(Long id);
+
+    CategoryResponse getCategoryById(Long id, String localeCode);
+
+    CategoryResponse getCategoryBySlug(String slug, String localeCode);
 
     CategoryResponse createCategory(CreateCategoryRequest request);
 

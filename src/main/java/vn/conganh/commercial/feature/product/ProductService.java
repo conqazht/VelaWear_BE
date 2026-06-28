@@ -11,7 +11,13 @@ public interface ProductService {
 
     ResultPaginationDTO getAllProducts(ProductFilterRequest filter, Pageable pageable);
 
+    ResultPaginationDTO getAllProducts(ProductFilterRequest filter, Pageable pageable, String localeCode);
+
     ProductResponse getProductById(Long id);
+
+    ProductResponse getProductById(Long id, String localeCode);
+
+    ProductResponse getProductBySlug(String slug, String localeCode);
 
     ProductResponse createProduct(CreateProductRequest request);
 

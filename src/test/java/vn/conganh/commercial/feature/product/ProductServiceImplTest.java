@@ -29,11 +29,14 @@ class ProductServiceImplTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private ProductTranslationRepository productTranslationRepository;
+
     private ProductServiceImpl productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductServiceImpl(productRepository);
+        productService = new ProductServiceImpl(productRepository, productTranslationRepository);
     }
 
     @Nested
@@ -46,11 +49,15 @@ class ProductServiceImplTest {
             // Arrange
             CreateProductRequest request = new CreateProductRequest(1L, 2L, "Sneaker", "sneaker", "desc", "ACTIVE");
             when(productRepository.existsBySlug("sneaker")).thenReturn(false);
+            when(productTranslationRepository.existsByLocaleCodeAndSlug("vi", "sneaker")).thenReturn(false);
             when(productRepository.save(any(Product.class))).thenAnswer(invocation -> {
                 Product product = invocation.getArgument(0);
                 ReflectionTestUtils.setField(product, "id", 1L);
                 return product;
             });
+            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi")).thenReturn(Optional.empty());
+            when(productTranslationRepository.save(any(ProductTranslation.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
 
             // Act
             ProductResponse response = productService.createProduct(request);
@@ -74,6 +81,20 @@ class ProductServiceImplTest {
                     .isInstanceOf(InvalidRequestException.class);
             verify(productRepository, never()).save(any());
         }
+
+        @Test
+        @DisplayName("createProduct - không gọi save khi slug bản dịch vi đã tồn tại")
+        void createProduct_duplicateVietnameseTranslationSlug_throwsInvalidRequestExceptionAndDoesNotSave() {
+            // Arrange
+            CreateProductRequest request = new CreateProductRequest(1L, 2L, "Sneaker", "sneaker", null, "ACTIVE");
+            when(productRepository.existsBySlug("sneaker")).thenReturn(false);
+            when(productTranslationRepository.existsByLocaleCodeAndSlug("vi", "sneaker")).thenReturn(true);
+
+            // Act & Assert
+            assertThatThrownBy(() -> productService.createProduct(request))
+                    .isInstanceOf(InvalidRequestException.class);
+            verify(productRepository, never()).save(any());
+        }
     }
 
     @Nested
@@ -88,6 +109,9 @@ class ProductServiceImplTest {
             UpdateProductRequest request = new UpdateProductRequest(3L, 4L, "New", "new desc", "INACTIVE");
             when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
             when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi")).thenReturn(Optional.empty());
+            when(productTranslationRepository.save(any(ProductTranslation.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
 
             // Act
             ProductResponse response = productService.updateProduct(1L, request);
@@ -96,6 +120,48 @@ class ProductServiceImplTest {
             assertThat(response.name()).isEqualTo("New");
             assertThat(response.slug()).isEqualTo("old");
             assertThat(response.status()).isEqualTo("INACTIVE");
+        }
+    }
+
+    @Nested
+    @DisplayName("Read localized product")
+    class ReadLocalizedProduct {
+
+        @Test
+        @DisplayName("getProductById - fallback về bản dịch vi khi locale yêu cầu bị thiếu")
+        void getProductById_missingRequestedTranslation_fallsBackToVietnamese() {
+            // Arrange
+            Product product = product(1L, "Core name", "core-slug");
+            ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "en")).thenReturn(Optional.empty());
+            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+
+            // Act
+            ProductResponse response = productService.getProductById(1L, "en");
+
+            // Assert
+            assertThat(response.name()).isEqualTo("Tên tiếng Việt");
+            assertThat(response.slug()).isEqualTo("ten-tieng-viet");
+        }
+
+        @Test
+        @DisplayName("getProductBySlug - tìm theo slug bản dịch")
+        void getProductBySlug_localizedSlug_returnsLocalizedResponse() {
+            // Arrange
+            Product product = product(1L, "Core name", "core-slug");
+            ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
+            when(productTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-tieng-viet"))
+                    .thenReturn(Optional.of(vi));
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+
+            // Act
+            ProductResponse response = productService.getProductBySlug("ten-tieng-viet", "vi");
+
+            // Assert
+            assertThat(response.name()).isEqualTo("Tên tiếng Việt");
+            assertThat(response.slug()).isEqualTo("ten-tieng-viet");
         }
     }
 
@@ -140,5 +206,18 @@ class ProductServiceImplTest {
         product.setSlug(slug);
         product.setStatus("ACTIVE");
         return product;
+    }
+
+    private ProductTranslation productTranslation(Long productId, String localeCode, String name, String slug) {
+        ProductTranslation translation = new ProductTranslation();
+        translation.setProductId(productId);
+        translation.setLocaleCode(localeCode);
+        translation.setName(name);
+        translation.setSlug(slug);
+        translation.setShortDescription("Mô tả ngắn");
+        translation.setDescription("Mô tả đầy đủ");
+        translation.setSeoTitle(name);
+        translation.setSeoDescription("SEO");
+        return translation;
     }
 }

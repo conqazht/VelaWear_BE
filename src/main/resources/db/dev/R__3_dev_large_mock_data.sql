@@ -34,34 +34,10 @@ BEGIN
     END LOOP;
 END $$;
 
--- 3. Colors (100 records)
-DO $$
-DECLARE
-    i INT;
-    hex_val VARCHAR(7);
-BEGIN
-    FOR i IN 1..100 LOOP
-        hex_val := '#' || TO_HEX((i * 123456) % 16777215);
-        IF LENGTH(hex_val) < 7 THEN
-            hex_val := hex_val || REPEAT('0', 7 - LENGTH(hex_val));
-        END IF;
-        INSERT INTO colors (name, hex_code, sort_order)
-        VALUES ('Color ' || i, hex_val, i)
-        ON CONFLICT (name) DO NOTHING;
-    END LOOP;
-END $$;
+-- 3. Colors are intentionally limited to the curated palette from R__1/R__2:
+-- Black, Red, Yellow, Purple, Orange.
 
--- 4. Sizes (100 records)
-DO $$
-DECLARE
-    i INT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        INSERT INTO sizes (name, sort_order)
-        VALUES ('Size ' || i, i)
-        ON CONFLICT (name) DO NOTHING;
-    END LOOP;
-END $$;
+-- 4. Sizes are intentionally limited to XS, S, M, L, XL, XXL and 35..45.
 
 -- 5. Products (100 records)
 DO $$
@@ -78,6 +54,150 @@ BEGIN
         ON CONFLICT (slug) DO NOTHING;
     END LOOP;
 END $$;
+
+-- 5.1 Vietnamese catalog translations
+INSERT INTO category_translations (category_id, locale_code, name, slug, description, seo_title, seo_description)
+SELECT
+    id,
+    'vi',
+    CASE slug
+        WHEN 'men' THEN 'Nam'
+        WHEN 'women' THEN 'Nữ'
+        WHEN 't-shirts' THEN 'Áo thun'
+        WHEN 'dresses' THEN 'Đầm'
+        WHEN 'accessories' THEN 'Phụ kiện'
+        WHEN 'outerwear' THEN 'Áo khoác ngoài'
+        WHEN 'jackets' THEN 'Áo khoác'
+        ELSE regexp_replace(name, '^Category ', 'Danh mục ')
+    END,
+    CASE slug
+        WHEN 'men' THEN 'nam'
+        WHEN 'women' THEN 'nu'
+        WHEN 't-shirts' THEN 'ao-thun'
+        WHEN 'dresses' THEN 'dam'
+        WHEN 'accessories' THEN 'phu-kien'
+        WHEN 'outerwear' THEN 'ao-khoac-ngoai'
+        WHEN 'jackets' THEN 'ao-khoac'
+        ELSE regexp_replace(slug, '^category-', 'danh-muc-')
+    END,
+    CASE slug
+        WHEN 'men' THEN 'Danh mục thời trang nam.'
+        WHEN 'women' THEN 'Danh mục thời trang nữ.'
+        WHEN 't-shirts' THEN 'Áo thun mặc hằng ngày.'
+        WHEN 'dresses' THEN 'Đầm nhẹ nhàng cho nhiều dịp.'
+        WHEN 'accessories' THEN 'Phụ kiện hoàn thiện trang phục.'
+        WHEN 'outerwear' THEN 'Trang phục khoác ngoài tiện dụng.'
+        WHEN 'jackets' THEN 'Áo khoác cho nhịp sống đô thị.'
+        ELSE 'Danh mục sản phẩm VelaWear.'
+    END,
+    CASE slug
+        WHEN 'men' THEN 'Thời trang nam'
+        WHEN 'women' THEN 'Thời trang nữ'
+        WHEN 't-shirts' THEN 'Áo thun'
+        WHEN 'dresses' THEN 'Đầm'
+        WHEN 'accessories' THEN 'Phụ kiện'
+        WHEN 'outerwear' THEN 'Áo khoác ngoài'
+        WHEN 'jackets' THEN 'Áo khoác'
+        ELSE regexp_replace(name, '^Category ', 'Danh mục ')
+    END,
+    CASE slug
+        WHEN 'men' THEN 'Khám phá các thiết kế thời trang nam từ VelaWear.'
+        WHEN 'women' THEN 'Khám phá các thiết kế thời trang nữ từ VelaWear.'
+        WHEN 't-shirts' THEN 'Các mẫu áo thun dễ phối cho ngày thường.'
+        WHEN 'dresses' THEN 'Các mẫu đầm nhẹ, thoải mái và tinh tế.'
+        WHEN 'accessories' THEN 'Phụ kiện tối giản cho trang phục hằng ngày.'
+        WHEN 'outerwear' THEN 'Trang phục khoác ngoài gọn gàng và thực dụng.'
+        WHEN 'jackets' THEN 'Các mẫu áo khoác tiện dụng cho thời tiết thay đổi.'
+        ELSE 'Khám phá danh mục sản phẩm VelaWear.'
+    END
+FROM categories
+ON CONFLICT (category_id, locale_code) DO UPDATE
+SET
+    name = EXCLUDED.name,
+    slug = EXCLUDED.slug,
+    description = EXCLUDED.description,
+    seo_title = EXCLUDED.seo_title,
+    seo_description = EXCLUDED.seo_description;
+
+INSERT INTO product_translations (
+    product_id,
+    locale_code,
+    name,
+    slug,
+    short_description,
+    description,
+    material,
+    care_instruction,
+    seo_title,
+    seo_description
+)
+SELECT
+    id,
+    'vi',
+    CASE slug
+        WHEN 'essential-cotton-tee' THEN 'Áo thun cotton cơ bản'
+        WHEN 'urban-linen-dress' THEN 'Đầm linen đô thị'
+        WHEN 'north-utility-jacket' THEN 'Áo khoác tiện ích North'
+        WHEN 'studio-canvas-tote' THEN 'Túi tote canvas Studio'
+        ELSE regexp_replace(name, '^Product ', 'Sản phẩm ')
+    END,
+    CASE slug
+        WHEN 'essential-cotton-tee' THEN 'ao-thun-cotton-co-ban'
+        WHEN 'urban-linen-dress' THEN 'dam-linen-do-thi'
+        WHEN 'north-utility-jacket' THEN 'ao-khoac-tien-ich-north'
+        WHEN 'studio-canvas-tote' THEN 'tui-tote-canvas-studio'
+        ELSE regexp_replace(slug, '^product-', 'san-pham-')
+    END,
+    CASE slug
+        WHEN 'essential-cotton-tee' THEN 'Áo thun cotton mềm, dễ mặc mỗi ngày.'
+        WHEN 'urban-linen-dress' THEN 'Đầm linen nhẹ cho những ngày ấm.'
+        WHEN 'north-utility-jacket' THEN 'Áo khoác nhẹ nhiều túi tiện dụng.'
+        WHEN 'studio-canvas-tote' THEN 'Túi tote canvas bền cho nhu cầu hằng ngày.'
+        ELSE 'Thiết kế tối giản cho tủ đồ hằng ngày.'
+    END,
+    CASE slug
+        WHEN 'essential-cotton-tee' THEN 'Áo thun cotton mềm với phom thoải mái, phù hợp mặc hằng ngày.'
+        WHEN 'urban-linen-dress' THEN 'Đầm linen thoáng nhẹ, phù hợp cho những ngày nắng ấm.'
+        WHEN 'north-utility-jacket' THEN 'Áo khoác utility nhẹ với nhiều túi rộng rãi và phom linh hoạt.'
+        WHEN 'studio-canvas-tote' THEN 'Túi tote canvas chắc chắn, đủ rộng cho các vật dụng thường ngày.'
+        ELSE 'Sản phẩm VelaWear được thiết kế tối giản, dễ phối và thoải mái.'
+    END,
+    CASE slug
+        WHEN 'essential-cotton-tee' THEN 'Cotton'
+        WHEN 'urban-linen-dress' THEN 'Linen'
+        WHEN 'north-utility-jacket' THEN 'Cotton pha'
+        WHEN 'studio-canvas-tote' THEN 'Canvas'
+        ELSE NULL
+    END,
+    CASE slug
+        WHEN 'studio-canvas-tote' THEN 'Lau sạch bằng khăn ẩm.'
+        ELSE 'Giặt máy nước lạnh.'
+    END,
+    CASE slug
+        WHEN 'essential-cotton-tee' THEN 'Áo thun cotton cơ bản'
+        WHEN 'urban-linen-dress' THEN 'Đầm linen đô thị'
+        WHEN 'north-utility-jacket' THEN 'Áo khoác tiện ích North'
+        WHEN 'studio-canvas-tote' THEN 'Túi tote canvas Studio'
+        ELSE regexp_replace(name, '^Product ', 'Sản phẩm ')
+    END,
+    CASE slug
+        WHEN 'essential-cotton-tee' THEN 'Áo thun cotton mềm, phom thoải mái cho ngày thường.'
+        WHEN 'urban-linen-dress' THEN 'Đầm linen nhẹ, thoáng và dễ mặc trong ngày ấm.'
+        WHEN 'north-utility-jacket' THEN 'Áo khoác utility nhẹ với nhiều túi tiện dụng.'
+        WHEN 'studio-canvas-tote' THEN 'Túi tote canvas bền, tối giản cho nhu cầu hằng ngày.'
+        ELSE 'Thiết kế tối giản cho tủ đồ hằng ngày.'
+    END
+FROM products
+ON CONFLICT (product_id, locale_code) DO UPDATE
+SET
+    name = EXCLUDED.name,
+    slug = EXCLUDED.slug,
+    short_description = EXCLUDED.short_description,
+    description = EXCLUDED.description,
+    material = EXCLUDED.material,
+    care_instruction = EXCLUDED.care_instruction,
+    seo_title = EXCLUDED.seo_title,
+    seo_description = EXCLUDED.seo_description;
 
 -- 6. Product Variants (100 records)
 DO $$

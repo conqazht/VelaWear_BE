@@ -186,8 +186,8 @@ SET
 INSERT INTO colors (name, hex_code, sort_order)
 VALUES
     ('Black', '#000000', 1),
-    ('White', '#FFFFFF', 2),
-    ('Navy', '#1F3A5F', 3)
+    ('Red', '#D32F2F', 2),
+    ('Yellow', '#F2C94C', 3)
 ON CONFLICT (name) DO UPDATE
 SET
     hex_code = EXCLUDED.hex_code,
@@ -195,10 +195,23 @@ SET
 
 INSERT INTO sizes (name, sort_order)
 VALUES
-    ('S', 1),
-    ('M', 2),
-    ('L', 3),
-    ('XL', 4)
+    ('XS', 1),
+    ('S', 2),
+    ('M', 3),
+    ('L', 4),
+    ('XL', 5),
+    ('XXL', 6),
+    ('35', 7),
+    ('36', 8),
+    ('37', 9),
+    ('38', 10),
+    ('39', 11),
+    ('40', 12),
+    ('41', 13),
+    ('42', 14),
+    ('43', 15),
+    ('44', 16),
+    ('45', 17)
 ON CONFLICT (name) DO UPDATE
 SET sort_order = EXCLUDED.sort_order;
 
@@ -258,12 +271,12 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'VW-TEE-WHT-L', 249000.00, NULL, 55, c.id, s.id, 'ACTIVE'
+SELECT p.id, 'VW-TEE-RED-L', 249000.00, NULL, 55, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
 WHERE p.slug = 'essential-cotton-tee'
-  AND c.name = 'White'
+  AND c.name = 'Red'
   AND s.name = 'L'
 ON CONFLICT (sku) DO UPDATE
 SET
@@ -275,12 +288,12 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'UT-DRESS-NVY-S', 699000.00, 649000.00, 30, c.id, s.id, 'ACTIVE'
+SELECT p.id, 'UT-DRESS-YLW-S', 699000.00, 649000.00, 30, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
 WHERE p.slug = 'urban-linen-dress'
-  AND c.name = 'Navy'
+  AND c.name = 'Yellow'
   AND s.name = 'S'
 ON CONFLICT (sku) DO UPDATE
 SET
@@ -350,7 +363,7 @@ INSERT INTO cart_items (cart_id, variant_id, quantity)
 SELECT c.id, pv.id, 1
 FROM carts c
 JOIN users u ON u.id = c.user_id
-JOIN product_variants pv ON pv.sku = 'VW-TEE-WHT-L'
+JOIN product_variants pv ON pv.sku = 'VW-TEE-RED-L'
 WHERE u.email = 'user@velawear.local'
 ON CONFLICT (cart_id, variant_id) DO UPDATE
 SET quantity = EXCLUDED.quantity;

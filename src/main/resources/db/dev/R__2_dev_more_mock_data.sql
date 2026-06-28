@@ -59,9 +59,8 @@ SET
 
 INSERT INTO colors (name, hex_code, sort_order)
 VALUES
-    ('Olive', '#556B2F', 4),
-    ('Gray', '#808080', 5),
-    ('Beige', '#D8CAB8', 6)
+    ('Purple', '#7B2CBF', 4),
+    ('Orange', '#F97316', 5)
 ON CONFLICT (name) DO UPDATE
 SET
     hex_code = EXCLUDED.hex_code,
@@ -106,12 +105,12 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'NS-JACKET-OLV-M', 1199000.00, 999000.00, 24, c.id, s.id, 'ACTIVE'
+SELECT p.id, 'NS-JACKET-PUR-M', 1199000.00, 999000.00, 24, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
 WHERE p.slug = 'north-utility-jacket'
-  AND c.name = 'Olive'
+  AND c.name = 'Purple'
   AND s.name = 'M'
 ON CONFLICT (sku) DO UPDATE
 SET
@@ -123,11 +122,11 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'SV-TOTE-BGE-OS', 329000.00, NULL, 120, c.id, NULL, 'ACTIVE'
+SELECT p.id, 'SV-TOTE-ORG-OS', 329000.00, NULL, 120, c.id, NULL, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 WHERE p.slug = 'studio-canvas-tote'
-  AND c.name = 'Beige'
+  AND c.name = 'Orange'
 ON CONFLICT (sku) DO UPDATE
 SET
     price = EXCLUDED.price,
@@ -191,7 +190,7 @@ INSERT INTO cart_items (cart_id, variant_id, quantity)
 SELECT c.id, pv.id, 1
 FROM carts c
 JOIN users u ON u.id = c.user_id
-JOIN product_variants pv ON pv.sku = 'NS-JACKET-OLV-M'
+JOIN product_variants pv ON pv.sku = 'NS-JACKET-PUR-M'
 WHERE u.email = 'linh@velawear.local'
 ON CONFLICT (cart_id, variant_id) DO UPDATE
 SET quantity = EXCLUDED.quantity;
@@ -200,7 +199,7 @@ INSERT INTO cart_items (cart_id, variant_id, quantity)
 SELECT c.id, pv.id, 2
 FROM carts c
 JOIN users u ON u.id = c.user_id
-JOIN product_variants pv ON pv.sku = 'SV-TOTE-BGE-OS'
+JOIN product_variants pv ON pv.sku = 'SV-TOTE-ORG-OS'
 WHERE u.email = 'minh@velawear.local'
 ON CONFLICT (cart_id, variant_id) DO UPDATE
 SET quantity = EXCLUDED.quantity;
@@ -255,17 +254,17 @@ SET status = EXCLUDED.status,
     payment_status = EXCLUDED.payment_status;
 
 INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
-SELECT o.id, pv.id, p.name, 'Olive / M', pv.sku, '/images/dev/north-utility-jacket.jpg', 999000.00, 1, 999000.00, 'CONFIRMED'
+SELECT o.id, pv.id, p.name, 'Purple / M', pv.sku, '/images/dev/north-utility-jacket.jpg', 999000.00, 1, 999000.00, 'CONFIRMED'
 FROM orders o
-JOIN product_variants pv ON pv.sku = 'NS-JACKET-OLV-M'
+JOIN product_variants pv ON pv.sku = 'NS-JACKET-PUR-M'
 JOIN products p ON p.id = pv.product_id
 WHERE o.order_code = 'VW-DEV-1002'
   AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.sku = pv.sku);
 
 INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
-SELECT o.id, pv.id, p.name, 'Beige / One Size', pv.sku, '/images/dev/studio-canvas-tote.jpg', 329000.00, 2, 658000.00, 'PENDING'
+SELECT o.id, pv.id, p.name, 'Orange / One Size', pv.sku, '/images/dev/studio-canvas-tote.jpg', 329000.00, 2, 658000.00, 'PENDING'
 FROM orders o
-JOIN product_variants pv ON pv.sku = 'SV-TOTE-BGE-OS'
+JOIN product_variants pv ON pv.sku = 'SV-TOTE-ORG-OS'
 JOIN products p ON p.id = pv.product_id
 WHERE o.order_code = 'VW-DEV-1003'
   AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.sku = pv.sku);
@@ -303,7 +302,7 @@ INSERT INTO reviews (user_id, order_item_id, rating, comment)
 SELECT u.id, oi.id, 4, 'Good structure and nice pockets. Slightly roomy fit.'
 FROM users u
 JOIN orders o ON o.user_id = u.id AND o.order_code = 'VW-DEV-1002'
-JOIN order_items oi ON oi.order_id = o.id AND oi.sku = 'NS-JACKET-OLV-M'
+JOIN order_items oi ON oi.order_id = o.id AND oi.sku = 'NS-JACKET-PUR-M'
 WHERE u.email = 'linh@velawear.local'
 ON CONFLICT (user_id, order_item_id) DO UPDATE
 SET rating = EXCLUDED.rating,
@@ -313,7 +312,7 @@ INSERT INTO review_images (review_id, image)
 SELECT r.id, '/images/dev/reviews/north-utility-jacket-review.jpg'
 FROM reviews r
 JOIN order_items oi ON oi.id = r.order_item_id
-WHERE oi.sku = 'NS-JACKET-OLV-M'
+WHERE oi.sku = 'NS-JACKET-PUR-M'
   AND NOT EXISTS (
       SELECT 1 FROM review_images ri
       WHERE ri.review_id = r.id
@@ -323,7 +322,7 @@ WHERE oi.sku = 'NS-JACKET-OLV-M'
 INSERT INTO inventory_logs (variant_id, change_quantity, type, reason)
 SELECT pv.id, 24, 'IMPORT', 'Additional dev seed stock import'
 FROM product_variants pv
-WHERE pv.sku = 'NS-JACKET-OLV-M'
+WHERE pv.sku = 'NS-JACKET-PUR-M'
   AND NOT EXISTS (
       SELECT 1 FROM inventory_logs il
       WHERE il.variant_id = pv.id
@@ -334,7 +333,7 @@ WHERE pv.sku = 'NS-JACKET-OLV-M'
 INSERT INTO inventory_logs (variant_id, change_quantity, type, reason)
 SELECT pv.id, -1, 'ORDER', 'Dev order VW-DEV-1002'
 FROM product_variants pv
-WHERE pv.sku = 'NS-JACKET-OLV-M'
+WHERE pv.sku = 'NS-JACKET-PUR-M'
   AND NOT EXISTS (
       SELECT 1 FROM inventory_logs il
       WHERE il.variant_id = pv.id

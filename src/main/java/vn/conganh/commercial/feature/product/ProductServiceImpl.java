@@ -1,15 +1,22 @@
 package vn.conganh.commercial.feature.product;
 
-import org.springframework.data.jpa.domain.Specification;
-
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
@@ -20,18 +27,54 @@ import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final ProductTranslationRepository productTranslationRepository;
 
     @Override
     @Transactional(readOnly = true)
     public ResultPaginationDTO getAllProducts(ProductFilterRequest filter, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(productRepository.findAll(Specification.where(ProductSpecification.build(filter)), pageable)
-                .map(ProductResponse::fromEntity));
+        return getAllProducts(filter, pageable, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ResultPaginationDTO getAllProducts(ProductFilterRequest filter, Pageable pageable, String localeCode) {
+        Page<Product> products = productRepository.findAll(Specification.where(ProductSpecification.build(filter)), pageable);
+        Map<Long, ProductTranslation> translations = loadTranslations(
+                products.getContent().stream().map(Product::getId).toList(),
+                localeCode);
+        return ResultPaginationDTO.fromPage(products.map(product -> ProductResponse.fromEntity(
+                product,
+                translations.get(product.getId()))));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
-        return ProductResponse.fromEntity(findProduct(id));
+        return getProductById(id, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse getProductById(Long id, String localeCode) {
+        Product product = findProduct(id);
+        return ProductResponse.fromEntity(product, resolveTranslation(product.getId(), localeCode).orElse(null));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse getProductBySlug(String slug, String localeCode) {
+        String resolvedLocale = normalizeLocale(localeCode);
+        Optional<ProductTranslation> translation = productTranslationRepository.findByLocaleCodeAndSlug(resolvedLocale, slug);
+        if (translation.isEmpty() && !CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
+            translation = productTranslationRepository.findByLocaleCodeAndSlug(CatalogLocaleResolver.DEFAULT_LOCALE, slug);
+        }
+        if (translation.isPresent()) {
+            Product product = findProduct(translation.get().getProductId());
+            return ProductResponse.fromEntity(product, resolveTranslation(product.getId(), resolvedLocale).orElse(null));
+        }
+
+        return ProductResponse.fromEntity(productRepository.findBySlugAndDeletedAtIsNull(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "slug", slug)));
     }
 
     @Override
@@ -41,7 +84,18 @@ public class ProductServiceImpl implements ProductService {
         Product product = new Product();
         product.setSlug(request.slug());
         apply(product, request);
-        return ProductResponse.fromEntity(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        ProductTranslation translation = saveDefaultTranslation(
+                saved,
+                request.name(),
+                request.slug(),
+                request.description(),
+                request.description(),
+                null,
+                null,
+                request.name(),
+                request.description());
+        return ProductResponse.fromEntity(saved, translation);
     }
 
     @Override
@@ -53,7 +107,18 @@ public class ProductServiceImpl implements ProductService {
         product.setName(request.name());
         product.setDescription(request.description());
         product.setStatus(request.status());
-        return ProductResponse.fromEntity(productRepository.save(product));
+        Product saved = productRepository.save(product);
+        ProductTranslation translation = saveDefaultTranslation(
+                saved,
+                request.name(),
+                saved.getSlug(),
+                request.description(),
+                request.description(),
+                null,
+                null,
+                request.name(),
+                request.description());
+        return ProductResponse.fromEntity(saved, translation);
     }
 
     @Override
@@ -71,7 +136,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void validateUniqueProduct(String slug) {
-        if (productRepository.existsBySlug(slug)) {
+        if (productRepository.existsBySlug(slug)
+                || productTranslationRepository.existsByLocaleCodeAndSlug(CatalogLocaleResolver.DEFAULT_LOCALE, slug)) {
             throw new InvalidRequestException("Product slug already exists");
         }
     }
@@ -82,5 +148,68 @@ public class ProductServiceImpl implements ProductService {
         product.setName(request.name());
         product.setDescription(request.description());
         product.setStatus(request.status());
+    }
+
+    private Optional<ProductTranslation> resolveTranslation(Long productId, String localeCode) {
+        String resolvedLocale = normalizeLocale(localeCode);
+        Optional<ProductTranslation> translation =
+                productTranslationRepository.findByProductIdAndLocaleCode(productId, resolvedLocale);
+        if (translation.isPresent() || CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
+            return translation;
+        }
+        return productTranslationRepository.findByProductIdAndLocaleCode(productId, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    private Map<Long, ProductTranslation> loadTranslations(List<Long> productIds, String localeCode) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, ProductTranslation> translations = new HashMap<>(productTranslationRepository
+                .findByProductIdInAndLocaleCode(productIds, CatalogLocaleResolver.DEFAULT_LOCALE)
+                .stream()
+                .collect(Collectors.toMap(ProductTranslation::getProductId, Function.identity())));
+
+        String resolvedLocale = normalizeLocale(localeCode);
+        if (!CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
+            productTranslationRepository.findByProductIdInAndLocaleCode(productIds, resolvedLocale)
+                    .forEach(translation -> translations.put(translation.getProductId(), translation));
+        }
+        return translations;
+    }
+
+    private ProductTranslation saveDefaultTranslation(
+            Product product,
+            String name,
+            String slug,
+            String shortDescription,
+            String description,
+            String material,
+            String careInstruction,
+            String seoTitle,
+            String seoDescription) {
+        ProductTranslation translation = productTranslationRepository
+                .findByProductIdAndLocaleCode(product.getId(), CatalogLocaleResolver.DEFAULT_LOCALE)
+                .orElseGet(ProductTranslation::new);
+        translation.setProductId(product.getId());
+        translation.setLocaleCode(CatalogLocaleResolver.DEFAULT_LOCALE);
+        translation.setName(name);
+        translation.setSlug(slug);
+        translation.setShortDescription(shortDescription);
+        translation.setDescription(description);
+        translation.setMaterial(material);
+        translation.setCareInstruction(careInstruction);
+        translation.setSeoTitle(seoTitle);
+        translation.setSeoDescription(seoDescription);
+        return productTranslationRepository.save(translation);
+    }
+
+    private String normalizeLocale(String localeCode) {
+        if (localeCode == null || localeCode.isBlank()) {
+            return CatalogLocaleResolver.DEFAULT_LOCALE;
+        }
+        String normalized = localeCode.trim().replace('_', '-').toLowerCase();
+        int regionSeparator = normalized.indexOf('-');
+        return regionSeparator > 0 ? normalized.substring(0, regionSeparator) : normalized;
     }
 }

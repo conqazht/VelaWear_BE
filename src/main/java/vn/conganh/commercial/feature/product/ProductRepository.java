@@ -16,6 +16,8 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
 
     Optional<Product> findByIdAndDeletedAtIsNull(Long id);
 
+    Optional<Product> findBySlugAndDeletedAtIsNull(String slug);
+
     @Query(value = "SELECT name FROM products WHERE id = :id", nativeQuery = true)
     String findNameById(@Param("id") Long id);
 }

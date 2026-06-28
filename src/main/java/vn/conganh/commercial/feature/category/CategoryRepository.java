@@ -13,4 +13,6 @@ public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSp
     Page<Category> findAllByDeletedAtIsNull(Pageable pageable);
 
     Optional<Category> findByIdAndDeletedAtIsNull(Long id);
+
+    Optional<Category> findBySlugAndDeletedAtIsNull(String slug);
 }
