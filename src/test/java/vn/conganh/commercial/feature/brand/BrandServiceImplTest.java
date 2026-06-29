@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentMatchers;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -94,7 +95,7 @@ class BrandServiceImplTest {
         void getAll_existingBrands_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(brandRepository.findAll(any(Specification.class), eq(pageable)))
+            when(brandRepository.findAll(ArgumentMatchers.<Specification<Brand>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(brand(1L, "Nike", "nike")), pageable, 1));
 
             // Act

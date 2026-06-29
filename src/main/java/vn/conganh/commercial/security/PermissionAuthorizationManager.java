@@ -1,10 +1,6 @@
 package vn.conganh.commercial.security;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Supplier;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
@@ -13,32 +9,16 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
-import vn.conganh.commercial.feature.permission.Permission;
 import vn.conganh.commercial.feature.permission.PermissionRepository;
-import vn.conganh.commercial.feature.permission.RolePermissionView;
 
 @Component
 public class PermissionAuthorizationManager implements AuthorizationManager<RequestAuthorizationContext> {
 
     private final PermissionRepository permissionRepository;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
-    private volatile Map<String, List<Permission>> rolePermissionsCache = Map.of();
 
     public PermissionAuthorizationManager(PermissionRepository permissionRepository) {
         this.permissionRepository = permissionRepository;
-        refreshCache();
-    }
-
-    public void refreshCache() {
-        List<RolePermissionView> rolePermissions = permissionRepository.findAllRolePermissions();
-
-        Map<String, List<Permission>> cache = new HashMap<>();
-        for (RolePermissionView rolePermission : rolePermissions) {
-            String roleName = "ROLE_" + rolePermission.getRoleName();
-            cache.computeIfAbsent(roleName, key -> new ArrayList<>())
-                    .add(rolePermission.getPermission());
-        }
-        rolePermissionsCache = Collections.unmodifiableMap(cache);
     }
 
     @Override
@@ -54,11 +34,16 @@ public class PermissionAuthorizationManager implements AuthorizationManager<Requ
         String httpMethod = context.getRequest().getMethod();
 
         for (String role : getUserRoles(authentication)) {
-            List<Permission> permissions = rolePermissionsCache.getOrDefault(role, List.of());
-            for (Permission permission : permissions) {
-                if (permission.getMethod().equalsIgnoreCase(httpMethod)
-                        && pathMatcher.match(permission.getApiPath(), requestPath)) {
-                    return new AuthorizationDecision(true);
+            String cleanRoleName = role.replace("ROLE_", "");
+            // Method repository có @Cacheable, nên Redis được kiểm tra trước khi fallback về PostgreSQL.
+            List<PermissionAccess> permissions = permissionRepository.findPermissionsByRoleName(cleanRoleName);
+            if (permissions != null) {
+                for (PermissionAccess permission : permissions) {
+                    // Một permission chỉ cho phép truy cập khi khớp cả HTTP method và API path kiểu ant.
+                    if (permission.method().equalsIgnoreCase(httpMethod)
+                            && pathMatcher.match(permission.apiPath(), requestPath)) {
+                        return new AuthorizationDecision(true);
+                    }
                 }
             }
         }

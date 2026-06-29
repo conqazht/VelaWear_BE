@@ -44,9 +44,8 @@ Public endpoints:
 
 Auth token configuration:
 
-| Environment variable | Default | Description |
-|----------------------|---------|-------------|
-| `JWT_SECRET_KEY` | dev fallback only | HMAC signing secret. Required in production. |
+| `JWT_ACCESS_TOKEN_SECRET_KEY` | dev fallback only | HMAC signing secret for Access tokens. Required in production. |
+| `JWT_REFRESH_TOKEN_SECRET_KEY` | dev fallback only | HMAC signing secret for Refresh tokens. Required in production. |
 | `JWT_ACCESS_TOKEN_EXPIRATION` | `900` | Access token lifetime in seconds, 15 minutes by default. |
 | `JWT_REFRESH_TOKEN_EXPIRATION` | `259200` | Refresh token lifetime in seconds, 3 days by default. |
 

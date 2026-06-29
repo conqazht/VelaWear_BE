@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -110,7 +111,7 @@ class CouponServiceImplTest {
         void getAllCoupons_existingCoupons_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(couponRepository.findAll(any(Specification.class), eq(pageable)))
+            when(couponRepository.findAll(ArgumentMatchers.<Specification<Coupon>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(coupon(1L, "SALE10")), pageable, 1));
 
             // Act

@@ -1,5 +1,7 @@
 package vn.conganh.commercial.exception;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -24,6 +26,22 @@ import vn.conganh.commercial.dto.ApiResponse;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String REFRESH_TOKEN_COOKIE_NAME = "refresh_token";
+    private static final String REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth";
+
+    @ExceptionHandler(RefreshTokenSessionNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRefreshTokenSessionNotFound(
+            RefreshTokenSessionNotFoundException exception,
+            HttpServletResponse response) {
+        Cookie cookie = new Cookie(REFRESH_TOKEN_COOKIE_NAME, "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        cookie.setPath(REFRESH_TOKEN_COOKIE_PATH);
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+        return ResponseEntity.status(exception.getStatus())
+                .body(ApiResponse.error(exception.getStatus().value(), exception.getMessage()));
+    }
 
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Void>> handleAppException(AppException exception) {
@@ -76,8 +94,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(ApiResponse.error(HttpStatus.PAYLOAD_TOO_LARGE.value(), "Uploaded file exceeds maximum allowed size"));
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(ApiResponse.error(HttpStatus.CONTENT_TOO_LARGE.value(), "Uploaded file exceeds maximum allowed size"));
     }
 
     @ExceptionHandler(PropertyReferenceException.class)

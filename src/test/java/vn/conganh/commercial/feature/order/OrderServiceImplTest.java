@@ -19,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -153,7 +154,7 @@ class OrderServiceImplTest {
             Pageable pageable = PageRequest.of(0, 10);
             Order order = order(10L, user(1L), "SHIPPING");
             when(orderRepository.existsById(10L)).thenReturn(true);
-            when(orderStatusHistoryRepository.findAll(any(Specification.class), eq(pageable)))
+            when(orderStatusHistoryRepository.findAll(ArgumentMatchers.<Specification<OrderStatusHistory>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(history(100L, order, "PENDING", "SHIPPING")), pageable, 1));
 
             // Act

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -180,7 +181,7 @@ class ReviewServiceImplTest {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
             User user = user(1L);
-            when(reviewRepository.findAll(any(Specification.class), eq(pageable)))
+            when(reviewRepository.findAll(ArgumentMatchers.<Specification<Review>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(
                             List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
                             pageable,
@@ -202,7 +203,7 @@ class ReviewServiceImplTest {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
             User user = user(1L);
-            when(reviewRepository.findAll(any(Specification.class), eq(pageable)))
+            when(reviewRepository.findAll(ArgumentMatchers.<Specification<Review>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(
                             List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
                             pageable,

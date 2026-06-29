@@ -27,6 +27,9 @@ public class TestDataFactory {
     @Autowired
     private PermissionAuthorizationManager permissionAuthorizationManager;
 
+    @Autowired
+    private org.springframework.cache.CacheManager cacheManager;
+
     private static final String TEST_ROLE_NAME = "TEST_ROLE";
 
     @Transactional
@@ -78,7 +81,9 @@ public class TestDataFactory {
         }
 
         // Reload cache
-        permissionAuthorizationManager.refreshCache();
+        if (cacheManager.getCache("role_permissions") != null) {
+            cacheManager.getCache("role_permissions").clear();
+        }
     }
 
     @Transactional
@@ -142,7 +147,9 @@ public class TestDataFactory {
         // Delete users created by test factory
         jdbcTemplate.update("DELETE FROM users WHERE email LIKE 'test%@example.com' OR email = 'noperm@example.com'");
 
-        permissionAuthorizationManager.refreshCache();
+        if (cacheManager.getCache("role_permissions") != null) {
+            cacheManager.getCache("role_permissions").clear();
+        }
     }
 
     private Long insertForId(String sql, Object... args) {

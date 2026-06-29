@@ -465,7 +465,8 @@ and `JwtDecoder` (verify tokens) as Spring beans. Algorithm: **HS512** (symmetri
 ### application.yml
 ```yaml
 jwt:
-  secret-key: ${JWT_SECRET_KEY}        # Min 64 chars for HS512 — load from env variable
+  access-token-secret-key: ${JWT_ACCESS_TOKEN_SECRET_KEY}  # Min 64 chars for HS512 — load from env
+  refresh-token-secret-key: ${JWT_REFRESH_TOKEN_SECRET_KEY} # Min 64 chars for HS512 — load from env
   access-token-expiration: 900         # 15 minutes (in seconds)
   refresh-token-expiration: 604800     # 7 days (in seconds)
 ```
@@ -474,7 +475,8 @@ jwt:
 ```java
 @ConfigurationProperties("jwt")
 public record JwtProperties(
-        String secretKey,
+        String accessTokenSecretKey,
+        String refreshTokenSecretKey,
         long accessTokenExpiration,
         long refreshTokenExpiration
 ) {}
@@ -489,17 +491,36 @@ public class JwtConfig {
     private final JwtProperties jwtProperties;
 
     @Bean
+    @Primary
     public JwtEncoder jwtEncoder() {
         SecretKey key = new SecretKeySpec(
-                jwtProperties.secretKey().getBytes(StandardCharsets.UTF_8), "HmacSHA512");
+                jwtProperties.accessTokenSecretKey().getBytes(StandardCharsets.UTF_8), "HmacSHA512");
         JWKSource<SecurityContext> jwkSource = new ImmutableSecret<>(key);
         return new NimbusJwtEncoder(jwkSource);
     }
 
     @Bean
+    @Primary
     public JwtDecoder jwtDecoder() {
         SecretKey key = new SecretKeySpec(
-                jwtProperties.secretKey().getBytes(StandardCharsets.UTF_8), "HmacSHA512");
+                jwtProperties.accessTokenSecretKey().getBytes(StandardCharsets.UTF_8), "HmacSHA512");
+        return NimbusJwtDecoder.withSecretKey(key)
+                .macAlgorithm(MacAlgorithm.HS512)
+                .build();
+    }
+
+    @Bean
+    public JwtEncoder refreshJwtEncoder() {
+        SecretKey key = new SecretKeySpec(
+                jwtProperties.refreshTokenSecretKey().getBytes(StandardCharsets.UTF_8), "HmacSHA512");
+        JWKSource<SecurityContext> jwkSource = new ImmutableSecret<>(key);
+        return new NimbusJwtEncoder(jwkSource);
+    }
+
+    @Bean
+    public JwtDecoder refreshJwtDecoder() {
+        SecretKey key = new SecretKeySpec(
+                jwtProperties.refreshTokenSecretKey().getBytes(StandardCharsets.UTF_8), "HmacSHA512");
         return NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS512)
                 .build();
@@ -804,7 +825,8 @@ testcontainers:
   enabled: true
 
 jwt:
-  secret-key: ${TEST_JWT_SECRET_KEY}
+  access-token-secret-key: ${TEST_JWT_ACCESS_TOKEN_SECRET_KEY}
+  refresh-token-secret-key: ${TEST_JWT_REFRESH_TOKEN_SECRET_KEY}
   access-token-expiration: 900
   refresh-token-expiration: 604800
 ```

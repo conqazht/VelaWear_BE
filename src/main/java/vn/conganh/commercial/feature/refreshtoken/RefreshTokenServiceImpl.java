@@ -98,6 +98,18 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     @Override
     @Transactional
+    public void markRefreshTokenRevoked(String rawToken) {
+        refreshTokenRepository.findByToken(hashToken(rawToken))
+                .ifPresent(refreshToken -> {
+                    if (!refreshToken.isRevoked()) {
+                        refreshToken.setRevoked(true);
+                        refreshTokenRepository.save(refreshToken);
+                    }
+                });
+    }
+
+    @Override
+    @Transactional
     public void deleteRefreshToken(Long id) {
         refreshTokenRepository.delete(findRefreshToken(id));
     }
@@ -112,7 +124,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
     }
 
-    private String hashToken(String rawToken) {
+    @Override
+    public String hashToken(String rawToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance(REFRESH_TOKEN_HASH_ALGORITHM);
             byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));

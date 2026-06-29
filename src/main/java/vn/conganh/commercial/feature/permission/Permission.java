@@ -43,6 +43,7 @@ public class Permission {
     private String module;
 
     @OneToMany(mappedBy = "permission")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Set<RoleHasPermission> roleHasPermissions = new HashSet<>();
 
     @CreationTimestamp

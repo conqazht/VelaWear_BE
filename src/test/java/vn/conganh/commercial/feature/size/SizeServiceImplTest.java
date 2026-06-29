@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -90,7 +91,7 @@ class SizeServiceImplTest {
         void getAll_existingSizes_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(sizeRepository.findAll(any(Specification.class), eq(pageable)))
+            when(sizeRepository.findAll(ArgumentMatchers.<Specification<Size>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(size(1L, "XL")), pageable, 1));
 
             // Act

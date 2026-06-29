@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -113,7 +114,7 @@ class CategoryServiceImplTest {
         void getAllCategories_existingCategories_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(categoryRepository.findAll(any(Specification.class), eq(pageable)))
+            when(categoryRepository.findAll(ArgumentMatchers.<Specification<Category>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(category(1L, "Shoes", "shoes")), pageable, 1));
             when(categoryTranslationRepository.findByCategoryIdInAndLocaleCode(anyCollection(), eq("vi")))
                     .thenReturn(List.of());

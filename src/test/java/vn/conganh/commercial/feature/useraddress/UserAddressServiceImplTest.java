@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -121,7 +122,7 @@ class UserAddressServiceImplTest {
         void getAllUserAddresses_existingAddresses_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(userAddressRepository.findAll(any(Specification.class), eq(pageable)))
+            when(userAddressRepository.findAll(ArgumentMatchers.<Specification<UserAddress>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(address(10L, user(1L), false)), pageable, 1));
 
             // Act
@@ -138,7 +139,7 @@ class UserAddressServiceImplTest {
         void getUserAddressesByUserId_existingAddresses_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(userAddressRepository.findAll(any(Specification.class), eq(pageable)))
+            when(userAddressRepository.findAll(ArgumentMatchers.<Specification<UserAddress>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(address(10L, user(1L), true)), pageable, 1));
 
             // Act

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -28,6 +29,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
+import vn.conganh.commercial.feature.role.RoleRepository;
+import vn.conganh.commercial.security.TokenBlacklistService;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
@@ -47,11 +50,25 @@ class UserServiceImplTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private UserHasRoleRepository userHasRoleRepository;
+
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserServiceImpl(userRepository, passwordEncoder);
+        userService = new UserServiceImpl(
+                userRepository,
+                passwordEncoder,
+                userHasRoleRepository,
+                roleRepository,
+                tokenBlacklistService);
     }
 
     @Nested
@@ -146,7 +163,7 @@ class UserServiceImplTest {
             Pageable pageable = PageRequest.of(0, 10);
             User user = activeUser(1L, "user@example.com");
             Role role = role(2L, "ADMIN");
-            when(userRepository.findAll(any(Specification.class), eq(pageable)))
+            when(userRepository.findAll(ArgumentMatchers.<Specification<User>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(user), pageable, 1));
             when(userRepository.findAllWithRoleByUserIdIn(List.of(1L)))
                     .thenReturn(List.of(userHasRole(user, role)));
@@ -158,12 +175,9 @@ class UserServiceImplTest {
             assertThat(responses.result()).hasSize(1);
             assertThat(responses.result()).extracting("id").containsExactly(1L);
             assertThat(responses.result()).extracting("email").containsExactly("user@example.com");
-            assertThat(responses.result())
-                    .extracting("roles")
-                    .asList()
-                    .first()
-                    .asList()
-                    .extracting("name")
+            UserResponse firstUser = (UserResponse) responses.result().get(0);
+            assertThat(firstUser.roles())
+                    .extracting(UserResponse.RoleSummaryResponse::name)
                     .containsExactly("ADMIN");
             assertThat(responses.meta().page()).isEqualTo(1);
         }

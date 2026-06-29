@@ -8,7 +8,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,7 +29,6 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Slf4j
 @Tag(name = "Authentication", description = "Authentication and token management endpoints")
 public class AuthController {
 
@@ -87,13 +85,7 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
         String token = extractRefreshTokenFromCookie(httpRequest);
-        if (token != null && !token.isBlank()) {
-            try {
-                authService.logout(new RefreshTokenRequest(token));
-            } catch (Exception e) {
-                log.warn("[VelaWear/Auth] Failed to revoke refresh token during logout", e);
-            }
-        }
+        authService.logout(new RefreshTokenRequest(token));
         clearRefreshTokenCookie(httpResponse);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
