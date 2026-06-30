@@ -34,11 +34,15 @@ import vn.conganh.commercial.security.TokenBlacklistService;
 import vn.conganh.commercial.config.JwtProperties;
 import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
 import vn.conganh.commercial.exception.DuplicateResourceException;
+import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ServiceUnavailableException;
+import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
+import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
+import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
@@ -51,6 +55,7 @@ import vn.conganh.commercial.feature.user.UserHasRole;
 import vn.conganh.commercial.feature.user.UserHasRoleRepository;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
+import vn.conganh.commercial.util.constant.OtpPurpose;
 import vn.conganh.commercial.util.constant.UserGender;
 
 @ExtendWith(MockitoExtension.class)
@@ -86,6 +91,9 @@ class AuthServiceImplTest {
     @Mock
     private TokenBlacklistService tokenBlacklistService;
 
+    @Mock
+    private OtpService otpService;
+
     private AuthServiceImpl authService;
 
     @BeforeEach
@@ -104,7 +112,8 @@ class AuthServiceImplTest {
                 jwtConfig.refreshJwtEncoder(),
                 jwtConfig.refreshJwtDecoder(),
                 jwtProperties,
-                tokenBlacklistService);
+                tokenBlacklistService,
+                otpService);
     }
 
     @Nested
@@ -206,6 +215,7 @@ class AuthServiceImplTest {
                     UserGender.OTHER);
             Role role = role(4L, "USER");
             when(userRepository.existsByEmail("new.user@example.com")).thenReturn(false);
+            when(otpService.isOtpVerified("new.user@example.com", OtpPurpose.REGISTER)).thenReturn(true);
             when(passwordEncoder.encode("Password123!")).thenReturn("$2a$10$encoded");
             when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
                 User savedUser = invocation.getArgument(0);
@@ -220,6 +230,7 @@ class AuthServiceImplTest {
             // Assert
             assertThat(response.id()).isEqualTo(2L);
             assertThat(response.email()).isEqualTo("new.user@example.com");
+            verify(otpService).consumeOtpVerifiedMarker("new.user@example.com", OtpPurpose.REGISTER);
             verify(userRepository).save(argThat(user ->
                     "$2a$10$encoded".equals(user.getPassword())
                             && !"Password123!".equals(user.getPassword())));
@@ -422,5 +433,88 @@ class AuthServiceImplTest {
 
     private String jwtId(String rawJwt) throws ParseException {
         return SignedJWT.parse(rawJwt).getJWTClaimsSet().getJWTID();
+    }
+
+    @Nested
+    @DisplayName("Reset Password")
+    class ResetPassword {
+
+        @Test
+        @DisplayName("resetPassword - resets password successfully with verified OTP")
+        void resetPassword_success() {
+            // Arrange
+            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest("reset@example.com", "NewPassword123!");
+            User user = new User();
+            user.setEmail("reset@example.com");
+            when(userRepository.findByEmailAndDeletedAtIsNull("reset@example.com")).thenReturn(Optional.of(user));
+            when(otpService.isOtpVerified("reset@example.com", OtpPurpose.FORGOT_PASSWORD)).thenReturn(true);
+            when(passwordEncoder.encode("NewPassword123!")).thenReturn("encodedNewPassword");
+
+            // Act
+            authService.resetPassword(request);
+
+            // Assert
+            assertThat(user.getPassword()).isEqualTo("encodedNewPassword");
+            verify(userRepository).save(user);
+            verify(otpService).consumeOtpVerifiedMarker("reset@example.com", OtpPurpose.FORGOT_PASSWORD);
+        }
+
+        @Test
+        @DisplayName("resetPassword - throws InvalidRequestException if OTP not verified")
+        void resetPassword_unverifiedOtp_throwsException() {
+            // Arrange
+            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest("reset@example.com", "NewPassword123!");
+            when(otpService.isOtpVerified("reset@example.com", OtpPurpose.FORGOT_PASSWORD)).thenReturn(false);
+
+            // Act & Assert
+            assertThatThrownBy(() -> authService.resetPassword(request))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("Email address has not been verified with OTP.");
+            verify(userRepository, never()).findByEmailAndDeletedAtIsNull(any());
+            verify(userRepository, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Change Email")
+    class ChangeEmail {
+
+        @Test
+        @DisplayName("changeEmail - updates email successfully with verified OTP")
+        void changeEmail_success() {
+            // Arrange
+            ChangeEmailRequest request = new ChangeEmailRequest("new@example.com");
+            User user = new User();
+            user.setEmail("current@example.com");
+
+            when(userRepository.findByEmailAndDeletedAtIsNull("current@example.com")).thenReturn(Optional.of(user));
+            when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
+            when(otpService.isOtpVerified("new@example.com", OtpPurpose.CHANGE_EMAIL)).thenReturn(true);
+
+            // Act
+            authService.changeEmail("current@example.com", request);
+
+            // Assert
+            assertThat(user.getEmail()).isEqualTo("new@example.com");
+            verify(userRepository).save(user);
+            verify(otpService).consumeOtpVerifiedMarker("new@example.com", OtpPurpose.CHANGE_EMAIL);
+        }
+
+        @Test
+        @DisplayName("changeEmail - throws DuplicateResourceException if new email exists")
+        void changeEmail_duplicateNewEmail_throwsException() {
+            // Arrange
+            ChangeEmailRequest request = new ChangeEmailRequest("new@example.com");
+            User user = new User();
+            user.setEmail("current@example.com");
+
+            when(userRepository.findByEmailAndDeletedAtIsNull("current@example.com")).thenReturn(Optional.of(user));
+            when(userRepository.existsByEmail("new@example.com")).thenReturn(true);
+
+            // Act & Assert
+            assertThatThrownBy(() -> authService.changeEmail("current@example.com", request))
+                    .isInstanceOf(DuplicateResourceException.class);
+            verify(userRepository, never()).save(any());
+        }
     }
 }

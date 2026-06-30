@@ -1,5 +1,16 @@
 # Project Status
 
+## 2026-06-30
+
+### Completed
+
+- Implemented Redis-backed OTP (One-Time Password) generation, validation, and verification markers.
+- Integrated Resend email provider with custom, responsive HTML templates for OTP delivery.
+- Enforced OTP verification for storefront user registration (`REGISTER` purpose).
+- Implemented forgot-password reset flow (`FORGOT_PASSWORD` purpose) and authenticated email changes (`CHANGE_EMAIL` purpose), both protected and consumed via OTP verified markers.
+- Added full suite of unit and integration tests covering OTP services, controllers, and protected auth endpoints.
+- Updated `API_SPEC.md` documentation to reflect the new public and private OTP endpoints.
+
 ## 2026-06-29
 
 ### Completed

@@ -1,5 +1,7 @@
 package vn.conganh.commercial.feature.auth;
 
+import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
+import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
@@ -19,4 +21,8 @@ public interface AuthService {
     void logout(RefreshTokenRequest request);
 
     UserResponse getMe(String email);
+
+    void resetPassword(ForgotPasswordResetRequest request);
+
+    void changeEmail(String currentEmail, ChangeEmailRequest request);
 }
