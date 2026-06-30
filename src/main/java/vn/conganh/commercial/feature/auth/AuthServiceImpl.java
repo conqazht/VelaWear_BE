@@ -5,14 +5,16 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -22,8 +24,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.conganh.commercial.security.TokenBlacklistService;
 import vn.conganh.commercial.config.JwtProperties;
 import vn.conganh.commercial.exception.DuplicateResourceException;
+import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.exception.UnauthorizedException;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
@@ -31,6 +35,8 @@ import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
 import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
+import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
+import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenService;
 import vn.conganh.commercial.feature.refreshtoken.dto.CreateRefreshTokenRequest;
 import vn.conganh.commercial.feature.role.Role;
@@ -43,7 +49,6 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
     private static final MacAlgorithm JWT_MAC_ALGORITHM = MacAlgorithm.HS512;
@@ -54,10 +59,40 @@ public class AuthServiceImpl implements AuthService {
     private final RoleRepository roleRepository;
     private final UserHasRoleRepository userHasRoleRepository;
     private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenSessionService refreshTokenSessionService;
     private final PasswordEncoder passwordEncoder;
-    private final JwtEncoder jwtEncoder;
-    private final JwtDecoder jwtDecoder;
+    private final JwtEncoder accessJwtEncoder;
+    private final JwtEncoder refreshJwtEncoder;
+    private final JwtDecoder refreshJwtDecoder;
     private final JwtProperties jwtProperties;
+    private final TokenBlacklistService tokenBlacklistService;
+
+    public AuthServiceImpl(
+            AuthenticationManager authenticationManager,
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            UserHasRoleRepository userHasRoleRepository,
+            RefreshTokenService refreshTokenService,
+            RefreshTokenSessionService refreshTokenSessionService,
+            PasswordEncoder passwordEncoder,
+            JwtEncoder accessJwtEncoder,
+            @Qualifier("refreshJwtEncoder") JwtEncoder refreshJwtEncoder,
+            @Qualifier("refreshJwtDecoder") JwtDecoder refreshJwtDecoder,
+            JwtProperties jwtProperties,
+            TokenBlacklistService tokenBlacklistService) {
+        this.authenticationManager = authenticationManager;
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.userHasRoleRepository = userHasRoleRepository;
+        this.refreshTokenService = refreshTokenService;
+        this.refreshTokenSessionService = refreshTokenSessionService;
+        this.passwordEncoder = passwordEncoder;
+        this.accessJwtEncoder = accessJwtEncoder;
+        this.refreshJwtEncoder = refreshJwtEncoder;
+        this.refreshJwtDecoder = refreshJwtDecoder;
+        this.jwtProperties = jwtProperties;
+        this.tokenBlacklistService = tokenBlacklistService;
+    }
 
     @Override
     @Transactional
@@ -121,24 +156,53 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public TokenResponse refreshToken(RefreshTokenRequest request) {
-        validateRefreshJwt(request.refreshToken());
-        RefreshToken existingToken = refreshTokenService.findValidRefreshToken(request.refreshToken());
-        User user = existingToken.getUser();
+        Jwt currentRefreshJwt = validateRefreshJwt(request.refreshToken());
+        String currentJti = requireJti(currentRefreshJwt);
+        RefreshTokenSession currentSession = refreshTokenSessionService.find(currentJti)
+                .orElseThrow(() -> {
+                    refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
+                    return new RefreshTokenSessionNotFoundException("Refresh session is expired or revoked");
+                });
+
+        String currentTokenHash = refreshTokenService.hashToken(request.refreshToken());
+        if (!currentTokenHash.equals(currentSession.tokenHash())) {
+            refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
+            throw new RefreshTokenSessionNotFoundException("Refresh session is expired or revoked");
+        }
+
+        User user = userRepository.findByIdAndDeletedAtIsNull(currentSession.userId())
+                .orElseThrow(() -> new UnauthorizedException("Refresh token user is invalid"));
 
         List<String> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
         String accessToken = generateAccessToken(user.getEmail(), user.getId(), roles);
+        String refreshToken = rotateRefreshToken(request.refreshToken(), currentJti, user, currentSession);
 
         log.info("[VelaWear/Auth] - REFRESH_TOKEN: userId: {}", user.getId());
 
-        return new TokenResponse(accessToken, request.refreshToken(), jwtProperties.accessTokenExpiration());
+        return new TokenResponse(accessToken, refreshToken, jwtProperties.accessTokenExpiration());
     }
 
     @Override
     @Transactional
     public void logout(RefreshTokenRequest request) {
-        refreshTokenService.revokeRefreshToken(request.refreshToken());
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof JwtAuthenticationToken jwtAuth) {
+            Jwt jwt = jwtAuth.getToken();
+            if (jwt.getExpiresAt() != null) {
+                long remainingSeconds = jwt.getExpiresAt().getEpochSecond() - Instant.now().getEpochSecond();
+                if (remainingSeconds > 0) {
+                    // Chỉ blacklist theo thời gian còn lại của token để khóa Redis không sống lâu hơn cần thiết.
+                    tokenBlacklistService.blacklistToken(jwt.getTokenValue(), remainingSeconds);
+                }
+            }
+        }
+        if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
+            Jwt refreshJwt = validateRefreshJwt(request.refreshToken());
+            refreshTokenSessionService.delete(requireJti(refreshJwt));
+            refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
+        }
     }
 
     @Override
@@ -164,13 +228,14 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         JwsHeader header = JwsHeader.with(JWT_MAC_ALGORITHM).build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return accessJwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 
     private String createRefreshToken(User user, String deviceInfo, String ipAddress) {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(jwtProperties.refreshTokenExpiration(), ChronoUnit.SECONDS);
-        String refreshToken = generateRefreshToken(user, now, expiresAt);
+        String jti = UUID.randomUUID().toString();
+        String refreshToken = generateRefreshToken(user, now, expiresAt, jti);
         refreshTokenService.createRefreshToken(new CreateRefreshTokenRequest(
                 user.getId(),
                 refreshToken,
@@ -178,12 +243,48 @@ public class AuthServiceImpl implements AuthService {
                 deviceInfo,
                 ipAddress
         ));
+        refreshTokenSessionService.create(new RefreshTokenSession(
+                jti,
+                user.getId(),
+                refreshTokenService.hashToken(refreshToken),
+                deviceInfo,
+                ipAddress,
+                now,
+                expiresAt));
         return refreshToken;
     }
 
-    private String generateRefreshToken(User user, Instant issuedAt, Instant expiresAt) {
+    private String rotateRefreshToken(
+            String currentRefreshToken,
+            String currentJti,
+            User user,
+            RefreshTokenSession currentSession) {
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(jwtProperties.refreshTokenExpiration(), ChronoUnit.SECONDS);
+        String newJti = UUID.randomUUID().toString();
+        String newRefreshToken = generateRefreshToken(user, now, expiresAt, newJti);
+        refreshTokenService.markRefreshTokenRevoked(currentRefreshToken);
+        refreshTokenService.createRefreshToken(new CreateRefreshTokenRequest(
+                user.getId(),
+                newRefreshToken,
+                expiresAt,
+                currentSession.deviceInfo(),
+                currentSession.ipAddress()
+        ));
+        refreshTokenSessionService.rotate(currentJti, new RefreshTokenSession(
+                newJti,
+                user.getId(),
+                refreshTokenService.hashToken(newRefreshToken),
+                currentSession.deviceInfo(),
+                currentSession.ipAddress(),
+                now,
+                expiresAt));
+        return newRefreshToken;
+    }
+
+    private String generateRefreshToken(User user, Instant issuedAt, Instant expiresAt, String jti) {
         JwtClaimsSet claims = JwtClaimsSet.builder()
-                .id(UUID.randomUUID().toString())
+                .id(jti)
                 .subject(user.getEmail())
                 .claim("userId", user.getId())
                 .claim("type", REFRESH_TOKEN_TYPE)
@@ -192,18 +293,26 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         JwsHeader header = JwsHeader.with(JWT_MAC_ALGORITHM).build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return refreshJwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 
-    private void validateRefreshJwt(String rawRefreshToken) {
+    private Jwt validateRefreshJwt(String rawRefreshToken) {
         try {
-            Jwt jwt = jwtDecoder.decode(rawRefreshToken);
+            Jwt jwt = refreshJwtDecoder.decode(rawRefreshToken);
             if (!REFRESH_TOKEN_TYPE.equals(jwt.getClaimAsString("type"))) {
                 throw new UnauthorizedException("Refresh token type is invalid");
             }
+            return jwt;
         } catch (JwtException exception) {
             throw new UnauthorizedException("Refresh token is invalid");
         }
+    }
+
+    private String requireJti(Jwt jwt) {
+        if (jwt.getId() == null || jwt.getId().isBlank()) {
+            throw new UnauthorizedException("Refresh token id is invalid");
+        }
+        return jwt.getId();
     }
 
     private String normalizeEmail(String email) {

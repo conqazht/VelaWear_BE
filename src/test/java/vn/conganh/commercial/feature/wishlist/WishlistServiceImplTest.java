@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -140,7 +141,7 @@ class WishlistServiceImplTest {
         void getAllWishlists_existingWishlists_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(wishlistRepository.findAll(any(Specification.class), eq(pageable)))
+            when(wishlistRepository.findAll(ArgumentMatchers.<Specification<Wishlist>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(wishlist(10L, user(1L), product(2L))), pageable, 1));
 
             // Act
@@ -157,7 +158,7 @@ class WishlistServiceImplTest {
         void getWishlistsByUserId_existingWishlists_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(wishlistRepository.findAll(any(Specification.class), eq(pageable)))
+            when(wishlistRepository.findAll(ArgumentMatchers.<Specification<Wishlist>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(wishlist(10L, user(1L), product(2L))), pageable, 1));
 
             // Act

@@ -1,4 +1,10 @@
 -- 1. Correct existing misconfigured permissions
+DELETE FROM permissions
+WHERE api_path = '/api/v1/payments/{id}' AND method = 'PATCH'
+  AND EXISTS (
+      SELECT 1 FROM (SELECT id FROM permissions WHERE api_path = '/api/v1/payments/{id}' AND method = 'PUT') AS temp
+  );
+
 UPDATE permissions
 SET method = 'PUT'
 WHERE api_path = '/api/v1/payments/{id}' AND method = 'PATCH';

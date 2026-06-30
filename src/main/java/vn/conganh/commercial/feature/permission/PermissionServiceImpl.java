@@ -1,7 +1,7 @@
 package vn.conganh.commercial.feature.permission;
 
+import org.springframework.cache.CacheManager;
 import org.springframework.data.jpa.domain.Specification;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -13,12 +13,15 @@ import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
 import vn.conganh.commercial.feature.permission.dto.PermissionFilterRequest;
 import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
+import vn.conganh.commercial.feature.role.RoleRepository;
 
 @Service
 @RequiredArgsConstructor
 public class PermissionServiceImpl implements PermissionService {
 
     private final PermissionRepository permissionRepository;
+    private final CacheManager cacheManager;
+    private final RoleRepository roleRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -55,13 +58,24 @@ public class PermissionServiceImpl implements PermissionService {
         permission.setApiPath(request.apiPath());
         permission.setMethod(request.method());
         permission.setModule(request.module());
-        return PermissionResponse.fromEntity(permissionRepository.save(permission));
+        PermissionResponse response = PermissionResponse.fromEntity(permissionRepository.save(permission));
+        clearAllRolePermissionsCache();
+        return response;
     }
 
     @Override
     @Transactional
     public void deletePermission(Long id) {
         permissionRepository.delete(findPermission(id));
+        clearAllRolePermissionsCache();
+    }
+
+    private void clearAllRolePermissionsCache() {
+        // Permission thay đổi có thể ảnh hưởng mọi role, nên evict toàn bộ cache role và để lần đọc sau nạp lại Redis.
+        var cache = cacheManager.getCache("role_permissions");
+        if (cache != null) {
+            roleRepository.findAll().forEach(role -> cache.evict(role.getName()));
+        }
     }
 
     private Permission findPermission(Long id) {

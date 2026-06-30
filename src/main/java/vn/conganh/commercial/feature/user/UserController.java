@@ -19,6 +19,7 @@ import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
+import vn.conganh.commercial.feature.user.dto.UpdateUserRolesRequest;
 import vn.conganh.commercial.feature.user.dto.UserFilterRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
@@ -53,6 +54,13 @@ public class UserController {
             @PathVariable Long id,
             @RequestBody @Valid UpdateUserRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request)));
+    }
+
+    @PutMapping(path = "/{id}/roles")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUserRoles(
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateUserRolesRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateUserRoles(id, request)));
     }
 
     @DeleteMapping(path = "/{id}")

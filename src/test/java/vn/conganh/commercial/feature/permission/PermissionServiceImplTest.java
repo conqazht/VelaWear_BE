@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -36,11 +37,17 @@ class PermissionServiceImplTest {
     @Mock
     private PermissionRepository permissionRepository;
 
+    @Mock
+    private org.springframework.cache.CacheManager cacheManager;
+
+    @Mock
+    private vn.conganh.commercial.feature.role.RoleRepository roleRepository;
+
     private PermissionServiceImpl permissionService;
 
     @BeforeEach
     void setUp() {
-        permissionService = new PermissionServiceImpl(permissionRepository);
+        permissionService = new PermissionServiceImpl(permissionRepository, cacheManager, roleRepository);
     }
 
     @Nested
@@ -91,7 +98,7 @@ class PermissionServiceImplTest {
         void getAllPermissions_existingPermissions_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(permissionRepository.findAll(any(Specification.class), eq(pageable)))
+            when(permissionRepository.findAll(ArgumentMatchers.<Specification<Permission>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(permission(1L)), pageable, 1));
 
             // Act

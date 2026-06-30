@@ -6,36 +6,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.JwsHeader;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
+import vn.conganh.commercial.AuthenticatedIntegrationTest;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
 @Transactional
-@Testcontainers
 @TestPropertySource(properties = {
         "app.upload.base-dir=target/test-uploads/file-controller",
         "app.upload.url-prefix=/uploads",
@@ -44,19 +25,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
         "app.upload.allowed-folders=avatars,logos"
 })
 @DisplayName("Module File - FileController")
-class FileControllerTest {
+class FileControllerTest extends AuthenticatedIntegrationTest {
 
     private static final String ENDPOINT = "/api/v1/files";
-
-    @Container
-    @ServiceConnection
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private JwtEncoder jwtEncoder;
 
     @Nested
     @DisplayName("Upload file")
@@ -141,26 +112,8 @@ class FileControllerTest {
         return new MockMultipartFile("file", originalFileName, contentType, content);
     }
 
-    private String adminToken() {
-        return tokenWithRoles("admin@velawear.local", 1L, List.of("ROLE_ADMIN"));
-    }
-
     private String noAccessToken() {
         return tokenWithRoles("no-access@velawear.local", 999_999L, List.of("ROLE_NO_ACCESS"));
-    }
-
-    private String tokenWithRoles(String email, Long userId, List<String> roles) {
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .subject(email)
-                .claim("userId", userId)
-                .claim("roles", roles)
-                .issuedAt(now)
-                .expiresAt(now.plus(15, ChronoUnit.MINUTES))
-                .build();
-
-        JwsHeader header = JwsHeader.with(MacAlgorithm.HS512).build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 
     private byte[] jpegBytes() {

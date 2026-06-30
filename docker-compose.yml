@@ -17,5 +17,20 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:8.8.0
+    container_name: commercial-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - commercial_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   commercial_postgres_data:
+  commercial_redis_data:

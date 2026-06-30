@@ -16,11 +16,14 @@ import vn.conganh.commercial.feature.role.dto.RoleFilterRequest;
 import vn.conganh.commercial.feature.role.dto.RoleResponse;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 
+import org.springframework.cache.CacheManager;
+
 @Service
 @RequiredArgsConstructor
 public class RoleServiceImpl implements RoleService {
 
     private final RoleRepository roleRepository;
+    private final CacheManager cacheManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -55,15 +58,33 @@ public class RoleServiceImpl implements RoleService {
     @Transactional
     public RoleResponse updateRole(Long id, UpdateRoleRequest request) {
         Role role = findRole(id);
+        String oldRoleName = role.getName();
         role.setName(request.name());
         role.setDescription(request.description());
-        return RoleResponse.fromEntity(roleRepository.save(role));
+        RoleResponse response = RoleResponse.fromEntity(roleRepository.save(role));
+        // Tên role là cache key, nên evict key cũ và nếu đổi tên thì evict cả key mới.
+        clearRolePermissionsCache(oldRoleName);
+        if (!oldRoleName.equalsIgnoreCase(request.name())) {
+            clearRolePermissionsCache(request.name());
+        }
+        return response;
     }
 
     @Override
     @Transactional
     public void deleteRole(Long id) {
-        roleRepository.delete(findRole(id));
+        Role role = findRole(id);
+        String roleName = role.getName();
+        roleRepository.delete(role);
+        clearRolePermissionsCache(roleName);
+    }
+
+    private void clearRolePermissionsCache(String roleName) {
+        // Lần kiểm tra phân quyền tiếp theo sẽ nạp lại permission của role này từ PostgreSQL.
+        var cache = cacheManager.getCache("role_permissions");
+        if (cache != null && roleName != null) {
+            cache.evict(roleName);
+        }
     }
 
     private Role findRole(Long id) {

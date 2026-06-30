@@ -1,5 +1,14 @@
 # Project Status
 
+## 2026-06-29
+
+### Completed
+
+- Separated the symmetric HMAC HS512 JWT configuration into two distinct keys: `JWT_ACCESS_TOKEN_SECRET_KEY` and `JWT_REFRESH_TOKEN_SECRET_KEY`.
+- Created separate primary and qualified `JwtEncoder` and `JwtDecoder` Spring beans for both access and refresh tokens.
+- Updated `AuthServiceImpl` to use specific encoders/decoders for generating/verifying tokens, and configured unit tests to run with separate secrets.
+- Updated documentation (`docs/PROJECT-RULES.md` and `docs/API_SPEC.md`), environment variable templates (`.env.example` and `.env`), and integration test configurations.
+
 ## 2026-06-27
 
 ### Completed

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -91,7 +92,7 @@ class ColorServiceImplTest {
         void getAll_existingColors_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(colorRepository.findAll(any(Specification.class), eq(pageable)))
+            when(colorRepository.findAll(ArgumentMatchers.<Specification<Color>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(color(1L, "Black")), pageable, 1));
 
             // Act

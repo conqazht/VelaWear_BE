@@ -1,7 +1,6 @@
 package vn.conganh.commercial.feature.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -9,7 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.nimbusds.jwt.SignedJWT;
+import java.text.ParseException;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenRepository;
+import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
@@ -39,6 +42,9 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
 
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    private RefreshTokenSessionService refreshTokenSessionService;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -112,28 +118,49 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
         }
 
         @Test
-        @DisplayName("POST /auth/refresh - 200: giữ nguyên refresh token và trả về token mới")
-        void refreshToken_validRefreshToken_returnsSameRefreshTokenAndNewAccessToken() throws Exception {
+        @DisplayName("POST /auth/refresh - 200: rotate refresh token và trả về token mới")
+        void refreshToken_validRefreshToken_rotatesRefreshTokenAndReturnsNewToken() throws Exception {
             // Arrange
             userRepository.save(user("auth.refresh@velawear.local", "Password123!"));
             String oldRefreshToken = loginAndExtractRefreshToken("auth.refresh@velawear.local", "Password123!");
+            String oldJti = jwtId(oldRefreshToken);
             long refreshTokenCountBefore = refreshTokenRepository.count();
 
             // Act & Assert
-            mockMvc.perform(post("/api/v1/auth/refresh")
+            MvcResult result = mockMvc.perform(post("/api/v1/auth/refresh")
                             .cookie(new Cookie("refresh_token", oldRefreshToken)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.statusCode").value(200))
                     .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
                     .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
-                    .andExpect(jsonPath("$.data.refreshToken").value(is(oldRefreshToken)))
                     .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
                     .andExpect(jsonPath("$.data.expiresIn").value(900))
                     .andExpect(header().string(HttpHeaders.SET_COOKIE,
-                            org.hamcrest.Matchers.containsString("refresh_token=" + oldRefreshToken)));
+                            org.hamcrest.Matchers.containsString("refresh_token=")))
+                    .andReturn();
 
-            assertThat(refreshTokenRepository.count()).isEqualTo(refreshTokenCountBefore);
-            assertThat(countRevokedRefreshTokens()).isEqualTo(0);
+            String newRefreshToken = JsonPath.read(result.getResponse().getContentAsString(), "$.data.refreshToken");
+            String newJti = jwtId(newRefreshToken);
+            assertThat(newRefreshToken).isNotEqualTo(oldRefreshToken);
+            assertThat(refreshTokenRepository.count()).isEqualTo(refreshTokenCountBefore + 1);
+            assertThat(countRevokedRefreshTokens()).isEqualTo(1);
+            assertThat(refreshTokenSessionService.find(oldJti)).isEmpty();
+            assertThat(refreshTokenSessionService.find(newJti)).isPresent();
+        }
+
+        @Test
+        @DisplayName("POST /auth/login - 200: ghi refresh session vào Redis và audit row vào PostgreSQL")
+        void login_validCredentials_writesRedisSessionAndPostgresAuditRow() throws Exception {
+            // Arrange
+            userRepository.save(user("auth.login.redis@velawear.local", "Password123!"));
+            long refreshTokenCountBefore = refreshTokenRepository.count();
+
+            // Act
+            String refreshToken = loginAndExtractRefreshToken("auth.login.redis@velawear.local", "Password123!");
+
+            // Assert
+            assertThat(refreshTokenRepository.count()).isEqualTo(refreshTokenCountBefore + 1);
+            assertThat(refreshTokenSessionService.find(jwtId(refreshToken))).isPresent();
         }
 
         @Test
@@ -145,6 +172,12 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/logout")
+                            .header("Authorization", "Bearer " + tokenWithRoles(
+                                    "auth.logout@velawear.local",
+                                    userRepository.findByEmailAndDeletedAtIsNull("auth.logout@velawear.local")
+                                            .orElseThrow()
+                                            .getId(),
+                                    List.of("ROLE_USER")))
                             .cookie(new Cookie("refresh_token", refreshToken)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.statusCode").value(200))
@@ -152,6 +185,7 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                             org.hamcrest.Matchers.containsString("Max-Age=0")));
 
             assertThat(countRevokedRefreshTokens()).isGreaterThanOrEqualTo(1);
+            assertThat(refreshTokenSessionService.find(jwtId(refreshToken))).isEmpty();
         }
 
         @Test
@@ -183,7 +217,43 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                             .cookie(new Cookie("refresh_token", refreshToken)))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.statusCode").value(401))
-                    .andExpect(jsonPath("$.message").value("Refresh token is revoked"));
+                    .andExpect(jsonPath("$.message").value("Refresh session is expired or revoked"));
+        }
+
+        @Test
+        @DisplayName("POST /auth/refresh - 401: Redis miss không fallback PostgreSQL và clear cookie")
+        void refreshToken_redisMiss_returnsUnauthorizedWithoutPostgresFallback() throws Exception {
+            // Arrange
+            userRepository.save(user("auth.redis.miss@velawear.local", "Password123!"));
+            String refreshToken = loginAndExtractRefreshToken("auth.redis.miss@velawear.local", "Password123!");
+            refreshTokenSessionService.delete(jwtId(refreshToken));
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/auth/refresh")
+                            .cookie(new Cookie("refresh_token", refreshToken)))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.statusCode").value(401))
+                    .andExpect(jsonPath("$.message").value("Refresh session is expired or revoked"))
+                    .andExpect(header().string(HttpHeaders.SET_COOKIE,
+                            org.hamcrest.Matchers.containsString("Max-Age=0")));
+
+            assertThat(countRevokedRefreshTokens()).isGreaterThanOrEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("POST /auth/refresh - 401: refresh token cũ sau rotation không dùng lại được")
+        void refreshToken_reusedOldTokenAfterRotation_returnsUnauthorized() throws Exception {
+            // Arrange
+            userRepository.save(user("auth.rotate.reuse@velawear.local", "Password123!"));
+            String oldRefreshToken = loginAndExtractRefreshToken("auth.rotate.reuse@velawear.local", "Password123!");
+            refreshAndExtractRefreshToken(oldRefreshToken);
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/auth/refresh")
+                            .cookie(new Cookie("refresh_token", oldRefreshToken)))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.statusCode").value(401))
+                    .andExpect(jsonPath("$.message").value("Refresh session is expired or revoked"));
         }
 
         @Test
@@ -312,6 +382,19 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                 .andReturn();
 
         return JsonPath.read(result.getResponse().getContentAsString(), "$.data.refreshToken");
+    }
+
+    private String refreshAndExtractRefreshToken(String refreshToken) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(new Cookie("refresh_token", refreshToken)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return JsonPath.read(result.getResponse().getContentAsString(), "$.data.refreshToken");
+    }
+
+    private String jwtId(String rawJwt) throws ParseException {
+        return SignedJWT.parse(rawJwt).getJWTClaimsSet().getJWTID();
     }
 
     private Long countRevokedRefreshTokens() {

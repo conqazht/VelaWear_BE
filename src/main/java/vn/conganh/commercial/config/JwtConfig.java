@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -29,15 +30,31 @@ public class JwtConfig {
     private final JwtProperties jwtProperties;
 
     @Bean
+    @Primary
     public JwtEncoder jwtEncoder() {
-        SecretKey key = secretKey();
+        SecretKey key = secretKey(jwtProperties.accessTokenSecretKey());
         JWKSource<SecurityContext> jwkSource = new ImmutableSecret<>(key);
         return new NimbusJwtEncoder(jwkSource);
     }
 
     @Bean
+    @Primary
     public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(secretKey())
+        return NimbusJwtDecoder.withSecretKey(secretKey(jwtProperties.accessTokenSecretKey()))
+                .macAlgorithm(JWT_MAC_ALGORITHM)
+                .build();
+    }
+
+    @Bean
+    public JwtEncoder refreshJwtEncoder() {
+        SecretKey key = secretKey(jwtProperties.refreshTokenSecretKey());
+        JWKSource<SecurityContext> jwkSource = new ImmutableSecret<>(key);
+        return new NimbusJwtEncoder(jwkSource);
+    }
+
+    @Bean
+    public JwtDecoder refreshJwtDecoder() {
+        return NimbusJwtDecoder.withSecretKey(secretKey(jwtProperties.refreshTokenSecretKey()))
                 .macAlgorithm(JWT_MAC_ALGORITHM)
                 .build();
     }
@@ -53,7 +70,7 @@ public class JwtConfig {
         return converter;
     }
 
-    private SecretKey secretKey() {
-        return new SecretKeySpec(jwtProperties.secretKey().getBytes(StandardCharsets.UTF_8), HMAC_SECRET_ALGORITHM);
+    private SecretKey secretKey(String rawSecret) {
+        return new SecretKeySpec(rawSecret.getBytes(StandardCharsets.UTF_8), HMAC_SECRET_ALGORITHM);
     }
 }

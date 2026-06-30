@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -38,11 +39,14 @@ class RoleServiceImplTest {
     @Mock
     private RoleRepository roleRepository;
 
+    @Mock
+    private org.springframework.cache.CacheManager cacheManager;
+
     private RoleServiceImpl roleService;
 
     @BeforeEach
     void setUp() {
-        roleService = new RoleServiceImpl(roleRepository);
+        roleService = new RoleServiceImpl(roleRepository, cacheManager);
     }
 
     @Nested
@@ -93,7 +97,7 @@ class RoleServiceImplTest {
         void getAllRoles_existingRoles_returnsResponses() {
             // Arrange
             Pageable pageable = PageRequest.of(0, 10);
-            when(roleRepository.findAll(any(Specification.class), eq(pageable)))
+            when(roleRepository.findAll(ArgumentMatchers.<Specification<Role>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(role(1L, "ADMIN")), pageable, 1));
 
             // Act

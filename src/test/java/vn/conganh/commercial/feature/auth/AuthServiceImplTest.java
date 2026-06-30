@@ -1,9 +1,11 @@
 package vn.conganh.commercial.feature.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,13 +30,18 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.config.JwtConfig;
+import vn.conganh.commercial.security.TokenBlacklistService;
 import vn.conganh.commercial.config.JwtProperties;
+import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
 import vn.conganh.commercial.exception.DuplicateResourceException;
+import vn.conganh.commercial.exception.ServiceUnavailableException;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
 import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
+import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
+import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenService;
 import vn.conganh.commercial.feature.refreshtoken.dto.CreateRefreshTokenRequest;
 import vn.conganh.commercial.feature.role.Role;
@@ -52,6 +59,8 @@ class AuthServiceImplTest {
 
     private static final String SECRET_KEY =
             "0123456789012345678901234567890123456789012345678901234567890123";
+    private static final String REFRESH_SECRET_KEY =
+            "refresh-secret-key-for-auth-service-tests-0123456789012345678901234";
 
     @Mock
     private AuthenticationManager authenticationManager;
@@ -69,13 +78,19 @@ class AuthServiceImplTest {
     private RefreshTokenService refreshTokenService;
 
     @Mock
+    private RefreshTokenSessionService refreshTokenSessionService;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
 
     private AuthServiceImpl authService;
 
     @BeforeEach
     void setUp() {
-        JwtProperties jwtProperties = new JwtProperties(SECRET_KEY, 900, 259200);
+        JwtProperties jwtProperties = new JwtProperties(SECRET_KEY, REFRESH_SECRET_KEY, 900, 259200);
         JwtConfig jwtConfig = new JwtConfig(jwtProperties);
         authService = new AuthServiceImpl(
                 authenticationManager,
@@ -83,10 +98,13 @@ class AuthServiceImplTest {
                 roleRepository,
                 userHasRoleRepository,
                 refreshTokenService,
+                refreshTokenSessionService,
                 passwordEncoder,
                 jwtConfig.jwtEncoder(),
-                jwtConfig.jwtDecoder(),
-                jwtProperties);
+                jwtConfig.refreshJwtEncoder(),
+                jwtConfig.refreshJwtDecoder(),
+                jwtProperties,
+                tokenBlacklistService);
     }
 
     @Nested
@@ -236,21 +254,69 @@ class AuthServiceImplTest {
     class RefreshTokenGroup {
 
         @Test
-        @DisplayName("refreshToken - giữ nguyên refresh token và trả về access token mới")
-        void refreshToken_validRefreshToken_returnsNewAccessTokenAndSameRefreshToken() {
+        @DisplayName("refreshToken - Redis hit thì rotate refresh token và trả về token mới")
+        void refreshToken_validRefreshToken_rotatesRefreshTokenAndReturnsNewToken() throws ParseException {
             // Arrange
             User user = user(1L);
-            RefreshToken refreshToken = refreshToken(user, validRefreshJwt(user));
-            when(refreshTokenService.findValidRefreshToken(refreshToken.getToken())).thenReturn(refreshToken);
+            String rawRefreshToken = validRefreshJwt(user);
+            String jti = jwtId(rawRefreshToken);
+            RefreshTokenSession session = new RefreshTokenSession(
+                    jti,
+                    user.getId(),
+                    "hash-old-token",
+                    "Chrome",
+                    "127.0.0.1",
+                    Instant.now().minusSeconds(60),
+                    Instant.now().plusSeconds(259200));
+            when(refreshTokenService.hashToken(any(String.class)))
+                    .thenAnswer(invocation -> "hash-" + invocation.getArgument(0, String.class).hashCode());
+            when(refreshTokenService.hashToken(rawRefreshToken)).thenReturn("hash-old-token");
+            when(refreshTokenSessionService.find(jti)).thenReturn(Optional.of(session));
+            when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
             when(userRepository.findRolesByUserId(1L)).thenReturn(List.of(role(1L, "ADMIN")));
 
             // Act
-            TokenResponse response = authService.refreshToken(new RefreshTokenRequest(refreshToken.getToken()));
+            TokenResponse response = authService.refreshToken(new RefreshTokenRequest(rawRefreshToken));
 
             // Assert
-            assertThat(refreshToken.isRevoked()).isFalse();
             assertThat(response.accessToken()).isNotBlank();
-            assertThat(response.refreshToken()).isEqualTo(refreshToken.getToken());
+            assertThat(response.refreshToken()).isNotEqualTo(rawRefreshToken);
+            verify(refreshTokenService).markRefreshTokenRevoked(rawRefreshToken);
+            verify(refreshTokenService).createRefreshToken(any(CreateRefreshTokenRequest.class));
+            verify(refreshTokenSessionService).rotate(eq(jti), any(RefreshTokenSession.class));
+        }
+
+        @Test
+        @DisplayName("refreshToken - Redis miss thì trả về 401 và không fallback xuống PostgreSQL")
+        void refreshToken_redisMiss_throwsUnauthorizedAndDoesNotCreateNewToken() throws ParseException {
+            // Arrange
+            User user = user(1L);
+            String rawRefreshToken = validRefreshJwt(user);
+            String jti = jwtId(rawRefreshToken);
+            when(refreshTokenSessionService.find(jti)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> authService.refreshToken(new RefreshTokenRequest(rawRefreshToken)))
+                    .isInstanceOf(RefreshTokenSessionNotFoundException.class);
+            verify(refreshTokenService).markRefreshTokenRevoked(rawRefreshToken);
+            verify(refreshTokenService, never()).createRefreshToken(any());
+            verify(userRepository, never()).findByIdAndDeletedAtIsNull(any());
+        }
+
+        @Test
+        @DisplayName("refreshToken - Redis error thì trả về 503 và không revoke audit row")
+        void refreshToken_redisError_throwsServiceUnavailableAndDoesNotRevokeAuditRow() throws ParseException {
+            // Arrange
+            User user = user(1L);
+            String rawRefreshToken = validRefreshJwt(user);
+            String jti = jwtId(rawRefreshToken);
+            when(refreshTokenSessionService.find(jti))
+                    .thenThrow(new ServiceUnavailableException("Refresh session store is temporarily unavailable"));
+
+            // Act & Assert
+            assertThatThrownBy(() -> authService.refreshToken(new RefreshTokenRequest(rawRefreshToken)))
+                    .isInstanceOf(ServiceUnavailableException.class);
+            verify(refreshTokenService, never()).markRefreshTokenRevoked(any());
             verify(refreshTokenService, never()).createRefreshToken(any());
         }
     }
@@ -261,15 +327,19 @@ class AuthServiceImplTest {
 
         @Test
         @DisplayName("logout - revoke refresh token")
-        void logout_validRefreshToken_revokesToken() {
+        void logout_validRefreshToken_revokesToken() throws ParseException {
             // Arrange
-            RefreshTokenRequest request = new RefreshTokenRequest("raw-refresh-token");
+            User user = user(1L);
+            String rawRefreshToken = validRefreshJwt(user);
+            String jti = jwtId(rawRefreshToken);
+            RefreshTokenRequest request = new RefreshTokenRequest(rawRefreshToken);
 
             // Act
             authService.logout(request);
 
             // Assert
-            verify(refreshTokenService).revokeRefreshToken("raw-refresh-token");
+            verify(refreshTokenSessionService).delete(jti);
+            verify(refreshTokenService).markRefreshTokenRevoked(rawRefreshToken);
         }
     }
 
@@ -330,7 +400,7 @@ class AuthServiceImplTest {
     }
 
     private String validRefreshJwt(User user) {
-        JwtProperties jwtProperties = new JwtProperties(SECRET_KEY, 900, 259200);
+        JwtProperties jwtProperties = new JwtProperties(SECRET_KEY, REFRESH_SECRET_KEY, 900, 259200);
         JwtConfig jwtConfig = new JwtConfig(jwtProperties);
         Instant now = Instant.now();
         org.springframework.security.oauth2.jwt.JwtClaimsSet claims =
@@ -345,8 +415,12 @@ class AuthServiceImplTest {
         org.springframework.security.oauth2.jwt.JwsHeader header =
                 org.springframework.security.oauth2.jwt.JwsHeader.with(
                         org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS512).build();
-        return jwtConfig.jwtEncoder()
+        return jwtConfig.refreshJwtEncoder()
                 .encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(header, claims))
                 .getTokenValue();
+    }
+
+    private String jwtId(String rawJwt) throws ParseException {
+        return SignedJWT.parse(rawJwt).getJWTClaimsSet().getJWTID();
     }
 }

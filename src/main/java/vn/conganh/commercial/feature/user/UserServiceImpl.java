@@ -21,6 +21,10 @@ import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
 import lombok.RequiredArgsConstructor;
 import vn.conganh.commercial.feature.user.dto.UserFilterRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
+import vn.conganh.commercial.feature.user.dto.UpdateUserRolesRequest;
+import vn.conganh.commercial.feature.role.Role;
+import vn.conganh.commercial.feature.role.RoleRepository;
+import vn.conganh.commercial.security.TokenBlacklistService;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +32,9 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserHasRoleRepository userHasRoleRepository;
+    private final RoleRepository roleRepository;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     @Transactional(readOnly = true)
@@ -76,6 +83,31 @@ public class UserServiceImpl implements UserService {
         user.setAvatar(request.avatar());
         user.setGender(request.gender());
         return UserResponse.fromEntity(userRepository.save(user));
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateUserRoles(Long id, UpdateUserRolesRequest request) {
+        User user = findActiveUser(id);
+
+        // Thay thế danh sách role của user một cách nguyên tử trong transaction này.
+        userHasRoleRepository.deleteByUserId(id);
+
+        for (String roleName : request.roles()) {
+            Role role = roleRepository.findByName(roleName)
+                    .orElseThrow(() -> new ResourceNotFoundException("Role", "name", roleName));
+            UserHasRole uhr = new UserHasRole();
+            uhr.setUser(user);
+            uhr.setRole(role);
+            userHasRoleRepository.save(uhr);
+        }
+
+        // Ghi mốc đổi role để Access Token đã phát hành trước đó bị SecurityConfig từ chối.
+        tokenBlacklistService.setRoleUpdateTimestamp(id);
+
+        List<UserResponse.RoleSummaryResponse> roles =
+                rolesByUserId(List.of(user)).getOrDefault(user.getId(), List.of());
+        return UserResponse.fromEntity(user, roles);
     }
 
     @Override

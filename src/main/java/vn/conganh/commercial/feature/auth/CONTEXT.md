@@ -13,9 +13,10 @@ Auth exposes public endpoints under `/api/v1/auth`:
 
 - Access token lifetime is configured by `JWT_ACCESS_TOKEN_EXPIRATION`, default `900` seconds.
 - Refresh token lifetime is configured by `JWT_REFRESH_TOKEN_EXPIRATION`, default `259200` seconds.
-- Production must provide `JWT_SECRET_KEY` through environment variables.
-- Access tokens are JWTs signed by Spring Security `JwtEncoder` with HS512.
-- Refresh tokens are JWTs signed by Spring Security `JwtEncoder` with HS512.
+- Production must provide separate `JWT_ACCESS_TOKEN_SECRET_KEY` and `JWT_REFRESH_TOKEN_SECRET_KEY`
+  environment variables.
+- Access tokens are JWTs signed by the access-token `JwtEncoder` with HS512.
+- Refresh tokens are JWTs signed by the refresh-token `JwtEncoder` with HS512.
 - Refresh JWTs include `jti`, `sub`, `userId`, `type=refresh`, `iat`, and `exp`.
 - Refresh tokens are stored in `refresh_tokens.token` using SHA-512 of the raw refresh JWT,
   never as raw tokens.

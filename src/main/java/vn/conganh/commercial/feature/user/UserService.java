@@ -4,6 +4,7 @@ import org.springframework.data.domain.Pageable;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
+import vn.conganh.commercial.feature.user.dto.UpdateUserRolesRequest;
 import vn.conganh.commercial.feature.user.dto.UserFilterRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 
@@ -16,6 +17,8 @@ public interface UserService {
     UserResponse createUser(CreateUserRequest request);
 
     UserResponse updateUser(Long id, UpdateUserRequest request);
+
+    UserResponse updateUserRoles(Long id, UpdateUserRolesRequest request);
 
     void deleteUser(Long id);
 }
