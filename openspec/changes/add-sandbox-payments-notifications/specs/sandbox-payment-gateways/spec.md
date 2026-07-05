@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Sandbox Payment Initiation
-The system MUST allow the backend to initiate a payment for an existing order using a frontend-selected provider while keeping provider secrets and gateway API calls inside the backend.
+The system MUST allow the backend to initiate a sandbox payment for an existing order using a frontend-selected provider while keeping provider secrets and gateway API calls inside the backend.
 
 #### Scenario: Initiate MoMo sandbox payment
 - **WHEN** a client requests payment initiation for an eligible order with provider `MOMO`
@@ -11,16 +11,24 @@ The system MUST allow the backend to initiate a payment for an existing order us
 - **WHEN** a client requests payment initiation for an eligible order with provider `VNPAY`
 - **THEN** the system creates or reuses a pending payment, creates a signed VNPay sandbox payment URL, and returns it to the client
 
+#### Scenario: Initiate ZaloPay sandbox payment
+- **WHEN** a client requests payment initiation for an eligible order with provider `ZALOPAY`
+- **THEN** the system creates or reuses a pending payment, calls the configured ZaloPay sandbox gateway, and returns a payment URL, order token, or QR payload to the client
+
 #### Scenario: Initiate SePay bank transfer sandbox payment
 - **WHEN** a client requests payment initiation for an eligible order with provider `SEPAY`
 - **THEN** the system creates or reuses a pending payment with provider `SEPAY` and returns QR or bank-transfer reference data for the order
+
+#### Scenario: Initiate Stripe test-mode payment
+- **WHEN** Stripe test mode is enabled and a client requests payment initiation for an eligible order with provider `STRIPE`
+- **THEN** the system creates or reuses a pending payment, creates a Stripe test-mode checkout/payment session, and returns the test redirect URL or session payload to the client
 
 #### Scenario: Initiate COD payment
 - **WHEN** a client requests payment initiation for an eligible order with provider `COD`
 - **THEN** the system records the COD payment state without calling an external gateway
 
 ### Requirement: Gateway Configuration
-The system MUST keep sandbox provider endpoints, credentials, return URLs, callback URLs, and enabled-provider flags in backend configuration.
+The system MUST keep sandbox provider endpoints, credentials, return URLs, callback URLs, enabled-provider flags, and the global sandbox payment environment in backend configuration.
 
 #### Scenario: Provider disabled
 - **WHEN** a client requests initiation for a provider disabled by configuration
@@ -29,6 +37,21 @@ The system MUST keep sandbox provider endpoints, credentials, return URLs, callb
 #### Scenario: Sandbox environment configured
 - **WHEN** the application starts with sandbox payment configuration
 - **THEN** provider adapters use sandbox endpoints and sandbox credentials instead of production endpoints
+
+#### Scenario: Live configuration rejected
+- **WHEN** this sandbox-only phase is configured with live provider endpoints or production payment environment settings
+- **THEN** the system rejects the configuration or keeps the affected provider disabled
+
+### Requirement: Shared Payment Orchestration
+The system MUST use shared orchestration for common checkout, callback, audit, idempotency, and notification behavior while isolating provider-specific API and signature behavior in provider adapters.
+
+#### Scenario: Initiation uses provider adapter
+- **WHEN** a client initiates payment for any enabled sandbox provider
+- **THEN** the shared orchestration validates the order and payment state before routing provider-specific request creation to the selected adapter
+
+#### Scenario: Callback uses shared state transition path
+- **WHEN** a verified provider callback or enabled simulation is accepted
+- **THEN** the system applies payment transaction audit, idempotency, payment status, order payment status, and notification decisions through the shared callback processing path
 
 ### Requirement: Payment Callback Processing
 The system MUST process provider callback, webhook, IPN, or simulation payloads in the backend and update payment/order state from verified results.
