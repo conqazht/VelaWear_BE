@@ -5,6 +5,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 public record ReviewFilterRequest(
         Long userId,
+        Long productId,
         Long orderId,
         Long orderItemId,
         Short ratingFrom,
@@ -16,14 +17,18 @@ public record ReviewFilterRequest(
         LocalDate createdTo
 ) {
     public ReviewFilterRequest withUserId(Long userId) {
-        return new ReviewFilterRequest(userId, orderId, orderItemId, ratingFrom, ratingTo, comment, createdFrom, createdTo);
+        return new ReviewFilterRequest(userId, productId, orderId, orderItemId, ratingFrom, ratingTo, comment, createdFrom, createdTo);
+    }
+
+    public ReviewFilterRequest withProductId(Long productId) {
+        return new ReviewFilterRequest(userId, productId, orderId, orderItemId, ratingFrom, ratingTo, comment, createdFrom, createdTo);
     }
 
     public ReviewFilterRequest withOrderId(Long orderId) {
-        return new ReviewFilterRequest(userId, orderId, orderItemId, ratingFrom, ratingTo, comment, createdFrom, createdTo);
+        return new ReviewFilterRequest(userId, productId, orderId, orderItemId, ratingFrom, ratingTo, comment, createdFrom, createdTo);
     }
 
     public ReviewFilterRequest withOrderItemId(Long orderItemId) {
-        return new ReviewFilterRequest(userId, orderId, orderItemId, ratingFrom, ratingTo, comment, createdFrom, createdTo);
+        return new ReviewFilterRequest(userId, productId, orderId, orderItemId, ratingFrom, ratingTo, comment, createdFrom, createdTo);
     }
 }

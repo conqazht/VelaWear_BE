@@ -15,8 +15,14 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  docker:
+    compose:
+      enabled: true
+      file: docker-compose.yml
+      lifecycle-management: start-and-stop
   flyway:
     locations: classpath:db/migration
+    encoding: UTF-8
   data:
     web:
       pageable:
@@ -74,7 +80,8 @@ app:
       - webp
     allowed-folders:
       - avatars
-      - logos
+      - products
+      - reviews
 
 springdoc:
   api-docs:

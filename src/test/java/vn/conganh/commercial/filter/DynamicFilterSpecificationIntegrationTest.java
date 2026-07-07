@@ -51,7 +51,7 @@ class DynamicFilterSpecificationIntegrationTest {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18-alpine");
+    static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private BrandRepository brandRepository;
