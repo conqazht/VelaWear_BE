@@ -16,12 +16,12 @@ import org.testcontainers.utility.DockerImageName;
 @ActiveProfiles("test")
 public abstract class AbstractIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine")
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
             .withDatabaseName("velawear_test")
             .withUsername("test")
             .withPassword("test");
 
-    private static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine"))
+    private static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:8.8.0"))
             .withExposedPorts(6379);
 
     static {

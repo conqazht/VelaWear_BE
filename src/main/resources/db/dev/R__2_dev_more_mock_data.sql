@@ -122,11 +122,13 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'SV-TOTE-ORG-OS', 329000.00, NULL, 120, c.id, NULL, 'ACTIVE'
+SELECT p.id, 'SV-TOTE-ORG-OS', 329000.00, NULL, 120, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
+CROSS JOIN sizes s
 WHERE p.slug = 'studio-canvas-tote'
   AND c.name = 'Orange'
+  AND s.name = 'ONE SIZE'
 ON CONFLICT (sku) DO UPDATE
 SET
     price = EXCLUDED.price,
@@ -136,23 +138,43 @@ SET
     size_id = EXCLUDED.size_id,
     status = EXCLUDED.status;
 
+DELETE FROM product_images WHERE product_id IN (
+    SELECT id FROM products WHERE slug IN ('north-utility-jacket', 'studio-canvas-tote')
+) AND variant_id IS NULL;
+
+-- North Utility Jacket
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/images/dev/north-utility-jacket.jpg', TRUE, 1
-FROM products p
-WHERE p.slug = 'north-utility-jacket'
-  AND NOT EXISTS (
-      SELECT 1 FROM product_images pi
-      WHERE pi.product_id = p.id AND pi.variant_id IS NULL AND pi.is_thumbnail = TRUE
-  );
+SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_luxury_olive_green_556b2f_tailored.png', TRUE, 1
+FROM products p WHERE p.slug = 'north-utility-jacket';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/images/dev/studio-canvas-tote.jpg', TRUE, 1
-FROM products p
-WHERE p.slug = 'studio-canvas-tote'
-  AND NOT EXISTS (
-      SELECT 1 FROM product_images pi
-      WHERE pi.product_id = p.id AND pi.variant_id IS NULL AND pi.is_thumbnail = TRUE
-  );
+SELECT p.id, NULL, '/uploads/products/premium_fashion_product_shot_of_a_high_quality_tailored_piece_in_olive_green.png', FALSE, 2
+FROM products p WHERE p.slug = 'north-utility-jacket';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/professional_studio_photography_for_vela_wear._a_high_quality_tailored_piece_in.png', FALSE, 3
+FROM products p WHERE p.slug = 'north-utility-jacket';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_luxury_minimalist_olive_green.png', FALSE, 4
+FROM products p WHERE p.slug = 'north-utility-jacket';
+
+-- Studio Canvas Tote
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/individual_product_shot_of_a_premium_black_000000_leather_tote_bag_perspective.png', TRUE, 1
+FROM products p WHERE p.slug = 'studio-canvas-tote';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/product_detail_gallery_set_for_a_premium_black_000000_leather_tote_bag._4.png', FALSE, 2
+FROM products p WHERE p.slug = 'studio-canvas-tote';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_premium_black_000000_leather_tote.png', FALSE, 3
+FROM products p WHERE p.slug = 'studio-canvas-tote';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/macro_close_up_shot_of_the_black_000000_pebbled_leather_texture_and_embossed.png', FALSE, 4
+FROM products p WHERE p.slug = 'studio-canvas-tote';
 
 INSERT INTO product_attributes (product_id, name, value)
 SELECT p.id, 'Care', 'Machine wash cold'
@@ -309,14 +331,14 @@ SET rating = EXCLUDED.rating,
     comment = EXCLUDED.comment;
 
 INSERT INTO review_images (review_id, image)
-SELECT r.id, '/images/dev/reviews/north-utility-jacket-review.jpg'
+SELECT r.id, '/uploads/reviews/north-utility-jacket-review.png'
 FROM reviews r
 JOIN order_items oi ON oi.id = r.order_item_id
 WHERE oi.sku = 'NS-JACKET-PUR-M'
   AND NOT EXISTS (
       SELECT 1 FROM review_images ri
       WHERE ri.review_id = r.id
-        AND ri.image = '/images/dev/reviews/north-utility-jacket-review.jpg'
+        AND ri.image = '/uploads/reviews/north-utility-jacket-review.png'
   );
 
 INSERT INTO inventory_logs (variant_id, change_quantity, type, reason)

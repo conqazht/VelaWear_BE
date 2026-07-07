@@ -1,5 +1,14 @@
 # Project Status
 
+## 2026-07-06
+
+### Completed
+
+- **Database Seed Data Redesign**: Rebuilt the repeatable Flyway mock data migration (`src/main/resources/db/dev/R__3_dev_large_mock_data.sql`) to clean up old data, seed exactly 10 premium brands, 7 fashion categories with translations, 100 realistic category-aligned products with translations, and seed **exactly 4 detail images** per product. Grouped mock seed images by category to ensure correct item previews, and added precise overrides for white sneakers and brass key hook.
+- **UTF-8 Encoding for Flyway**: Added `encoding: UTF-8` to `spring.flyway` in `application.yaml` to prevent Vietnamese character corruption on Windows systems during db migration/seeding.
+- **Enhanced Product DTO Mappings**: Updated `ProductResponse` and `ProductServiceImpl` to batch-load and include `image`, `thumbnail`, `images` list, `categoryName`, and `categorySlug` in product detail/list API responses.
+- Verified backend compilability via `./mvnw compile`.
+
 ## 2026-06-29
 
 ### Completed

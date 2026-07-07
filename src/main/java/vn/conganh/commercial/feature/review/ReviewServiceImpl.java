@@ -38,7 +38,7 @@ public class ReviewServiceImpl implements ReviewService {
     public ResultPaginationDTO getReviewsByUserId(Long userId, ReviewFilterRequest filter, Pageable pageable) {
         FilterSpecifications.requireMatchingPathId("userId", userId, filter == null ? null : filter.userId());
         ReviewFilterRequest scopedFilter = filter == null
-                ? new ReviewFilterRequest(userId, null, null, null, null, null, null, null)
+                ? new ReviewFilterRequest(userId, null, null, null, null, null, null, null, null)
                 : filter.withUserId(userId);
 
         return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
@@ -50,7 +50,7 @@ public class ReviewServiceImpl implements ReviewService {
     public ResultPaginationDTO getReviewsByOrderId(Long orderId, ReviewFilterRequest filter, Pageable pageable) {
         FilterSpecifications.requireMatchingPathId("orderId", orderId, filter == null ? null : filter.orderId());
         ReviewFilterRequest scopedFilter = filter == null
-                ? new ReviewFilterRequest(null, orderId, null, null, null, null, null, null)
+                ? new ReviewFilterRequest(null, null, orderId, null, null, null, null, null, null)
                 : filter.withOrderId(orderId);
 
         return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
@@ -62,7 +62,7 @@ public class ReviewServiceImpl implements ReviewService {
     public ResultPaginationDTO getReviewsByOrderItemId(Long orderItemId, ReviewFilterRequest filter, Pageable pageable) {
         FilterSpecifications.requireMatchingPathId("orderItemId", orderItemId, filter == null ? null : filter.orderItemId());
         ReviewFilterRequest scopedFilter = filter == null
-                ? new ReviewFilterRequest(null, null, orderItemId, null, null, null, null, null)
+                ? new ReviewFilterRequest(null, null, null, orderItemId, null, null, null, null, null)
                 : filter.withOrderItemId(orderItemId);
 
         return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
