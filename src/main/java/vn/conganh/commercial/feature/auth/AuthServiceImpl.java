@@ -27,11 +27,15 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.security.TokenBlacklistService;
 import vn.conganh.commercial.config.JwtProperties;
 import vn.conganh.commercial.exception.DuplicateResourceException;
+import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.exception.UnauthorizedException;
+import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
+import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
+import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
 import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
@@ -46,6 +50,7 @@ import vn.conganh.commercial.feature.user.UserHasRole;
 import vn.conganh.commercial.feature.user.UserHasRoleRepository;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
+import vn.conganh.commercial.util.constant.OtpPurpose;
 
 @Slf4j
 @Service
@@ -66,6 +71,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtDecoder refreshJwtDecoder;
     private final JwtProperties jwtProperties;
     private final TokenBlacklistService tokenBlacklistService;
+    private final OtpService otpService;
 
     public AuthServiceImpl(
             AuthenticationManager authenticationManager,
@@ -79,7 +85,8 @@ public class AuthServiceImpl implements AuthService {
             @Qualifier("refreshJwtEncoder") JwtEncoder refreshJwtEncoder,
             @Qualifier("refreshJwtDecoder") JwtDecoder refreshJwtDecoder,
             JwtProperties jwtProperties,
-            TokenBlacklistService tokenBlacklistService) {
+            TokenBlacklistService tokenBlacklistService,
+            OtpService otpService) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -92,6 +99,7 @@ public class AuthServiceImpl implements AuthService {
         this.refreshJwtDecoder = refreshJwtDecoder;
         this.jwtProperties = jwtProperties;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.otpService = otpService;
     }
 
     @Override
@@ -133,6 +141,9 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("User", "email", normalizedEmail);
         }
 
+        if (!otpService.isOtpVerified(normalizedEmail, OtpPurpose.REGISTER)) {
+            throw new InvalidRequestException("Email address has not been verified with OTP.");
+        }
         User user = new User();
         user.setFullName(request.fullName());
         user.setEmail(normalizedEmail);
@@ -149,6 +160,7 @@ public class AuthServiceImpl implements AuthService {
         userHasRole.setRole(userRole);
         userHasRoleRepository.save(userHasRole);
 
+        otpService.consumeOtpVerifiedMarker(normalizedEmail, OtpPurpose.REGISTER);
         log.info("[VelaWear/Auth] - REGISTER: userId: {}", savedUser.getId());
         return UserResponse.fromEntity(savedUser);
     }
@@ -317,5 +329,48 @@ public class AuthServiceImpl implements AuthService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ForgotPasswordResetRequest request) {
+        String normalizedEmail = normalizeEmail(request.email());
+
+        if (!otpService.isOtpVerified(normalizedEmail, OtpPurpose.FORGOT_PASSWORD)) {
+            throw new InvalidRequestException("Email address has not been verified with OTP.");
+        }
+
+        User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedEmail));
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        otpService.consumeOtpVerifiedMarker(normalizedEmail, OtpPurpose.FORGOT_PASSWORD);
+        log.info("[VelaWear/Auth] - PASSWORD_RESET: email: {}", normalizedEmail);
+    }
+
+    @Override
+    @Transactional
+    public void changeEmail(String currentEmail, ChangeEmailRequest request) {
+        String normalizedCurrent = normalizeEmail(currentEmail);
+        String normalizedNew = normalizeEmail(request.newEmail());
+
+        User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedCurrent)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedCurrent));
+
+        if (userRepository.existsByEmail(normalizedNew)) {
+            throw new DuplicateResourceException("User", "email", normalizedNew);
+        }
+
+        if (!otpService.isOtpVerified(normalizedNew, OtpPurpose.CHANGE_EMAIL)) {
+            throw new InvalidRequestException("New email address has not been verified with OTP.");
+        }
+
+        user.setEmail(normalizedNew);
+        userRepository.save(user);
+
+        otpService.consumeOtpVerifiedMarker(normalizedNew, OtpPurpose.CHANGE_EMAIL);
+        log.info("[VelaWear/Auth] - CHANGE_EMAIL: from: {}, to: {}", normalizedCurrent, normalizedNew);
     }
 }

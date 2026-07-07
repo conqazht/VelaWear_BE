@@ -18,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.category.CategoryRepository;
+import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
@@ -32,11 +34,25 @@ class ProductServiceImplTest {
     @Mock
     private ProductTranslationRepository productTranslationRepository;
 
+    @Mock
+    private ProductImageRepository productImageRepository;
+
+    @Mock
+    private CategoryRepository categoryRepository;
+
+    @Mock
+    private CategoryTranslationRepository categoryTranslationRepository;
+
     private ProductServiceImpl productService;
 
     @BeforeEach
     void setUp() {
-        productService = new ProductServiceImpl(productRepository, productTranslationRepository);
+        productService = new ProductServiceImpl(
+                productRepository,
+                productTranslationRepository,
+                productImageRepository,
+                categoryRepository,
+                categoryTranslationRepository);
     }
 
     @Nested

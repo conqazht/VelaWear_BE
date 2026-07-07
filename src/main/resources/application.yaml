@@ -15,8 +15,14 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  docker:
+    compose:
+      enabled: true
+      file: docker-compose.yml
+      lifecycle-management: start-and-stop
   flyway:
     locations: classpath:db/migration
+    encoding: UTF-8
   data:
     web:
       pageable:
@@ -53,7 +59,16 @@ jwt:
   access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
+resend:
+  api-key: ${RESEND_API_KEY}
+  from-email: ${RESEND_FROM_EMAIL:onboarding@resend.dev}
+
 app:
+  otp:
+    ttl-seconds: 300
+    cooldown-seconds: 60
+    max-attempts: 5
+    verified-ttl-seconds: 300
   upload:
     base-dir: ./uploads
     url-prefix: /uploads
@@ -65,7 +80,8 @@ app:
       - webp
     allowed-folders:
       - avatars
-      - logos
+      - products
+      - reviews
 
 springdoc:
   api-docs:
