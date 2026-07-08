@@ -1,3 +1,10 @@
+### Fix Product Price Mismatch between Catalog and Detail Page
+
+- **Date/Time**: 2026-07-08T19:49:00+07:00
+- **Summary of Changes**: Updated ProductServiceImpl to query variants and identify the minimum salePrice or price for each product. Added price and salePrice to ProductResponse to expose it correctly to the frontend.
+- **Verification Performed**: mvnw clean compile (Backend) passed.
+- **Known Follow-ups**: None.
+
 # Project Status
 
 ## 2026-06-30
@@ -250,3 +257,4 @@
 - Custom-configured Swagger UI response interceptor to clear credentials from `localStorage` and programmatically log out of Swagger UI without page reload.
 - Handled Spring Data `PropertyReferenceException` and database-level `InvalidDataAccessApiUsageException` in `GlobalExceptionHandler` to gracefully return `400 Bad Request` instead of `500 Internal Server Error` on invalid query sorts.
 - Added Flyway migration `V5__seed_missing_permissions.sql` to seed all 23 missing REST endpoints permissions, correct invalid HTTP methods, and assign full permissions to the `ADMIN` role and logical sub-permissions to `MANAGER`, `STAFF`, and `USER` roles.
+
