@@ -42,6 +42,7 @@ import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
+import vn.conganh.commercial.feature.auth.oauth2.OAuth2LoginCodeService;
 import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
@@ -94,6 +95,9 @@ class AuthServiceImplTest {
     @Mock
     private OtpService otpService;
 
+    @Mock
+    private OAuth2LoginCodeService oauth2LoginCodeService;
+
     private AuthServiceImpl authService;
 
     @BeforeEach
@@ -113,7 +117,8 @@ class AuthServiceImplTest {
                 jwtConfig.refreshJwtDecoder(),
                 jwtProperties,
                 tokenBlacklistService,
-                otpService);
+                otpService,
+                oauth2LoginCodeService);
     }
 
     @Nested

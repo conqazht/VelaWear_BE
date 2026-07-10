@@ -1260,3 +1260,88 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
 | GET | `/reviews/order/{orderId}` | Bearer | Implemented | List reviews by order |
 | GET | `/reviews/order-item/{orderItemId}` | Bearer | Implemented | List reviews by order item |
 | POST | `/reviews` | Bearer | Implemented | Create review |
+
+---
+
+## 7. Checkout Implemented
+
+### POST /api/v1/checkout Bearer
+
+Process a new checkout transaction.
+Creates an order from the authenticated user's persisted cart, reserves stock, consumes coupon, and clears the user's cart.
+
+**Request Body:**
+
+`json
+{
+  "receiverName": "John Doe",
+  "receiverPhone": "0123456789",
+  "receiverAddress": "123 Main St, City",
+  "paymentMethod": "COD",
+  "shippingFee": 15.00,
+  "couponCode": "SUMMER10"
+}
+`
+
+Item quantities and product variant IDs are loaded from the user's cart on the backend. Client-submitted item totals are not accepted as checkout source of truth.
+
+**Success Response (201):**
+
+\\\json
+{
+  "statusCode": 201,
+  "data": {
+    "orderId": 1,
+    "orderCode": "VELA-A1B2C3D4",
+    "status": "PENDING",
+    "subtotal": 100.00,
+    "shippingFee": 15.00,
+    "discountAmount": 10.00,
+    "finalAmount": 105.00,
+    "receiverName": "John Doe",
+    "receiverPhone": "0123456789",
+    "receiverAddress": "123 Main St, City",
+    "paymentMethod": "COD",
+    "paymentStatus": "UNPAID",
+    "items": [],
+    "paymentId": null,
+    "createdAt": "2026-07-04T10:00:00Z"
+  },
+  "message": "Created",
+  "timestamp": "2026-07-04T10:00:00"
+}
+\\\
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| 400 | Validation failed (e.g. empty cart, invalid coupon code) |
+| 401 | Unauthorized / Missing Token |
+| 404 | User not found |
+| 409 | Insufficient Stock or Invalid Request State |
+
+---
+
+### POST /api/v1/checkout/{orderId}/cancel Bearer
+
+Cancel a pending order. Restores stock, releases coupon usage, and updates order status.
+
+**Success Response (200):**
+
+\\\json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Success",
+  "timestamp": "2026-07-04T10:05:00"
+}
+\\\
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| 400 | Invalid Order Transition (e.g., already completed) |
+| 403 | Order does not belong to the user |
+| 404 | Order not found |

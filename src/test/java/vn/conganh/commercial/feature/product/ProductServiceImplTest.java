@@ -3,10 +3,12 @@ package vn.conganh.commercial.feature.product;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +25,7 @@ import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Product - ProductServiceImpl")
@@ -43,6 +46,9 @@ class ProductServiceImplTest {
     @Mock
     private CategoryTranslationRepository categoryTranslationRepository;
 
+    @Mock
+    private ProductVariantRepository productVariantRepository;
+
     private ProductServiceImpl productService;
 
     @BeforeEach
@@ -52,7 +58,9 @@ class ProductServiceImplTest {
                 productTranslationRepository,
                 productImageRepository,
                 categoryRepository,
-                categoryTranslationRepository);
+                categoryTranslationRepository,
+                productVariantRepository);
+        lenient().when(productVariantRepository.findRepresentativePricesByProductIds(any())).thenReturn(List.of());
     }
 
     @Nested

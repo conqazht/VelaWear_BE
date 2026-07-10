@@ -127,7 +127,10 @@ VALUES
     ('VIEW_WISHLISTS', '/api/v1/wishlists', 'GET', 'WISHLIST'),
     ('VIEW_WISHLIST_DETAIL', '/api/v1/wishlists/{id}', 'GET', 'WISHLIST'),
     ('CREATE_WISHLIST', '/api/v1/wishlists', 'POST', 'WISHLIST'),
-    ('DELETE_WISHLIST', '/api/v1/wishlists/{id}', 'DELETE', 'WISHLIST')
+    ('DELETE_WISHLIST', '/api/v1/wishlists/{id}', 'DELETE', 'WISHLIST'),
+    ('VIEW_MY_WISHLISTS', '/api/v1/wishlists/me', 'GET', 'WISHLIST'),
+    ('CREATE_MY_WISHLIST', '/api/v1/wishlists/me/{productId}', 'POST', 'WISHLIST'),
+    ('DELETE_MY_WISHLIST', '/api/v1/wishlists/me/{productId}', 'DELETE', 'WISHLIST')
 ON CONFLICT (api_path, method) DO UPDATE
 SET
     name = EXCLUDED.name,
