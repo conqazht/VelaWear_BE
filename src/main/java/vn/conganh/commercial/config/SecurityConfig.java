@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
@@ -32,12 +33,16 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.feature.auth.oauth2.CookieOAuth2AuthorizationRequestRepository;
+import vn.conganh.commercial.feature.auth.oauth2.OAuth2AuthenticationFailureHandler;
+import vn.conganh.commercial.feature.auth.oauth2.OAuth2AuthenticationSuccessHandler;
 import vn.conganh.commercial.security.PermissionAuthorizationManager;
 import vn.conganh.commercial.security.TokenBlacklistService;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@EnableConfigurationProperties(OAuth2Properties.class)
 public class SecurityConfig {
    private static final String[] WHITELIST = {
             "/api/v1/auth/login",
@@ -47,6 +52,9 @@ public class SecurityConfig {
             "/api/v1/auth/otp/request",
             "/api/v1/auth/otp/verify",
             "/api/v1/auth/forgot-password/reset",
+            "/api/v1/auth/oauth2/exchange",
+            "/oauth2/**",
+            "/login/oauth2/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
@@ -62,7 +70,10 @@ public class SecurityConfig {
             AuthenticationEntryPoint authenticationEntryPoint,
             AccessDeniedHandler accessDeniedHandler,
             TokenBlacklistService tokenBlacklistService,
-            ObjectMapper objectMapper) throws Exception {
+            ObjectMapper objectMapper,
+            CookieOAuth2AuthorizationRequestRepository cookieOAuth2AuthorizationRequestRepository,
+            OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
+            OAuth2AuthenticationFailureHandler oAuth2AuthenticationFailureHandler) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -80,8 +91,18 @@ public class SecurityConfig {
                                 "/api/v1/brands/**",
                                 "/api/v1/product-variants",
                                 "/api/v1/product-variants/**").permitAll()
-                        .requestMatchers("/api/v1/auth/me", "/api/v1/auth/me/email").authenticated()
+                        .requestMatchers(
+                                "/api/v1/auth/me",
+                                "/api/v1/auth/me/email",
+                                "/api/v1/auth/me/password",
+                                "/api/v1/wishlists/me",
+                                "/api/v1/wishlists/me/**").authenticated()
                         .anyRequest().access(permissionAuthorizationManager))
+                .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(endpoint -> endpoint
+                                .authorizationRequestRepository(cookieOAuth2AuthorizationRequestRepository))
+                        .successHandler(oAuth2AuthenticationSuccessHandler)
+                        .failureHandler(oAuth2AuthenticationFailureHandler))
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(Customizer.withDefaults())
                         .authenticationEntryPoint(authenticationEntryPoint)
