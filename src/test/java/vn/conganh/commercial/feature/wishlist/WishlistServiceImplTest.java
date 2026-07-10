@@ -26,7 +26,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
-import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductRepository;
@@ -69,7 +68,7 @@ class WishlistServiceImplTest {
             CreateWishlistRequest request = new CreateWishlistRequest(1L, 2L);
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
             when(productRepository.findById(2L)).thenReturn(Optional.of(product));
-            when(wishlistRepository.existsByUserIdAndProductId(1L, 2L)).thenReturn(false);
+            when(wishlistRepository.findByUserIdAndProductId(1L, 2L)).thenReturn(Optional.empty());
             when(wishlistRepository.save(any(Wishlist.class))).thenAnswer(invocation -> {
                 Wishlist wishlist = invocation.getArgument(0);
                 ReflectionTestUtils.setField(wishlist, "id", 10L);
@@ -88,18 +87,22 @@ class WishlistServiceImplTest {
         }
 
         @Test
-        @DisplayName("createWishlist - không gọi save khi wishlist đã tồn tại")
-        void createWishlist_duplicateWishlist_throwsInvalidRequestExceptionAndDoesNotSave() {
+        @DisplayName("createWishlist - trả về wishlist hiện có khi user đã lưu sản phẩm")
+        void createWishlist_duplicateWishlist_returnsExistingWishlistAndDoesNotSave() {
             // Arrange
             CreateWishlistRequest request = new CreateWishlistRequest(1L, 2L);
+            Wishlist existingWishlist = wishlist(10L, user(1L), product(2L));
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user(1L)));
             when(productRepository.findById(2L)).thenReturn(Optional.of(product(2L)));
-            when(wishlistRepository.existsByUserIdAndProductId(1L, 2L)).thenReturn(true);
+            when(wishlistRepository.findByUserIdAndProductId(1L, 2L)).thenReturn(Optional.of(existingWishlist));
 
-            // Act & Assert
-            assertThatThrownBy(() -> wishlistService.createWishlist(request))
-                    .isInstanceOf(InvalidRequestException.class)
-                    .hasMessageContaining("already exists");
+            // Act
+            WishlistResponse response = wishlistService.createWishlist(request);
+
+            // Assert
+            assertThat(response.id()).isEqualTo(10L);
+            assertThat(response.userId()).isEqualTo(1L);
+            assertThat(response.productId()).isEqualTo(2L);
             verify(wishlistRepository, never()).save(any());
         }
 

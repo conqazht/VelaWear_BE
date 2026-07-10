@@ -39,17 +39,17 @@ public class User {
     @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(name = "password", nullable = false, length = 255)
+    @Column(name = "password", length = 255)
     private String password;
 
-    @Column(name = "birth_date", nullable = false)
+    @Column(name = "birth_date")
     private LocalDate birthDate;
 
     @Column(name = "avatar", length = 500)
     private String avatar;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "gender", nullable = false, length = 20)
+    @Column(name = "gender", length = 20)
     private UserGender gender;
 
     @CreationTimestamp

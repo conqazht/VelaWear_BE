@@ -17,10 +17,16 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
+import vn.conganh.commercial.feature.category.Category;
+import vn.conganh.commercial.feature.category.CategoryRepository;
+import vn.conganh.commercial.feature.category.CategoryTranslation;
+import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository.RepresentativePrice;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +34,10 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final ProductTranslationRepository productTranslationRepository;
+    private final ProductImageRepository productImageRepository;
+    private final CategoryRepository categoryRepository;
+    private final CategoryTranslationRepository categoryTranslationRepository;
+    private final ProductVariantRepository productVariantRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -45,9 +55,40 @@ public class ProductServiceImpl implements ProductService {
         Map<Long, ProductTranslation> translations = loadTranslations(
                 products.getContent().stream().map(Product::getId).toList(),
                 resolvedLocale);
-        return ResultPaginationDTO.fromPage(products.map(product -> ProductResponse.fromEntity(
-                product,
-                translations.get(product.getId()))));
+
+        List<Long> productIds = products.getContent().stream().map(Product::getId).toList();
+        List<ProductImage> allImages = productImageRepository.findByProductIdIn(productIds);
+        Map<Long, List<ProductImage>> imagesMap = allImages.stream()
+                .collect(Collectors.groupingBy(img -> img.getProduct().getId()));
+
+        List<Long> categoryIds = products.getContent().stream().map(Product::getCategoryId).distinct().toList();
+        List<Category> allCategories = categoryRepository.findAllById(categoryIds);
+        Map<Long, Category> categoryMap = allCategories.stream()
+                .collect(Collectors.toMap(Category::getId, Function.identity()));
+        
+        List<CategoryTranslation> catTranslations = categoryTranslationRepository.findByCategoryIdInAndLocaleCode(categoryIds, resolvedLocale);
+        Map<Long, CategoryTranslation> catTranslationMap = catTranslations.stream()
+                .collect(Collectors.toMap(CategoryTranslation::getCategoryId, Function.identity()));
+
+        Map<Long, RepresentativePrice> representativePrices = loadRepresentativePrices(productIds);
+
+        return ResultPaginationDTO.fromPage(products.map(product -> {
+            Category category = categoryMap.get(product.getCategoryId());
+            CategoryTranslation catTrans = category == null ? null : catTranslationMap.get(category.getId());
+            String catName = catTrans != null ? catTrans.getName() : (category != null ? category.getName() : null);
+            String catSlug = category != null ? category.getSlug() : null;
+            
+            RepresentativePrice representativePrice = representativePrices.get(product.getId());
+
+            return ProductResponse.fromEntity(
+                    product,
+                    translations.get(product.getId()),
+                    imagesMap.get(product.getId()),
+                    catName,
+                    catSlug,
+                    representativePrice == null ? null : representativePrice.getPrice(),
+                    representativePrice == null ? null : representativePrice.getSalePrice());
+        }));
     }
 
     @Override
@@ -60,7 +101,29 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id, String localeCode) {
         Product product = findProduct(id);
-        return ProductResponse.fromEntity(product, resolveTranslation(product.getId(), localeCode).orElse(null));
+        String resolvedLocale = normalizeLocale(localeCode);
+        List<ProductImage> images = productImageRepository.findByProductId(product.getId());
+        
+        String categoryName = null;
+        String categorySlug = null;
+        Optional<Category> categoryOpt = categoryRepository.findById(product.getCategoryId());
+        if (categoryOpt.isPresent()) {
+            Category category = categoryOpt.get();
+            categorySlug = category.getSlug();
+            Optional<CategoryTranslation> catTranslation = categoryTranslationRepository.findByCategoryIdAndLocaleCode(category.getId(), resolvedLocale);
+            categoryName = catTranslation.map(CategoryTranslation::getName).orElse(category.getName());
+        }
+        
+        RepresentativePrice representativePrice = findRepresentativePrice(product.getId());
+
+        return ProductResponse.fromEntity(
+                product,
+                resolveTranslation(product.getId(), localeCode).orElse(null),
+                images,
+                categoryName,
+                categorySlug,
+                representativePrice == null ? null : representativePrice.getPrice(),
+                representativePrice == null ? null : representativePrice.getSalePrice());
     }
 
     @Override
@@ -73,11 +136,54 @@ public class ProductServiceImpl implements ProductService {
         }
         if (translation.isPresent()) {
             Product product = findProduct(translation.get().getProductId());
-            return ProductResponse.fromEntity(product, resolveTranslation(product.getId(), resolvedLocale).orElse(null));
+            List<ProductImage> images = productImageRepository.findByProductId(product.getId());
+            
+            String categoryName = null;
+            String categorySlug = null;
+            Optional<Category> categoryOpt = categoryRepository.findById(product.getCategoryId());
+            if (categoryOpt.isPresent()) {
+                Category category = categoryOpt.get();
+                categorySlug = category.getSlug();
+                Optional<CategoryTranslation> catTranslation = categoryTranslationRepository.findByCategoryIdAndLocaleCode(category.getId(), resolvedLocale);
+                categoryName = catTranslation.map(CategoryTranslation::getName).orElse(category.getName());
+            }
+            
+            RepresentativePrice representativePrice = findRepresentativePrice(product.getId());
+
+            return ProductResponse.fromEntity(
+                    product,
+                    resolveTranslation(product.getId(), resolvedLocale).orElse(null),
+                    images,
+                    categoryName,
+                    categorySlug,
+                    representativePrice == null ? null : representativePrice.getPrice(),
+                    representativePrice == null ? null : representativePrice.getSalePrice());
         }
 
-        return ProductResponse.fromEntity(productRepository.findBySlugAndDeletedAtIsNull(slug)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", "slug", slug)));
+        Product product = productRepository.findBySlugAndDeletedAtIsNull(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "slug", slug));
+        List<ProductImage> images = productImageRepository.findByProductId(product.getId());
+        
+        String categoryName = null;
+        String categorySlug = null;
+        Optional<Category> categoryOpt = categoryRepository.findById(product.getCategoryId());
+        if (categoryOpt.isPresent()) {
+            Category category = categoryOpt.get();
+            categorySlug = category.getSlug();
+            Optional<CategoryTranslation> catTranslation = categoryTranslationRepository.findByCategoryIdAndLocaleCode(category.getId(), resolvedLocale);
+            categoryName = catTranslation.map(CategoryTranslation::getName).orElse(category.getName());
+        }
+        
+        RepresentativePrice representativePrice = findRepresentativePrice(product.getId());
+
+        return ProductResponse.fromEntity(
+                product,
+                null,
+                images,
+                categoryName,
+                categorySlug,
+                representativePrice == null ? null : representativePrice.getPrice(),
+                representativePrice == null ? null : representativePrice.getSalePrice());
     }
 
     @Override
@@ -161,6 +267,18 @@ public class ProductServiceImpl implements ProductService {
             return translation;
         }
         return productTranslationRepository.findByProductIdAndLocaleCode(productId, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    private RepresentativePrice findRepresentativePrice(Long productId) {
+        return loadRepresentativePrices(List.of(productId)).get(productId);
+    }
+
+    private Map<Long, RepresentativePrice> loadRepresentativePrices(List<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        return productVariantRepository.findRepresentativePricesByProductIds(productIds).stream()
+                .collect(Collectors.toMap(RepresentativePrice::getProductId, Function.identity()));
     }
 
     private Map<Long, ProductTranslation> loadTranslations(List<Long> productIds, String localeCode) {

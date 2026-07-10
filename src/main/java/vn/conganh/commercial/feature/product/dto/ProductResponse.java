@@ -1,7 +1,9 @@
 package vn.conganh.commercial.feature.product.dto;
-
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import vn.conganh.commercial.feature.product.Product;
+import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductTranslation;
 
 public record ProductResponse(
@@ -19,14 +21,53 @@ public record ProductResponse(
         String seoDescription,
         String status,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String image,
+        String thumbnail,
+        List<String> images,
+        String categoryName,
+        String categorySlug,
+        BigDecimal price,
+        BigDecimal salePrice
 ) {
 
     public static ProductResponse fromEntity(Product product) {
-        return fromEntity(product, null);
+        return fromEntity(product, null, null, null, null, null, null);
     }
 
     public static ProductResponse fromEntity(Product product, ProductTranslation translation) {
+        return fromEntity(product, translation, null, null, null, null, null);
+    }
+
+    public static ProductResponse fromEntity(Product product, ProductTranslation translation, List<ProductImage> images) {
+        return fromEntity(product, translation, images, null, null, null, null);
+    }
+
+    public static ProductResponse fromEntity(
+            Product product,
+            ProductTranslation translation,
+            List<ProductImage> images,
+            String categoryName,
+            String categorySlug,
+            BigDecimal price,
+            BigDecimal salePrice
+    ) {
+        String thumbnail = null;
+        String mainImage = null;
+        List<String> imagePaths = java.util.Collections.emptyList();
+        if (images != null && !images.isEmpty()) {
+            List<ProductImage> sorted = images.stream()
+                    .sorted(java.util.Comparator.comparing(ProductImage::getSortOrder))
+                    .toList();
+            imagePaths = sorted.stream().map(ProductImage::getImage).toList();
+            thumbnail = sorted.stream()
+                    .filter(ProductImage::getIsThumbnail)
+                    .map(ProductImage::getImage)
+                    .findFirst()
+                    .orElse(imagePaths.get(0));
+            mainImage = thumbnail;
+        }
+
         return new ProductResponse(
                 product.getId(),
                 product.getCategoryId(),
@@ -42,7 +83,14 @@ public record ProductResponse(
                 translation == null ? product.getDescription() : translation.getSeoDescription(),
                 product.getStatus(),
                 product.getCreatedAt(),
-                product.getUpdatedAt());
+                product.getUpdatedAt(),
+                mainImage,
+                thumbnail,
+                imagePaths,
+                categoryName,
+                categorySlug,
+                price,
+                salePrice);
     }
 
     private static String value(String translated, String fallback) {

@@ -7,7 +7,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
-import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductRepository;
@@ -17,6 +16,8 @@ import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistFilterRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 import vn.conganh.commercial.util.FilterSpecifications;
+
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -59,6 +60,14 @@ public class WishlistServiceImpl implements WishlistService {
 
     @Override
     @Transactional(readOnly = true)
+    public ResultPaginationDTO getMyWishlists(String email, Pageable pageable) {
+        User user = findUserByEmail(email);
+        return ResultPaginationDTO.fromPage(wishlistRepository.findByUserId(user.getId(), pageable)
+                .map(WishlistResponse::fromEntity));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public WishlistResponse getWishlistById(Long id) {
         return WishlistResponse.fromEntity(findWishlist(id));
     }
@@ -69,8 +78,27 @@ public class WishlistServiceImpl implements WishlistService {
         User user = findUser(request.userId());
         Product product = findProduct(request.productId());
 
-        if (wishlistRepository.existsByUserIdAndProductId(request.userId(), request.productId())) {
-            throw new InvalidRequestException("Wishlist entry already exists for this user and product");
+        Optional<Wishlist> existingWishlist = wishlistRepository.findByUserIdAndProductId(request.userId(), request.productId());
+        if (existingWishlist.isPresent()) {
+            return WishlistResponse.fromEntity(existingWishlist.get());
+        }
+
+        Wishlist wishlist = new Wishlist();
+        wishlist.setUser(user);
+        wishlist.setProduct(product);
+
+        return WishlistResponse.fromEntity(wishlistRepository.save(wishlist));
+    }
+
+    @Override
+    @Transactional
+    public WishlistResponse createMyWishlist(String email, Long productId) {
+        User user = findUserByEmail(email);
+        Product product = findProduct(productId);
+
+        Optional<Wishlist> existingWishlist = wishlistRepository.findByUserIdAndProductId(user.getId(), productId);
+        if (existingWishlist.isPresent()) {
+            return WishlistResponse.fromEntity(existingWishlist.get());
         }
 
         Wishlist wishlist = new Wishlist();
@@ -86,6 +114,14 @@ public class WishlistServiceImpl implements WishlistService {
         wishlistRepository.delete(findWishlist(id));
     }
 
+    @Override
+    @Transactional
+    public void deleteMyWishlist(String email, Long productId) {
+        User user = findUserByEmail(email);
+        wishlistRepository.findByUserIdAndProductId(user.getId(), productId)
+                .ifPresent(wishlistRepository::delete);
+    }
+
     private Wishlist findWishlist(Long id) {
         return wishlistRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Wishlist", "id", id));
@@ -94,6 +130,11 @@ public class WishlistServiceImpl implements WishlistService {
     private User findUser(Long id) {
         return userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+    }
+
+    private User findUserByEmail(String email) {
+        return userRepository.findByEmailAndDeletedAtIsNull(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
     }
 
     private Product findProduct(Long id) {

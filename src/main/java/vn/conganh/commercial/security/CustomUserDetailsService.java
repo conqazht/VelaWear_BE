@@ -20,6 +20,9 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        if (user.getPassword() == null || user.getPassword().isBlank()) {
+            throw new UsernameNotFoundException("Password login is not enabled for this account");
+        }
 
         List<SimpleGrantedAuthority> authorities = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getName()))

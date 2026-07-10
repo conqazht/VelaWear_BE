@@ -32,9 +32,13 @@ Public endpoints:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/login` | Login and receive access/refresh tokens |
-| POST | `/api/v1/auth/register` | Register customer/user account |
+| POST | `/api/v1/auth/register` | Register customer/user account (requires REGISTER OTP) |
 | POST | `/api/v1/auth/refresh` | Rotate refresh token and issue new access token |
 | POST | `/api/v1/auth/logout` | Revoke refresh token |
+| POST | `/api/v1/auth/otp/request` | Request an OTP code via email |
+| POST | `/api/v1/auth/otp/verify` | Verify email OTP code |
+| POST | `/api/v1/auth/forgot-password/reset` | Reset password using verified OTP |
+| PUT | `/api/v1/auth/me/email` | Change email using verified OTP |
 | GET | `/actuator/health` | Health check |
 | GET | `/v3/api-docs/**` | OpenAPI docs |
 | GET | `/swagger-ui/**` | Swagger UI |
@@ -396,6 +400,112 @@ Get current authenticated user.
     ]
   },
   "message": "Success",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### POST /api/v1/auth/otp/request Public
+
+Request an OTP code via email.
+
+**Request Body:**
+
+```json
+{
+  "email": "customer@example.com",
+  "purpose": "REGISTER"
+}
+```
+
+Supported purpose values: `REGISTER`, `FORGOT_PASSWORD`, `CHANGE_EMAIL`.
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "OTP generated and sent successfully",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### POST /api/v1/auth/otp/verify Public
+
+Verify email OTP code.
+
+**Request Body:**
+
+```json
+{
+  "email": "customer@example.com",
+  "purpose": "REGISTER",
+  "code": "123456"
+}
+```
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "OTP verified successfully",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### POST /api/v1/auth/forgot-password/reset Public
+
+Reset password using verified OTP.
+
+**Request Body:**
+
+```json
+{
+  "email": "customer@example.com",
+  "newPassword": "newPassword123"
+}
+```
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Password reset successfully",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### PUT /api/v1/auth/me/email Bearer Implemented
+
+Change authenticated user's email using verified OTP (for the new email).
+
+**Request Body:**
+
+```json
+{
+  "newEmail": "newemail@example.com"
+}
+```
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Email updated successfully",
   "timestamp": "2026-06-14T21:00:00"
 }
 ```

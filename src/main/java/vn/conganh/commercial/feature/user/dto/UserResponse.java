@@ -16,6 +16,7 @@ public record UserResponse(
         UserGender gender,
         Instant createdAt,
         Instant updatedAt,
+        boolean hasPassword,
         List<RoleSummaryResponse> roles
 ) {
 
@@ -35,6 +36,7 @@ public record UserResponse(
                 user.getGender(),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
+                user.getPassword() != null && !user.getPassword().isBlank(),
                 roles);
     }
 

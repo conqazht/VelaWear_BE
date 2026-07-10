@@ -9,6 +9,7 @@ import java.util.List;
 import org.springframework.data.jpa.domain.Specification;
 import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.util.FilterSpecifications;
+import vn.conganh.commercial.feature.productvariant.ProductVariant;
 
 public final class ProductSpecification {
 
@@ -208,6 +209,38 @@ public final class ProductSpecification {
 
                         predicates.add(cb.or(coreMatch, translationMatch));
                     }
+                }
+
+                if (filter.colorId() != null || filter.sizeId() != null || filter.minPrice() != null || filter.maxPrice() != null) {
+                    Subquery<Long> variantSub = query.subquery(Long.class);
+                    Root<ProductVariant> variantRoot = variantSub.from(ProductVariant.class);
+                    variantSub.select(variantRoot.get("product").get("id"));
+
+                    List<Predicate> subPredicates = new ArrayList<>();
+                    subPredicates.add(cb.isNull(variantRoot.get("deletedAt")));
+                    subPredicates.add(cb.equal(variantRoot.get("status"), "ACTIVE"));
+
+                    if (filter.colorId() != null) {
+                        subPredicates.add(cb.equal(variantRoot.get("color").get("id"), filter.colorId()));
+                    }
+                    if (filter.sizeId() != null) {
+                        subPredicates.add(cb.equal(variantRoot.get("size").get("id"), filter.sizeId()));
+                    }
+
+                    if (filter.minPrice() != null || filter.maxPrice() != null) {
+                        jakarta.persistence.criteria.Expression<java.math.BigDecimal> activePrice =
+                                cb.coalesce(variantRoot.get("salePrice"), variantRoot.get("price"));
+
+                        if (filter.minPrice() != null) {
+                            subPredicates.add(cb.greaterThanOrEqualTo(activePrice, filter.minPrice()));
+                        }
+                        if (filter.maxPrice() != null) {
+                            subPredicates.add(cb.lessThanOrEqualTo(activePrice, filter.maxPrice()));
+                        }
+                    }
+
+                    variantSub.where(subPredicates.toArray(new Predicate[0]));
+                    predicates.add(from.get("id").in(variantSub));
                 }
             }
 

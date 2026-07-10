@@ -14,13 +14,18 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.config.JwtProperties;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.exception.UnauthorizedException;
+import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
+import vn.conganh.commercial.feature.auth.dto.ChangePasswordRequest;
+import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
+import vn.conganh.commercial.feature.auth.dto.OAuth2ExchangeRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
@@ -54,6 +59,23 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(@RequestBody @Valid RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(authService.register(request)));
+    }
+
+    @PostMapping("/oauth2/exchange")
+    @Operation(
+            summary = "Exchange OAuth2 login code",
+            description = "Exchanges a one-time OAuth2 login code for access and refresh tokens."
+    )
+    public ResponseEntity<ApiResponse<TokenResponse>> exchangeOAuth2Code(
+            @RequestBody @Valid OAuth2ExchangeRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        TokenResponse response = authService.exchangeOAuth2Code(
+                request,
+                httpRequest.getHeader("User-Agent"),
+                extractClientIp(httpRequest));
+        setRefreshTokenCookie(httpRequest, httpResponse, response.refreshToken());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/refresh")
@@ -93,6 +115,31 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(ApiResponse.success(authService.getMe(jwt.getSubject())));
+    }
+
+    @PostMapping("/forgot-password/reset")
+    @Operation(summary = "Reset password using verified OTP", description = "Resets the user's password if they have successfully verified the FORGOT_PASSWORD OTP.")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody @Valid ForgotPasswordResetRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), null, "Password reset successfully", java.time.LocalDateTime.now()));
+    }
+
+    @PutMapping("/me/email")
+    @Operation(summary = "Change email using verified OTP", description = "Changes the authenticated user's email if they have successfully verified the CHANGE_EMAIL OTP for the new email.")
+    public ResponseEntity<ApiResponse<Void>> changeEmail(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody @Valid ChangeEmailRequest request) {
+        authService.changeEmail(jwt.getSubject(), request);
+        return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), null, "Email updated successfully", java.time.LocalDateTime.now()));
+    }
+
+    @PutMapping("/me/password")
+    @Operation(summary = "Set or change password", description = "Sets a first password for OAuth-only users, or changes an existing password after checking the current password.")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody @Valid ChangePasswordRequest request) {
+        authService.changePassword(jwt.getSubject(), request);
+        return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), null, "Password updated successfully", java.time.LocalDateTime.now()));
     }
 
     private String extractRefreshToken(HttpServletRequest httpRequest) {

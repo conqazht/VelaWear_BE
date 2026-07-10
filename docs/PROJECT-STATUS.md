@@ -1,4 +1,30 @@
+### Fix Product Price Mismatch between Catalog and Detail Page
+
+- **Date/Time**: 2026-07-08T19:49:00+07:00
+- **Summary of Changes**: Updated ProductServiceImpl to query variants and identify the minimum salePrice or price for each product. Added price and salePrice to ProductResponse to expose it correctly to the frontend.
+- **Verification Performed**: mvnw clean compile (Backend) passed.
+- **Known Follow-ups**: None.
+
 # Project Status
+
+## 2026-06-30
+
+### Completed
+
+- Implemented Redis-backed OTP (One-Time Password) generation, validation, and verification markers.
+- Integrated Resend email provider with custom, responsive HTML templates for OTP delivery.
+- Enforced OTP verification for storefront user registration (`REGISTER` purpose).
+- Implemented forgot-password reset flow (`FORGOT_PASSWORD` purpose) and authenticated email changes (`CHANGE_EMAIL` purpose), both protected and consumed via OTP verified markers.
+- Added full suite of unit and integration tests covering OTP services, controllers, and protected auth endpoints.
+- Updated `API_SPEC.md` documentation to reflect the new public and private OTP endpoints.
+## 2026-07-06
+
+### Completed
+
+- **Database Seed Data Redesign**: Rebuilt the repeatable Flyway mock data migration (`src/main/resources/db/dev/R__3_dev_large_mock_data.sql`) to clean up old data, seed exactly 10 premium brands, 7 fashion categories with translations, 100 realistic category-aligned products with translations, and seed **exactly 4 detail images** per product. Grouped mock seed images by category to ensure correct item previews, and added precise overrides for white sneakers and brass key hook.
+- **UTF-8 Encoding for Flyway**: Added `encoding: UTF-8` to `spring.flyway` in `application.yaml` to prevent Vietnamese character corruption on Windows systems during db migration/seeding.
+- **Enhanced Product DTO Mappings**: Updated `ProductResponse` and `ProductServiceImpl` to batch-load and include `image`, `thumbnail`, `images` list, `categoryName`, and `categorySlug` in product detail/list API responses.
+- Verified backend compilability via `./mvnw compile`.
 
 ## 2026-06-29
 
@@ -231,3 +257,4 @@
 - Custom-configured Swagger UI response interceptor to clear credentials from `localStorage` and programmatically log out of Swagger UI without page reload.
 - Handled Spring Data `PropertyReferenceException` and database-level `InvalidDataAccessApiUsageException` in `GlobalExceptionHandler` to gracefully return `400 Bad Request` instead of `500 Internal Server Error` on invalid query sorts.
 - Added Flyway migration `V5__seed_missing_permissions.sql` to seed all 23 missing REST endpoints permissions, correct invalid HTTP methods, and assign full permissions to the `ADMIN` role and logical sub-permissions to `MANAGER`, `STAFF`, and `USER` roles.
+

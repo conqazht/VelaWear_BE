@@ -22,7 +22,7 @@ import vn.conganh.commercial.AuthenticatedIntegrationTest;
         "app.upload.url-prefix=/uploads",
         "app.upload.max-size-bytes=5242880",
         "app.upload.allowed-extensions=jpg,jpeg,png,webp",
-        "app.upload.allowed-folders=avatars,logos"
+        "app.upload.allowed-folders=avatars,products,reviews"
 })
 @DisplayName("Module File - FileController")
 class FileControllerTest extends AuthenticatedIntegrationTest {
