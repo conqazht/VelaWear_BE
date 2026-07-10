@@ -32,9 +32,12 @@ import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.exception.UnauthorizedException;
 import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
+import vn.conganh.commercial.feature.auth.dto.ChangePasswordRequest;
 import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
+import vn.conganh.commercial.feature.auth.dto.OAuth2ExchangeRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
+import vn.conganh.commercial.feature.auth.oauth2.OAuth2LoginCodeService;
 import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
@@ -72,6 +75,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProperties jwtProperties;
     private final TokenBlacklistService tokenBlacklistService;
     private final OtpService otpService;
+    private final OAuth2LoginCodeService oauth2LoginCodeService;
 
     public AuthServiceImpl(
             AuthenticationManager authenticationManager,
@@ -86,7 +90,8 @@ public class AuthServiceImpl implements AuthService {
             @Qualifier("refreshJwtDecoder") JwtDecoder refreshJwtDecoder,
             JwtProperties jwtProperties,
             TokenBlacklistService tokenBlacklistService,
-            OtpService otpService) {
+            OtpService otpService,
+            OAuth2LoginCodeService oauth2LoginCodeService) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -100,6 +105,7 @@ public class AuthServiceImpl implements AuthService {
         this.jwtProperties = jwtProperties;
         this.tokenBlacklistService = tokenBlacklistService;
         this.otpService = otpService;
+        this.oauth2LoginCodeService = oauth2LoginCodeService;
     }
 
     @Override
@@ -111,8 +117,15 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public TokenResponse authenticate(LoginRequest request, String deviceInfo, String ipAddress) {
+        String normalizedEmail = normalizeEmail(request.email());
+        userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+                .filter(user -> user.getPassword() == null || user.getPassword().isBlank())
+                .ifPresent(user -> {
+                    throw new UnauthorizedException("This account uses Google login. Please continue with Google.");
+                });
+
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+                new UsernamePasswordAuthenticationToken(normalizedEmail, request.password()));
 
         String email = authentication.getName();
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
@@ -121,16 +134,11 @@ public class AuthServiceImpl implements AuthService {
         List<String> roles = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
-        String accessToken = generateAccessToken(email, user.getId(), roles);
-        String refreshToken = createRefreshToken(user, deviceInfo, ipAddress);
+        TokenResponse response = issueTokens(user, roles, deviceInfo, ipAddress);
 
         log.info("[VelaWear/Auth] - LOGIN: userId: {}, email: {}", user.getId(), email);
 
-        return new TokenResponse(
-                accessToken,
-                refreshToken,
-                jwtProperties.accessTokenExpiration()
-        );
+        return response;
     }
 
     @Override
@@ -163,6 +171,20 @@ public class AuthServiceImpl implements AuthService {
         otpService.consumeOtpVerifiedMarker(normalizedEmail, OtpPurpose.REGISTER);
         log.info("[VelaWear/Auth] - REGISTER: userId: {}", savedUser.getId());
         return UserResponse.fromEntity(savedUser);
+    }
+
+    @Override
+    @Transactional
+    public TokenResponse exchangeOAuth2Code(OAuth2ExchangeRequest request, String deviceInfo, String ipAddress) {
+        Long userId = oauth2LoginCodeService.consume(request.code());
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new UnauthorizedException("OAuth2 login user is invalid"));
+        List<String> roles = userRepository.findRolesByUserId(user.getId()).stream()
+                .map(role -> "ROLE_" + role.getName())
+                .toList();
+        TokenResponse response = issueTokens(user, roles, deviceInfo, ipAddress);
+        log.info("[VelaWear/Auth] - OAUTH2_EXCHANGE: userId: {}, email: {}", user.getId(), user.getEmail());
+        return response;
     }
 
     @Override
@@ -227,6 +249,12 @@ public class AuthServiceImpl implements AuthService {
                 .map(UserResponse.RoleSummaryResponse::fromEntity)
                 .toList();
         return UserResponse.fromEntity(user, roles);
+    }
+
+    private TokenResponse issueTokens(User user, List<String> roles, String deviceInfo, String ipAddress) {
+        String accessToken = generateAccessToken(user.getEmail(), user.getId(), roles);
+        String refreshToken = createRefreshToken(user, deviceInfo, ipAddress);
+        return new TokenResponse(accessToken, refreshToken, jwtProperties.accessTokenExpiration());
     }
 
     private String generateAccessToken(String email, Long userId, List<String> roles) {
@@ -372,5 +400,30 @@ public class AuthServiceImpl implements AuthService {
 
         otpService.consumeOtpVerifiedMarker(normalizedNew, OtpPurpose.CHANGE_EMAIL);
         log.info("[VelaWear/Auth] - CHANGE_EMAIL: from: {}, to: {}", normalizedCurrent, normalizedNew);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(String currentEmail, ChangePasswordRequest request) {
+        String normalizedEmail = normalizeEmail(currentEmail);
+
+        User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedEmail));
+
+        boolean hasPassword = user.getPassword() != null && !user.getPassword().isBlank();
+        if (hasPassword) {
+            String currentPassword = request.currentPassword();
+            if (currentPassword == null || currentPassword.isBlank()) {
+                throw new InvalidRequestException("Current password is required.");
+            }
+            if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+                throw new UnauthorizedException("Current password is incorrect.");
+            }
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        log.info("[VelaWear/Auth] - CHANGE_PASSWORD: email: {}, hadPassword: {}", normalizedEmail, hasPassword);
     }
 }

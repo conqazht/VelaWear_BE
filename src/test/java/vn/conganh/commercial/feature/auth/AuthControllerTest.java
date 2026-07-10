@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
+import vn.conganh.commercial.feature.auth.dto.ChangePasswordRequest;
 import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
@@ -557,6 +558,59 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
             // Verify database updated
             User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
             assertThat(updatedUser.getEmail()).isEqualTo(newEmail);
+        }
+
+        @Test
+        @DisplayName("PUT /auth/me/password - 200: Google-only user sets first password without OTP")
+        void changePassword_googleOnlyUser_setsFirstPassword() throws Exception {
+            // Arrange
+            String email = "google-password@velawear.local";
+            User googleUser = user(email, "Temporary123!");
+            googleUser.setPassword(null);
+            User savedUser = userRepository.save(googleUser);
+
+            String token = tokenWithRoles(email, savedUser.getId(), List.of("ROLE_USER"));
+            ChangePasswordRequest request = new ChangePasswordRequest(null, "NewPassword123!");
+
+            // Act & Assert
+            mockMvc.perform(put("/api/v1/auth/me/password")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statusCode").value(200))
+                    .andExpect(jsonPath("$.message").value("Password updated successfully"));
+
+            User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+            assertThat(passwordEncoder.matches("NewPassword123!", updatedUser.getPassword())).isTrue();
+
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(new LoginRequest(email, "NewPassword123!"))))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("PUT /auth/me/password - 200: existing password user changes password with current password")
+        void changePassword_existingPassword_requiresCurrentPassword() throws Exception {
+            // Arrange
+            String email = "existing-password@velawear.local";
+            User savedUser = userRepository.save(user(email, "OldPassword123!"));
+
+            String token = tokenWithRoles(email, savedUser.getId(), List.of("ROLE_USER"));
+            ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
+
+            // Act & Assert
+            mockMvc.perform(put("/api/v1/auth/me/password")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statusCode").value(200))
+                    .andExpect(jsonPath("$.message").value("Password updated successfully"));
+
+            User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+            assertThat(passwordEncoder.matches("NewPassword123!", updatedUser.getPassword())).isTrue();
         }
     }
 }
