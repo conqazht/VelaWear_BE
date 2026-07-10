@@ -13,5 +13,9 @@ public record ProductFilterRequest(
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         LocalDate createdFrom,
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-        LocalDate createdTo
+        LocalDate createdTo,
+        Long colorId,
+        Long sizeId,
+        java.math.BigDecimal minPrice,
+        java.math.BigDecimal maxPrice
 ) {}

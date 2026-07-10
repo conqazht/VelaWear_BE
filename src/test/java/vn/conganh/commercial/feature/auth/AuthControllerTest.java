@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,11 +20,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
 import jakarta.servlet.http.Cookie;
+import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
+import vn.conganh.commercial.feature.auth.dto.ChangePasswordRequest;
+import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
@@ -51,6 +56,9 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
 
     @Nested
     @DisplayName("Happy path")
@@ -93,6 +101,9 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                     LocalDate.of(2000, 1, 1),
                     null,
                     UserGender.OTHER);
+
+            // Seed verified marker in Redis
+            redisTemplate.opsForValue().set("auth:otp:verified:REGISTER:auth.register@velawear.local", "true", 5, java.util.concurrent.TimeUnit.MINUTES);
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/register")
@@ -412,5 +423,194 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
         user.setBirthDate(LocalDate.of(2000, 1, 1));
         user.setGender(UserGender.OTHER);
         return user;
+    }
+
+    @Nested
+    @DisplayName("OTP Protected Auth Flows")
+    class OtpAuthFlows {
+
+        @Test
+        @DisplayName("POST /auth/register - 400: fails if email not verified with OTP")
+        void register_unverifiedEmail_fails() throws Exception {
+            // Arrange
+            RegisterRequest request = new RegisterRequest(
+                    "New User",
+                    "unverified@velawear.local",
+                    "Password123!",
+                    LocalDate.of(2000, 1, 1),
+                    null,
+                    UserGender.OTHER);
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/auth/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.statusCode").value(400))
+                    .andExpect(jsonPath("$.message").value("Email address has not been verified with OTP."));
+        }
+
+        @Test
+        @DisplayName("POST /auth/register - 201: succeeds if email verified with OTP")
+        void register_verifiedEmail_success() throws Exception {
+            // Arrange
+            String email = "verified-register@velawear.local";
+            RegisterRequest request = new RegisterRequest(
+                    "New User",
+                    email,
+                    "Password123!",
+                    LocalDate.of(2000, 1, 1),
+                    null,
+                    UserGender.OTHER);
+
+            // Seed verified marker in Redis
+            redisTemplate.opsForValue().set("auth:otp:verified:REGISTER:" + email, "true", 5, java.util.concurrent.TimeUnit.MINUTES);
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/auth/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.statusCode").value(201))
+                    .andExpect(jsonPath("$.data.email").value(email));
+
+            // Verify marker consumed
+            assertThat(redisTemplate.hasKey("auth:otp:verified:REGISTER:" + email)).isFalse();
+        }
+
+        @Test
+        @DisplayName("POST /auth/forgot-password/reset - 400: fails if email not verified with OTP")
+        void forgotPassword_unverifiedEmail_fails() throws Exception {
+            // Arrange
+            userRepository.save(user("unverified-forgot@velawear.local", "OldPassword123!"));
+            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest(
+                    "unverified-forgot@velawear.local",
+                    "NewPassword123!");
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/auth/forgot-password/reset")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.statusCode").value(400))
+                    .andExpect(jsonPath("$.message").value("Email address has not been verified with OTP."));
+        }
+
+        @Test
+        @DisplayName("POST /auth/forgot-password/reset - 200: succeeds if email verified with OTP")
+        void forgotPassword_verifiedEmail_success() throws Exception {
+            // Arrange
+            String email = "verified-forgot@velawear.local";
+            userRepository.save(user(email, "OldPassword123!"));
+            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest(
+                    email,
+                    "NewPassword123!");
+
+            // Seed verified marker in Redis
+            redisTemplate.opsForValue().set("auth:otp:verified:FORGOT_PASSWORD:" + email, "true", 5, java.util.concurrent.TimeUnit.MINUTES);
+
+            // Act & Assert
+            mockMvc.perform(post("/api/v1/auth/forgot-password/reset")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statusCode").value(200))
+                    .andExpect(jsonPath("$.message").value("Password reset successfully"));
+
+            // Verify marker consumed
+            assertThat(redisTemplate.hasKey("auth:otp:verified:FORGOT_PASSWORD:" + email)).isFalse();
+
+            // Verify user password updated by attempting login
+            LoginRequest loginRequest = new LoginRequest(email, "NewPassword123!");
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(loginRequest)))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("PUT /auth/me/email - 200: updates email successfully with verified OTP")
+        void changeEmail_verifiedNewEmail_success() throws Exception {
+            // Arrange
+            String currentEmail = "current-change@velawear.local";
+            String newEmail = "new-change@velawear.local";
+            User savedUser = userRepository.save(user(currentEmail, "Password123!"));
+
+            // Seed verified marker in Redis for the new email
+            redisTemplate.opsForValue().set("auth:otp:verified:CHANGE_EMAIL:" + newEmail, "true", 5, java.util.concurrent.TimeUnit.MINUTES);
+
+            // Generate user token
+            String token = tokenWithRoles(currentEmail, savedUser.getId(), List.of("ROLE_USER"));
+            ChangeEmailRequest request = new ChangeEmailRequest(newEmail);
+
+            // Act & Assert
+            mockMvc.perform(put("/api/v1/auth/me/email")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statusCode").value(200))
+                    .andExpect(jsonPath("$.message").value("Email updated successfully"));
+
+            // Verify marker consumed
+            assertThat(redisTemplate.hasKey("auth:otp:verified:CHANGE_EMAIL:" + newEmail)).isFalse();
+
+            // Verify database updated
+            User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+            assertThat(updatedUser.getEmail()).isEqualTo(newEmail);
+        }
+
+        @Test
+        @DisplayName("PUT /auth/me/password - 200: Google-only user sets first password without OTP")
+        void changePassword_googleOnlyUser_setsFirstPassword() throws Exception {
+            // Arrange
+            String email = "google-password@velawear.local";
+            User googleUser = user(email, "Temporary123!");
+            googleUser.setPassword(null);
+            User savedUser = userRepository.save(googleUser);
+
+            String token = tokenWithRoles(email, savedUser.getId(), List.of("ROLE_USER"));
+            ChangePasswordRequest request = new ChangePasswordRequest(null, "NewPassword123!");
+
+            // Act & Assert
+            mockMvc.perform(put("/api/v1/auth/me/password")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statusCode").value(200))
+                    .andExpect(jsonPath("$.message").value("Password updated successfully"));
+
+            User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+            assertThat(passwordEncoder.matches("NewPassword123!", updatedUser.getPassword())).isTrue();
+
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(new LoginRequest(email, "NewPassword123!"))))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("PUT /auth/me/password - 200: existing password user changes password with current password")
+        void changePassword_existingPassword_requiresCurrentPassword() throws Exception {
+            // Arrange
+            String email = "existing-password@velawear.local";
+            User savedUser = userRepository.save(user(email, "OldPassword123!"));
+
+            String token = tokenWithRoles(email, savedUser.getId(), List.of("ROLE_USER"));
+            ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
+
+            // Act & Assert
+            mockMvc.perform(put("/api/v1/auth/me/password")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statusCode").value(200))
+                    .andExpect(jsonPath("$.message").value("Password updated successfully"));
+
+            User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+            assertThat(passwordEncoder.matches("NewPassword123!", updatedUser.getPassword())).isTrue();
+        }
     }
 }

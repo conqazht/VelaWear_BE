@@ -1,13 +1,13 @@
 INSERT INTO users (full_name, email, password, birth_date, avatar, gender)
 VALUES
-    ('System Admin', 'admin@gmail.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
-    ('Example Admin', 'admin@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
-    ('Example Manager', 'manager@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
-    ('Example Staff', 'staff@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
-    ('Example User', 'user@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', NULL, 'OTHER'),
-    ('VelaWear Admin', 'admin@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1995-01-10', NULL, 'OTHER'),
-    ('VelaWear Staff', 'staff@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1998-05-20', NULL, 'FEMALE'),
-    ('Demo Customer', 'user@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '2000-09-15', NULL, 'MALE')
+    ('System Admin', 'admin@gmail.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', '/uploads/avatars/admin_avatar.png', 'OTHER'),
+    ('Example Admin', 'admin@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', '/uploads/avatars/admin_avatar.png', 'OTHER'),
+    ('Example Manager', 'manager@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', '/uploads/avatars/admin_avatar.png', 'OTHER'),
+    ('Example Staff', 'staff@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', '/uploads/avatars/staff_avatar.png', 'OTHER'),
+    ('Example User', 'user@example.com', '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq', DATE '1995-01-01', '/uploads/avatars/user_avatar.png', 'OTHER'),
+    ('VelaWear Admin', 'admin@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1995-01-10', '/uploads/avatars/admin_avatar.png', 'OTHER'),
+    ('VelaWear Staff', 'staff@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '1998-05-20', '/uploads/avatars/staff_avatar.png', 'FEMALE'),
+    ('Demo Customer', 'user@velawear.local', '$2a$12$jpmg9X/G2khv3X5405kl8erpqLDljNHfuACZGw4vlbcYlyBeLEQqS', DATE '2000-09-15', '/uploads/avatars/user_avatar.png', 'MALE')
 ON CONFLICT (email) DO UPDATE
 SET
     full_name = EXCLUDED.full_name,
@@ -127,7 +127,10 @@ VALUES
     ('VIEW_WISHLISTS', '/api/v1/wishlists', 'GET', 'WISHLIST'),
     ('VIEW_WISHLIST_DETAIL', '/api/v1/wishlists/{id}', 'GET', 'WISHLIST'),
     ('CREATE_WISHLIST', '/api/v1/wishlists', 'POST', 'WISHLIST'),
-    ('DELETE_WISHLIST', '/api/v1/wishlists/{id}', 'DELETE', 'WISHLIST')
+    ('DELETE_WISHLIST', '/api/v1/wishlists/{id}', 'DELETE', 'WISHLIST'),
+    ('VIEW_MY_WISHLISTS', '/api/v1/wishlists/me', 'GET', 'WISHLIST'),
+    ('CREATE_MY_WISHLIST', '/api/v1/wishlists/me/{productId}', 'POST', 'WISHLIST'),
+    ('DELETE_MY_WISHLIST', '/api/v1/wishlists/me/{productId}', 'DELETE', 'WISHLIST')
 ON CONFLICT (api_path, method) DO UPDATE
 SET
     name = EXCLUDED.name,
@@ -211,7 +214,12 @@ VALUES
     ('42', 14),
     ('43', 15),
     ('44', 16),
-    ('45', 17)
+    ('45', 17),
+    ('46', 18),
+    ('ONE SIZE', 101),
+    ('ADJUSTABLE', 102),
+    ('REGULAR', 103),
+    ('LARGE', 104)
 ON CONFLICT (name) DO UPDATE
 SET sort_order = EXCLUDED.sort_order;
 
@@ -304,29 +312,43 @@ SET
     size_id = EXCLUDED.size_id,
     status = EXCLUDED.status;
 
+DELETE FROM product_images WHERE product_id IN (
+    SELECT id FROM products WHERE slug IN ('essential-cotton-tee', 'urban-linen-dress')
+) AND variant_id IS NULL;
+
+-- Essential Cotton Tee
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/images/dev/essential-cotton-tee.jpg', TRUE, 1
-FROM products p
-WHERE p.slug = 'essential-cotton-tee'
-  AND NOT EXISTS (
-      SELECT 1
-      FROM product_images pi
-      WHERE pi.product_id = p.id
-        AND pi.variant_id IS NULL
-        AND pi.is_thumbnail = TRUE
-  );
+SELECT p.id, NULL, '/uploads/products/artisanal_fashion_product_shot_for_vela_wear._a_premium_garment_in_crisp_white.png', TRUE, 1
+FROM products p WHERE p.slug = 'essential-cotton-tee';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/images/dev/urban-linen-dress.jpg', TRUE, 1
-FROM products p
-WHERE p.slug = 'urban-linen-dress'
-  AND NOT EXISTS (
-      SELECT 1
-      FROM product_images pi
-      WHERE pi.product_id = p.id
-        AND pi.variant_id IS NULL
-        AND pi.is_thumbnail = TRUE
-  );
+SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_artisanal_crisp_white_ffffff_linen.png', FALSE, 2
+FROM products p WHERE p.slug = 'essential-cotton-tee';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/high_end_fashion_editorial_for_vela_wear._a_male_model_wearing_crisp_white.png', FALSE, 3
+FROM products p WHERE p.slug = 'essential-cotton-tee';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_crisp_white_ffffff_linen_shirt_and.png', FALSE, 4
+FROM products p WHERE p.slug = 'essential-cotton-tee';
+
+-- Urban Linen Dress
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_sand_beige_d8cab8_artisanal_dress.png', TRUE, 1
+FROM products p WHERE p.slug = 'urban-linen-dress';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/individual_product_shot_of_the_back_view_of_a_luxury_minimalist_sand_beige.png', FALSE, 2
+FROM products p WHERE p.slug = 'urban-linen-dress';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/professional_studio_photography_of_an_artisanal_garment_in_warm_sand_beige.png', FALSE, 3
+FROM products p WHERE p.slug = 'urban-linen-dress';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, NULL, '/uploads/products/product_detail_gallery_set_for_a_luxury_minimalist_sand_beige_d8cab8_linen.png', FALSE, 4
+FROM products p WHERE p.slug = 'urban-linen-dress';
 
 INSERT INTO product_attributes (product_id, name, value)
 SELECT p.id, 'Material', '100% cotton'
@@ -504,7 +526,7 @@ SET
     comment = EXCLUDED.comment;
 
 INSERT INTO review_images (review_id, image)
-SELECT r.id, '/images/dev/reviews/essential-cotton-tee-review.jpg'
+SELECT r.id, '/uploads/reviews/essential-cotton-tee-review.png'
 FROM reviews r
 JOIN users u ON u.id = r.user_id
 JOIN order_items oi ON oi.id = r.order_item_id
@@ -515,7 +537,7 @@ WHERE u.email = 'user@velawear.local'
       SELECT 1
       FROM review_images ri
       WHERE ri.review_id = r.id
-        AND ri.image = '/images/dev/reviews/essential-cotton-tee-review.jpg'
+        AND ri.image = '/uploads/reviews/essential-cotton-tee-review.png'
   );
 
 INSERT INTO inventory_logs (variant_id, change_quantity, type, reason)

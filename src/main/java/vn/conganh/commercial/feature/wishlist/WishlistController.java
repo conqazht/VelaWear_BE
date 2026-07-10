@@ -7,6 +7,8 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,6 +35,29 @@ public class WishlistController {
             @ParameterObject WishlistFilterRequest filter,
             @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(wishlistService.getAllWishlists(filter, pageable)));
+    }
+
+    @GetMapping(path = "/me")
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getMyWishlists(
+            @AuthenticationPrincipal Jwt jwt,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getMyWishlists(jwt.getSubject(), pageable)));
+    }
+
+    @PostMapping(path = "/me/{productId}")
+    public ResponseEntity<ApiResponse<WishlistResponse>> createMyWishlist(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long productId) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.created(wishlistService.createMyWishlist(jwt.getSubject(), productId)));
+    }
+
+    @DeleteMapping(path = "/me/{productId}")
+    public ResponseEntity<ApiResponse<Void>> deleteMyWishlist(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long productId) {
+        wishlistService.deleteMyWishlist(jwt.getSubject(), productId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @GetMapping(path = "/{id}")

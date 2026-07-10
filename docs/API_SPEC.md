@@ -32,9 +32,13 @@ Public endpoints:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/login` | Login and receive access/refresh tokens |
-| POST | `/api/v1/auth/register` | Register customer/user account |
+| POST | `/api/v1/auth/register` | Register customer/user account (requires REGISTER OTP) |
 | POST | `/api/v1/auth/refresh` | Rotate refresh token and issue new access token |
 | POST | `/api/v1/auth/logout` | Revoke refresh token |
+| POST | `/api/v1/auth/otp/request` | Request an OTP code via email |
+| POST | `/api/v1/auth/otp/verify` | Verify email OTP code |
+| POST | `/api/v1/auth/forgot-password/reset` | Reset password using verified OTP |
+| PUT | `/api/v1/auth/me/email` | Change email using verified OTP |
 | GET | `/actuator/health` | Health check |
 | GET | `/v3/api-docs/**` | OpenAPI docs |
 | GET | `/swagger-ui/**` | Swagger UI |
@@ -396,6 +400,112 @@ Get current authenticated user.
     ]
   },
   "message": "Success",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### POST /api/v1/auth/otp/request Public
+
+Request an OTP code via email.
+
+**Request Body:**
+
+```json
+{
+  "email": "customer@example.com",
+  "purpose": "REGISTER"
+}
+```
+
+Supported purpose values: `REGISTER`, `FORGOT_PASSWORD`, `CHANGE_EMAIL`.
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "OTP generated and sent successfully",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### POST /api/v1/auth/otp/verify Public
+
+Verify email OTP code.
+
+**Request Body:**
+
+```json
+{
+  "email": "customer@example.com",
+  "purpose": "REGISTER",
+  "code": "123456"
+}
+```
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "OTP verified successfully",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### POST /api/v1/auth/forgot-password/reset Public
+
+Reset password using verified OTP.
+
+**Request Body:**
+
+```json
+{
+  "email": "customer@example.com",
+  "newPassword": "newPassword123"
+}
+```
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Password reset successfully",
+  "timestamp": "2026-06-14T21:00:00"
+}
+```
+
+---
+
+### PUT /api/v1/auth/me/email Bearer Implemented
+
+Change authenticated user's email using verified OTP (for the new email).
+
+**Request Body:**
+
+```json
+{
+  "newEmail": "newemail@example.com"
+}
+```
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Email updated successfully",
   "timestamp": "2026-06-14T21:00:00"
 }
 ```
@@ -1150,3 +1260,88 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
 | GET | `/reviews/order/{orderId}` | Bearer | Implemented | List reviews by order |
 | GET | `/reviews/order-item/{orderItemId}` | Bearer | Implemented | List reviews by order item |
 | POST | `/reviews` | Bearer | Implemented | Create review |
+
+---
+
+## 7. Checkout Implemented
+
+### POST /api/v1/checkout Bearer
+
+Process a new checkout transaction.
+Creates an order from the authenticated user's persisted cart, reserves stock, consumes coupon, and clears the user's cart.
+
+**Request Body:**
+
+`json
+{
+  "receiverName": "John Doe",
+  "receiverPhone": "0123456789",
+  "receiverAddress": "123 Main St, City",
+  "paymentMethod": "COD",
+  "shippingFee": 15.00,
+  "couponCode": "SUMMER10"
+}
+`
+
+Item quantities and product variant IDs are loaded from the user's cart on the backend. Client-submitted item totals are not accepted as checkout source of truth.
+
+**Success Response (201):**
+
+\\\json
+{
+  "statusCode": 201,
+  "data": {
+    "orderId": 1,
+    "orderCode": "VELA-A1B2C3D4",
+    "status": "PENDING",
+    "subtotal": 100.00,
+    "shippingFee": 15.00,
+    "discountAmount": 10.00,
+    "finalAmount": 105.00,
+    "receiverName": "John Doe",
+    "receiverPhone": "0123456789",
+    "receiverAddress": "123 Main St, City",
+    "paymentMethod": "COD",
+    "paymentStatus": "UNPAID",
+    "items": [],
+    "paymentId": null,
+    "createdAt": "2026-07-04T10:00:00Z"
+  },
+  "message": "Created",
+  "timestamp": "2026-07-04T10:00:00"
+}
+\\\
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| 400 | Validation failed (e.g. empty cart, invalid coupon code) |
+| 401 | Unauthorized / Missing Token |
+| 404 | User not found |
+| 409 | Insufficient Stock or Invalid Request State |
+
+---
+
+### POST /api/v1/checkout/{orderId}/cancel Bearer
+
+Cancel a pending order. Restores stock, releases coupon usage, and updates order status.
+
+**Success Response (200):**
+
+\\\json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Success",
+  "timestamp": "2026-07-04T10:05:00"
+}
+\\\
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| 400 | Invalid Order Transition (e.g., already completed) |
+| 403 | Order does not belong to the user |
+| 404 | Order not found |

@@ -123,7 +123,7 @@ class FileServiceImplTest {
                 "/uploads",
                 maxSizeBytes,
                 List.of("jpg", "png"),
-                List.of("avatars", "logos"));
+                List.of("avatars", "products", "reviews"));
     }
 
     private MockMultipartFile imageFile(String originalFileName, byte[] content) {

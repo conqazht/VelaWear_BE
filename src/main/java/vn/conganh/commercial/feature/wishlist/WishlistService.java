@@ -14,9 +14,15 @@ public interface WishlistService {
 
     ResultPaginationDTO getWishlistsByProductId(Long productId, WishlistFilterRequest filter, Pageable pageable);
 
+    ResultPaginationDTO getMyWishlists(String email, Pageable pageable);
+
     WishlistResponse getWishlistById(Long id);
 
     WishlistResponse createWishlist(CreateWishlistRequest request);
 
+    WishlistResponse createMyWishlist(String email, Long productId);
+
     void deleteWishlist(Long id);
+
+    void deleteMyWishlist(String email, Long productId);
 }
