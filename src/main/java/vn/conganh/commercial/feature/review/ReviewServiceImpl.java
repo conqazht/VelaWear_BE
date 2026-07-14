@@ -2,7 +2,12 @@ package vn.conganh.commercial.feature.review;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +16,8 @@ import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
+import vn.conganh.commercial.feature.productvariant.ProductVariant;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewFilterRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewResponse;
@@ -25,12 +32,13 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
     private final OrderItemRepository orderItemRepository;
+    private final ProductVariantRepository productVariantRepository;
 
     @Override
     @Transactional(readOnly = true)
     public ResultPaginationDTO getAllReviews(ReviewFilterRequest filter, Pageable pageable) {
-        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(filter)), pageable)
-                .map(this::toResponse));
+        return toResponsePage(reviewRepository.findAll(
+                Specification.where(ReviewSpecification.build(filter)), pageable));
     }
 
     @Override
@@ -41,8 +49,24 @@ public class ReviewServiceImpl implements ReviewService {
                 ? new ReviewFilterRequest(userId, null, null, null, null, null, null, null, null)
                 : filter.withUserId(userId);
 
-        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
-                .map(this::toResponse));
+        return toResponsePage(reviewRepository.findAll(
+                Specification.where(ReviewSpecification.build(scopedFilter)), pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ResultPaginationDTO getReviewsByProductId(
+            Long productId,
+            ReviewFilterRequest filter,
+            Pageable pageable) {
+        FilterSpecifications.requireMatchingPathId(
+                "productId", productId, filter == null ? null : filter.productId());
+        ReviewFilterRequest scopedFilter = filter == null
+                ? new ReviewFilterRequest(null, productId, null, null, null, null, null, null, null)
+                : filter.withProductId(productId);
+
+        return toResponsePage(reviewRepository.findAll(
+                Specification.where(ReviewSpecification.build(scopedFilter)), pageable));
     }
 
     @Override
@@ -53,8 +77,8 @@ public class ReviewServiceImpl implements ReviewService {
                 ? new ReviewFilterRequest(null, null, orderId, null, null, null, null, null, null)
                 : filter.withOrderId(orderId);
 
-        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
-                .map(this::toResponse));
+        return toResponsePage(reviewRepository.findAll(
+                Specification.where(ReviewSpecification.build(scopedFilter)), pageable));
     }
 
     @Override
@@ -65,8 +89,8 @@ public class ReviewServiceImpl implements ReviewService {
                 ? new ReviewFilterRequest(null, null, null, orderItemId, null, null, null, null, null)
                 : filter.withOrderItemId(orderItemId);
 
-        return ResultPaginationDTO.fromPage(reviewRepository.findAll(Specification.where(ReviewSpecification.build(scopedFilter)), pageable)
-                .map(this::toResponse));
+        return toResponsePage(reviewRepository.findAll(
+                Specification.where(ReviewSpecification.build(scopedFilter)), pageable));
     }
 
     @Override
@@ -101,10 +125,29 @@ public class ReviewServiceImpl implements ReviewService {
         review.setComment(request.comment());
 
         Review saved = reviewRepository.save(review);
-        return toResponse(saved);
+        ProductVariant variant = saved.getOrderItem().getVariantId() == null
+                ? null
+                : productVariantRepository.findByIdAndDeletedAtIsNull(saved.getOrderItem().getVariantId()).orElse(null);
+        return ReviewResponse.fromEntity(saved, variant);
     }
 
-    private ReviewResponse toResponse(Review review) {
-        return ReviewResponse.fromEntity(review);
+    private ResultPaginationDTO toResponsePage(Page<Review> reviews) {
+        List<Long> variantIds = reviews.getContent().stream()
+                .map(Review::getOrderItem)
+                .map(OrderItem::getVariantId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, ProductVariant> variantsById = variantIds.isEmpty()
+                ? Map.of()
+                : productVariantRepository.findAllByIdInAndDeletedAtIsNull(variantIds).stream()
+                        .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
+
+        return ResultPaginationDTO.fromPage(reviews.map(review -> {
+            Long variantId = review.getOrderItem().getVariantId();
+            return ReviewResponse.fromEntity(
+                    review,
+                    variantId == null ? null : variantsById.get(variantId));
+        }));
     }
 }

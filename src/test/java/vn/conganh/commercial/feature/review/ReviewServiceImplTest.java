@@ -32,6 +32,7 @@ import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewResponse;
 import vn.conganh.commercial.feature.user.User;
@@ -51,11 +52,18 @@ class ReviewServiceImplTest {
     @Mock
     private OrderItemRepository orderItemRepository;
 
+    @Mock
+    private ProductVariantRepository productVariantRepository;
+
     private ReviewServiceImpl reviewService;
 
     @BeforeEach
     void setUp() {
-        reviewService = new ReviewServiceImpl(reviewRepository, userRepository, orderItemRepository);
+        reviewService = new ReviewServiceImpl(
+                reviewRepository,
+                userRepository,
+                orderItemRepository,
+                productVariantRepository);
     }
 
     @Nested

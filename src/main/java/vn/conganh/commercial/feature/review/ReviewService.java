@@ -12,6 +12,8 @@ public interface ReviewService {
 
     ResultPaginationDTO getReviewsByUserId(Long userId, ReviewFilterRequest filter, Pageable pageable);
 
+    ResultPaginationDTO getReviewsByProductId(Long productId, ReviewFilterRequest filter, Pageable pageable);
+
     ResultPaginationDTO getReviewsByOrderId(Long orderId, ReviewFilterRequest filter, Pageable pageable);
 
     ResultPaginationDTO getReviewsByOrderItemId(Long orderItemId, ReviewFilterRequest filter, Pageable pageable);
