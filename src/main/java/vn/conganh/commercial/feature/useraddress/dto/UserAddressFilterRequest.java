@@ -5,7 +5,6 @@ public record UserAddressFilterRequest(
         String receiverName,
         String phone,
         String province,
-        String district,
         String ward,
         Boolean isDefault
 ) {
@@ -15,7 +14,6 @@ public record UserAddressFilterRequest(
                 receiverName,
                 phone,
                 province,
-                district,
                 ward,
                 isDefault);
     }

@@ -612,8 +612,8 @@ BEGIN
     FOR i IN 1..100 LOOP
         SELECT id INTO u_id FROM users ORDER BY RANDOM() LIMIT 1;
         IF u_id IS NOT NULL THEN
-            INSERT INTO user_addresses (user_id, receiver_name, phone, province, district, ward, address_detail, is_default)
-            VALUES (u_id, 'Receiver ' || i, '09' || LPAD(i::text, 8, '0'), 'Province ' || i, 'District ' || i, 'Ward ' || i, 'Address Detail ' || i, FALSE)
+            INSERT INTO user_addresses (user_id, receiver_name, phone, province, ward, address_detail, is_default)
+            VALUES (u_id, 'Receiver ' || i, '09' || LPAD(i::text, 8, '0'), 'Province ' || i, 'Ward ' || i, 'Address Detail ' || i, FALSE)
             ON CONFLICT DO NOTHING;
         END IF;
     END LOOP;

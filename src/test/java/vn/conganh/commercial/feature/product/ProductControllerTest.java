@@ -449,17 +449,17 @@ class ProductControllerTest extends AuthenticatedIntegrationTest {
     private SeededEntity seedUserAddress() {
         Long userId = insertUserRow(unique("address-user"));
         Long id = insertForId("""
-                insert into user_addresses (user_id, receiver_name, phone, province, district, ward,
+                insert into user_addresses (user_id, receiver_name, phone, province, ward,
                     address_detail, is_default)
-                values (?, 'Receiver', '0900000000', 'Ho Chi Minh', 'District 1', 'Ben Nghe', '123 Test', false)
+                values (?, 'Receiver', '0900000000', 'Ho Chi Minh', 'Ben Nghe', '123 Test', false)
                 returning id
                 """, userId);
         return new SeededEntity(id,
                 json("receiverName", "Updated Receiver", "phone", "0900000001", "province", "Ha Noi",
-                        "district", "Cau Giay", "ward", "Dich Vong", "addressDetail", "456 Test",
+                        "ward", "Dich Vong", "addressDetail", "456 Test",
                         "isDefault", false),
                 json("receiverName", "", "phone", "0900000001", "province", "Ha Noi",
-                        "district", "Cau Giay", "ward", "Dich Vong", "addressDetail", "456 Test",
+                        "ward", "Dich Vong", "addressDetail", "456 Test",
                         "isDefault", false));
     }
 

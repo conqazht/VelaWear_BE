@@ -8,7 +8,6 @@ public record UserAddressResponse(
         String receiverName,
         String phone,
         String province,
-        String district,
         String ward,
         String addressDetail,
         boolean isDefault
@@ -21,7 +20,6 @@ public record UserAddressResponse(
                 userAddress.getReceiverName(),
                 userAddress.getPhone(),
                 userAddress.getProvince(),
-                userAddress.getDistrict(),
                 userAddress.getWard(),
                 userAddress.getAddressDetail(),
                 userAddress.isDefault());

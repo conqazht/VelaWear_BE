@@ -231,7 +231,6 @@ class UserAddressServiceImplTest {
                 "Nguyen Van A",
                 "0123456789",
                 "Ho Chi Minh",
-                "District 1",
                 "Ben Nghe",
                 "123 Le Loi",
                 isDefault);
@@ -242,7 +241,6 @@ class UserAddressServiceImplTest {
                 "Tran Thi B",
                 "0987654321",
                 "Ha Noi",
-                "Cau Giay",
                 "Dich Vong",
                 "456 Xuan Thuy",
                 isDefault);
@@ -255,7 +253,6 @@ class UserAddressServiceImplTest {
         address.setReceiverName("Nguyen Van A");
         address.setPhone("0123456789");
         address.setProvince("Ho Chi Minh");
-        address.setDistrict("District 1");
         address.setWard("Ben Nghe");
         address.setAddressDetail("123 Le Loi");
         address.setDefault(isDefault);

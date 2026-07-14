@@ -190,14 +190,14 @@ WHERE p.slug = 'studio-canvas-tote'
 ON CONFLICT (product_id, name) DO UPDATE
 SET value = EXCLUDED.value;
 
-INSERT INTO user_addresses (user_id, receiver_name, phone, province, district, ward, address_detail, is_default)
-SELECT u.id, u.full_name, '0911111111', 'Ha Noi', 'Hoan Kiem', 'Hang Trong', '45 Trang Tien', TRUE
+INSERT INTO user_addresses (user_id, receiver_name, phone, province, ward, address_detail, is_default)
+SELECT u.id, u.full_name, '0911111111', 'Ha Noi', 'Hang Trong', '45 Trang Tien', TRUE
 FROM users u
 WHERE u.email = 'linh@velawear.local'
   AND NOT EXISTS (SELECT 1 FROM user_addresses ua WHERE ua.user_id = u.id AND ua.is_default = TRUE);
 
-INSERT INTO user_addresses (user_id, receiver_name, phone, province, district, ward, address_detail, is_default)
-SELECT u.id, u.full_name, '0922222222', 'Da Nang', 'Hai Chau', 'Thach Thang', '18 Bach Dang', TRUE
+INSERT INTO user_addresses (user_id, receiver_name, phone, province, ward, address_detail, is_default)
+SELECT u.id, u.full_name, '0922222222', 'Da Nang', 'Thach Thang', '18 Bach Dang', TRUE
 FROM users u
 WHERE u.email = 'minh@velawear.local'
   AND NOT EXISTS (SELECT 1 FROM user_addresses ua WHERE ua.user_id = u.id AND ua.is_default = TRUE);

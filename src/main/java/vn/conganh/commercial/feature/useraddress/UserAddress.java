@@ -41,9 +41,6 @@ public class UserAddress {
     private String province;
 
     @Column(nullable = false, length = 100)
-    private String district;
-
-    @Column(nullable = false, length = 100)
     private String ward;
 
     @Column(name = "address_detail", nullable = false, length = 255)

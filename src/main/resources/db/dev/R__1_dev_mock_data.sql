@@ -364,8 +364,8 @@ WHERE p.slug = 'urban-linen-dress'
 ON CONFLICT (product_id, name) DO UPDATE
 SET value = EXCLUDED.value;
 
-INSERT INTO user_addresses (user_id, receiver_name, phone, province, district, ward, address_detail, is_default)
-SELECT u.id, 'Demo Customer', '0900000000', 'Ho Chi Minh', 'District 1', 'Ben Nghe', '123 Le Loi', TRUE
+INSERT INTO user_addresses (user_id, receiver_name, phone, province, ward, address_detail, is_default)
+SELECT u.id, 'Demo Customer', '0900000000', 'Ho Chi Minh', 'Ben Nghe', '123 Le Loi', TRUE
 FROM users u
 WHERE u.email = 'user@velawear.local'
   AND NOT EXISTS (
