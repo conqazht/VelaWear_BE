@@ -21,7 +21,6 @@ public final class UserAddressSpecification {
                 FilterSpecifications.addContains(predicates, cb, from.get("receiverName"), filter.receiverName());
                 FilterSpecifications.addContains(predicates, cb, from.get("phone"), filter.phone());
                 FilterSpecifications.addContains(predicates, cb, from.get("province"), filter.province());
-                FilterSpecifications.addContains(predicates, cb, from.get("district"), filter.district());
                 FilterSpecifications.addContains(predicates, cb, from.get("ward"), filter.ward());
                 FilterSpecifications.addEquals(predicates, cb, from.get("isDefault"), filter.isDefault());
             }

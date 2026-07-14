@@ -35,7 +35,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     public ResultPaginationDTO getUserAddressesByUserId(Long userId, UserAddressFilterRequest filter, Pageable pageable) {
         FilterSpecifications.requireMatchingPathId("userId", userId, filter == null ? null : filter.userId());
         UserAddressFilterRequest scopedFilter = filter == null
-                ? new UserAddressFilterRequest(userId, null, null, null, null, null, null)
+                ? new UserAddressFilterRequest(userId, null, null, null, null, null)
                 : filter.withUserId(userId);
 
         return ResultPaginationDTO.fromPage(userAddressRepository.findAll(Specification.where(UserAddressSpecification.build(scopedFilter)), pageable)
@@ -58,7 +58,6 @@ public class UserAddressServiceImpl implements UserAddressService {
         userAddress.setReceiverName(request.receiverName());
         userAddress.setPhone(request.phone());
         userAddress.setProvince(request.province());
-        userAddress.setDistrict(request.district());
         userAddress.setWard(request.ward());
         userAddress.setAddressDetail(request.addressDetail());
 
@@ -77,7 +76,6 @@ public class UserAddressServiceImpl implements UserAddressService {
         userAddress.setReceiverName(request.receiverName());
         userAddress.setPhone(request.phone());
         userAddress.setProvince(request.province());
-        userAddress.setDistrict(request.district());
         userAddress.setWard(request.ward());
         userAddress.setAddressDetail(request.addressDetail());
 

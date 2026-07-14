@@ -21,10 +21,6 @@ public record CreateUserAddressRequest(
         @Size(max = 100, message = "Province must be at most 100 characters")
         String province,
 
-        @NotBlank(message = "District is required")
-        @Size(max = 100, message = "District must be at most 100 characters")
-        String district,
-
         @NotBlank(message = "Ward is required")
         @Size(max = 100, message = "Ward must be at most 100 characters")
         String ward,
