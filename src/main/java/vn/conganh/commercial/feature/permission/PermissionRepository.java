@@ -5,7 +5,6 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
-import vn.conganh.commercial.security.PermissionAccess;
 
 public interface PermissionRepository extends JpaRepository<Permission, Long>, JpaSpecificationExecutor<Permission> {
 
@@ -19,15 +18,12 @@ public interface PermissionRepository extends JpaRepository<Permission, Long>, J
             """)
     List<RolePermissionView> findAllRolePermissions();
 
-    // Cache DTO nhẹ thay vì entity Permission để tránh serialize quan hệ/proxy của JPA.
+    // Cache chuỗi primitive để nhiều app instance/DevTools classloader có thể dùng chung Redis an toàn.
     @Cacheable(value = "role_permissions", key = "#roleName")
     @Query("""
-            select new vn.conganh.commercial.security.PermissionAccess(
-                rhp.permission.apiPath,
-                rhp.permission.method
-            )
+            select concat(concat(rhp.permission.method, ' '), rhp.permission.apiPath)
             from RoleHasPermission rhp
             where rhp.role.name = :roleName
             """)
-    List<PermissionAccess> findPermissionsByRoleName(String roleName);
+    List<String> findPermissionKeysByRoleName(String roleName);
 }
