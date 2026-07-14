@@ -14,11 +14,15 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.cart.dto.CartFilterRequest;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
+import vn.conganh.commercial.feature.cart.dto.ReplaceCartItemsRequest;
 
 @RestController
 @RequestMapping("/api/v1/carts")
@@ -49,6 +53,18 @@ public class CartController {
     public ResponseEntity<ApiResponse<CartResponse>> createCart(@RequestBody @Valid CreateCartRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(cartService.createCart(request)));
+    }
+
+    @GetMapping(path = "/me")
+    public ResponseEntity<ApiResponse<CartResponse>> getMyCart(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(ApiResponse.success(cartService.getMyCart(jwt.getSubject())));
+    }
+
+    @PutMapping(path = "/me/items")
+    public ResponseEntity<ApiResponse<CartResponse>> replaceMyCartItems(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody @Valid ReplaceCartItemsRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(cartService.replaceMyCartItems(jwt.getSubject(), request)));
     }
 
     @DeleteMapping(path = "/{id}")
