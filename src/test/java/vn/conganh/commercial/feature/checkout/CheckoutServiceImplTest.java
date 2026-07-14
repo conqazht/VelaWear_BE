@@ -40,6 +40,7 @@ import vn.conganh.commercial.feature.order.OrderItemRepository;
 import vn.conganh.commercial.feature.order.OrderRepository;
 import vn.conganh.commercial.feature.order.OrderStatusHistoryRepository;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
+import vn.conganh.commercial.feature.payment.sepay.SePayService;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.productvariant.InventoryLogRepository;
@@ -70,6 +71,8 @@ class CheckoutServiceImplTest {
     private CartItemRepository cartItemRepository;
     @Mock
     private PaymentRepository paymentRepository;
+    @Mock
+    private SePayService sePayService;
     @Mock
     private InventoryLogRepository inventoryLogRepository;
     @Mock
@@ -256,6 +259,20 @@ class CheckoutServiceImplTest {
 
         verify(orderItemRepository, never()).findByOrderId(anyLong());
         verify(productVariantRepository, never()).restoreStock(anyLong(), anyInt());
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should reject cancellation after payment succeeds")
+    void cancelOrder_paidOrder_throwsException() {
+        order.setPaymentStatus("PAID");
+        when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+
+        assertThrows(InvalidRequestException.class,
+                () -> checkoutService.cancelOrder(1L, "test@example.com"));
+
+        verify(orderItemRepository, never()).findByOrderId(anyLong());
         verify(orderRepository, never()).save(any());
     }
 }

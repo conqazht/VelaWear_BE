@@ -60,6 +60,7 @@ public class SecurityConfig {
             "/swagger-ui.html",
             "/actuator/health",
             "/actuator/info",
+            "/api/v1/payments/sepay/ipn",
             "/uploads/**"
     };
 
