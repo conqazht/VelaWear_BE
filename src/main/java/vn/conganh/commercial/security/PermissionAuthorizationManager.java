@@ -36,12 +36,18 @@ public class PermissionAuthorizationManager implements AuthorizationManager<Requ
         for (String role : getUserRoles(authentication)) {
             String cleanRoleName = role.replace("ROLE_", "");
             // Method repository có @Cacheable, nên Redis được kiểm tra trước khi fallback về PostgreSQL.
-            List<PermissionAccess> permissions = permissionRepository.findPermissionsByRoleName(cleanRoleName);
+            List<String> permissions = permissionRepository.findPermissionKeysByRoleName(cleanRoleName);
             if (permissions != null) {
-                for (PermissionAccess permission : permissions) {
+                for (String permission : permissions) {
+                    int separator = permission.indexOf(' ');
+                    if (separator <= 0 || separator == permission.length() - 1) {
+                        continue;
+                    }
+                    String method = permission.substring(0, separator);
+                    String apiPath = permission.substring(separator + 1);
                     // Một permission chỉ cho phép truy cập khi khớp cả HTTP method và API path kiểu ant.
-                    if (permission.method().equalsIgnoreCase(httpMethod)
-                            && pathMatcher.match(permission.apiPath(), requestPath)) {
+                    if (method.equalsIgnoreCase(httpMethod)
+                            && pathMatcher.match(apiPath, requestPath)) {
                         return new AuthorizationDecision(true);
                     }
                 }

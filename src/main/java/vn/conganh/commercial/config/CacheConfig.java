@@ -24,7 +24,7 @@ public class CacheConfig {
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(24))
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                // PermissionAccess có Serializable, nên JDK serialization tránh rắc rối Jackson/JPA proxy ở đây.
+                // Giá trị cache chỉ chứa List<String>, tương thích giữa các app instance và DevTools restart.
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
                         new JdkSerializationRedisSerializer()));
 
