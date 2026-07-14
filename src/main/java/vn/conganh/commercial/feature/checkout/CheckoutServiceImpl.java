@@ -28,6 +28,7 @@ import vn.conganh.commercial.feature.cart.CartRepository;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutItemResponse;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutRequest;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutResponse;
+import vn.conganh.commercial.feature.checkout.dto.PaymentInitiationResponse;
 import vn.conganh.commercial.feature.coupon.Coupon;
 import vn.conganh.commercial.feature.coupon.CouponRepository;
 import vn.conganh.commercial.feature.coupon.CouponUsage;
@@ -40,6 +41,8 @@ import vn.conganh.commercial.feature.order.OrderStatusHistory;
 import vn.conganh.commercial.feature.order.OrderStatusHistoryRepository;
 import vn.conganh.commercial.feature.payment.Payment;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
+import vn.conganh.commercial.feature.payment.sepay.SePayCheckoutForm;
+import vn.conganh.commercial.feature.payment.sepay.SePayService;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
@@ -70,6 +73,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final InventoryLogRepository inventoryLogRepository;
     private final ProductImageRepository productImageRepository;
     private final UserRepository userRepository;
+    private final SePayService sePayService;
 
     @Override
     @Transactional
@@ -203,15 +207,33 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
 
         Long paymentId = null;
+        PaymentInitiationResponse paymentInitiation = null;
         boolean isOnlinePayment = !"COD".equalsIgnoreCase(request.paymentMethod());
         if (isOnlinePayment) {
+            PaymentProvider provider;
+            try {
+                provider = PaymentProvider.valueOf(request.paymentMethod().toUpperCase());
+            } catch (IllegalArgumentException exception) {
+                throw new InvalidRequestException("Unsupported payment method: " + request.paymentMethod());
+            }
+            if (provider != PaymentProvider.SEPAY) {
+                throw new InvalidRequestException("Only SEPAY is currently available for online payment");
+            }
+
             Payment payment = new Payment();
             payment.setOrder(order);
-            payment.setProvider(PaymentProvider.valueOf(request.paymentMethod().toUpperCase()));
+            payment.setProvider(provider);
             payment.setAmount(order.getFinalAmount());
             payment.setStatus(PaymentStatus.PENDING);
             payment = paymentRepository.save(payment);
             paymentId = payment.getId();
+
+            SePayCheckoutForm checkoutForm = sePayService.createCheckoutForm(order);
+            paymentInitiation = new PaymentInitiationResponse(
+                    provider.name(),
+                    "POST",
+                    checkoutForm.actionUrl(),
+                    checkoutForm.fields());
         }
 
         cartItemRepository.deleteByCartId(cart.getId());
@@ -221,7 +243,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .toList();
                 
         log.info("[VelaWear/Checkout] - ACTION: Checkout successful for user {}, order code {}", userEmail, orderCode);
-        return CheckoutResponse.fromEntity(order, itemResponses, paymentId);
+        return CheckoutResponse.fromEntity(order, itemResponses, paymentId, paymentInitiation);
     }
 
     @Override
@@ -241,6 +263,10 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         if ("CANCELLED".equals(order.getStatus())) {
             return;
+        }
+
+        if ("PAID".equals(order.getPaymentStatus())) {
+            throw new InvalidRequestException("A paid order cannot be cancelled");
         }
 
         if (!"PENDING".equals(order.getStatus())) {

@@ -20,12 +20,35 @@ public record CheckoutResponse(
         String paymentStatus,
         List<CheckoutItemResponse> items,
         Long paymentId,
+        PaymentInitiationResponse paymentInitiation,
         Instant createdAt
 ) {
 
+    public CheckoutResponse(
+            long orderId,
+            String orderCode,
+            String status,
+            BigDecimal subtotal,
+            BigDecimal shippingFee,
+            BigDecimal discountAmount,
+            BigDecimal finalAmount,
+            String receiverName,
+            String receiverPhone,
+            String receiverAddress,
+            String paymentMethod,
+            String paymentStatus,
+            List<CheckoutItemResponse> items,
+            Long paymentId,
+            Instant createdAt) {
+        this(orderId, orderCode, status, subtotal, shippingFee, discountAmount, finalAmount,
+                receiverName, receiverPhone, receiverAddress, paymentMethod, paymentStatus,
+                items, paymentId, null, createdAt);
+    }
+
     public static CheckoutResponse fromEntity(Order order,
                                               List<CheckoutItemResponse> items,
-                                              Long paymentId) {
+                                              Long paymentId,
+                                              PaymentInitiationResponse paymentInitiation) {
         return new CheckoutResponse(
                 order.getId(),
                 order.getOrderCode(),
@@ -41,6 +64,7 @@ public record CheckoutResponse(
                 order.getPaymentStatus(),
                 items,
                 paymentId,
+                paymentInitiation,
                 order.getCreatedAt()
         );
     }
