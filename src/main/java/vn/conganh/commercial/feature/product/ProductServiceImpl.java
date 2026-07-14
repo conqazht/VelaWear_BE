@@ -217,16 +217,20 @@ public class ProductServiceImpl implements ProductService {
         product.setDescription(request.description());
         product.setStatus(request.status());
         Product saved = productRepository.save(product);
-        ProductTranslation translation = saveDefaultTranslation(
-                saved,
-                request.name(),
-                saved.getSlug(),
-                request.description(),
-                request.description(),
-                null,
-                null,
-                request.name(),
-                request.description());
+        Optional<ProductTranslation> existingTranslation = productTranslationRepository
+                .findByProductIdAndLocaleCode(saved.getId(), CatalogLocaleResolver.DEFAULT_LOCALE);
+        ProductTranslation translation = existingTranslation.orElseGet(ProductTranslation::new);
+        translation.setProductId(saved.getId());
+        translation.setLocaleCode(CatalogLocaleResolver.DEFAULT_LOCALE);
+        translation.setName(request.name());
+        translation.setSlug(saved.getSlug());
+        translation.setDescription(request.description());
+        if (existingTranslation.isEmpty()) {
+            translation.setShortDescription(request.description());
+            translation.setSeoTitle(request.name());
+            translation.setSeoDescription(request.description());
+        }
+        translation = productTranslationRepository.save(translation);
         return ProductResponse.fromEntity(saved, translation);
     }
 
