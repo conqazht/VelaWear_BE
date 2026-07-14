@@ -42,6 +42,14 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByUserId(userId, filter, pageable)));
     }
 
+    @GetMapping(path = "/product/{productId}")
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByProduct(
+            @PathVariable Long productId,
+            @ParameterObject ReviewFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewsByProductId(productId, filter, pageable)));
+    }
+
     @GetMapping(path = "/order/{orderId}")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getReviewsByOrder(
             @PathVariable Long orderId,

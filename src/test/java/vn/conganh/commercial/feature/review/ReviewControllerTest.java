@@ -118,7 +118,21 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCode").value(200))
-                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)));
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data.result[0].productId").value(review.productId()))
+                .andExpect(jsonPath("$.data.result[0].productSlug").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("GET /product/{productId} - 200: khách xem review công khai theo sản phẩm")
+    void getReviewsByProduct_publicRequest_returnsList() throws Exception {
+        ReviewSeed review = seedReview();
+
+        mockMvc.perform(get(BASE_PATH + "/product/" + review.productId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.result[0].productId").value(review.productId()))
+                .andExpect(jsonPath("$.data.result[0].productSlug").isNotEmpty());
     }
 
     @Test
@@ -169,7 +183,7 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
                 values (?, ?, 5, 'Good product')
                 returning id
                 """, userId, orderItemId);
-        return new ReviewSeed(reviewId, userId, orderId, orderItemId);
+        return new ReviewSeed(reviewId, userId, orderId, orderItemId, productId);
     }
 
     private Long seedBrand() {
@@ -246,7 +260,7 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
         return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
-    private record ReviewSeed(Long reviewId, Long userId, Long orderId, Long orderItemId) {
+    private record ReviewSeed(Long reviewId, Long userId, Long orderId, Long orderItemId, Long productId) {
     }
 }
 

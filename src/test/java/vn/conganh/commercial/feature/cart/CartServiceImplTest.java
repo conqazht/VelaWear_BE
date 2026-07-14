@@ -30,6 +30,8 @@ import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
+import vn.conganh.commercial.feature.product.ProductImageRepository;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
@@ -42,13 +44,27 @@ class CartServiceImplTest {
     private CartRepository cartRepository;
 
     @Mock
+    private CartItemRepository cartItemRepository;
+
+    @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ProductVariantRepository productVariantRepository;
+
+    @Mock
+    private ProductImageRepository productImageRepository;
 
     private CartServiceImpl cartService;
 
     @BeforeEach
     void setUp() {
-        cartService = new CartServiceImpl(cartRepository, userRepository);
+        cartService = new CartServiceImpl(
+                cartRepository,
+                cartItemRepository,
+                userRepository,
+                productVariantRepository,
+                productImageRepository);
     }
 
     @Nested

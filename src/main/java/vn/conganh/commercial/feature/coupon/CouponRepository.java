@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.coupon;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -13,6 +14,11 @@ public interface CouponRepository extends JpaRepository<Coupon, Long>, JpaSpecif
     boolean existsByCode(String code);
 
     Optional<Coupon> findByCode(String code);
+
+    List<Coupon> findAllByStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByEndDateAsc(
+            vn.conganh.commercial.util.constant.CouponStatus status,
+            Instant startDate,
+            Instant endDate);
 
     @Modifying
     @Query("""

@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.coupon;
 
+import java.time.Instant;
 import org.springframework.data.jpa.domain.Specification;
 
 import lombok.RequiredArgsConstructor;
@@ -12,13 +13,20 @@ import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.coupon.dto.CouponFilterRequest;
 import vn.conganh.commercial.feature.coupon.dto.CouponResponse;
 import vn.conganh.commercial.feature.coupon.dto.CreateCouponRequest;
+import vn.conganh.commercial.feature.coupon.dto.CouponUsageResponse;
+import vn.conganh.commercial.feature.coupon.dto.MyCouponsResponse;
 import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
+import vn.conganh.commercial.feature.user.User;
+import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.util.constant.CouponStatus;
 
 @Service
 @RequiredArgsConstructor
 public class CouponServiceImpl implements CouponService {
 
     private final CouponRepository couponRepository;
+    private final CouponUsageRepository couponUsageRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -31,6 +39,25 @@ public class CouponServiceImpl implements CouponService {
     @Transactional(readOnly = true)
     public CouponResponse getCouponById(Long id) {
         return CouponResponse.fromEntity(findCoupon(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MyCouponsResponse getMyCoupons(String email) {
+        User user = userRepository.findByEmailAndDeletedAtIsNull(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+        Instant now = Instant.now();
+        var availableCoupons = couponRepository
+                .findAllByStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByEndDateAsc(
+                        CouponStatus.ACTIVE, now, now)
+                .stream()
+                .map(CouponResponse::fromEntity)
+                .toList();
+        var usageHistory = couponUsageRepository.findAllDetailedByUserId(user.getId())
+                .stream()
+                .map(CouponUsageResponse::fromEntity)
+                .toList();
+        return new MyCouponsResponse(availableCoupons, usageHistory);
     }
 
     @Override
