@@ -51,12 +51,14 @@ class OrderServiceImplTest {
 
     @Mock
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
+    @Mock
+    private OrderItemRepository orderItemRepository;
 
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderRepository, userRepository, orderStatusHistoryRepository);
+        orderService = new OrderServiceImpl(orderRepository, userRepository, orderStatusHistoryRepository, orderItemRepository);
     }
 
     @Nested

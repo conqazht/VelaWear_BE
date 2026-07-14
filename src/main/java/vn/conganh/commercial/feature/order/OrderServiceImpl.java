@@ -27,6 +27,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final OrderItemRepository orderItemRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -40,7 +41,7 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse getOrderById(Long id) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
-        return OrderResponse.fromEntity(order);
+        return toDetailedResponse(order);
     }
 
     @Override
@@ -48,7 +49,7 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse getOrderByOrderCode(String orderCode) {
         Order order = orderRepository.findByOrderCode(orderCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderCode", orderCode));
-        return OrderResponse.fromEntity(order);
+        return toDetailedResponse(order);
     }
 
     @Override
@@ -142,7 +143,7 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
         recordStatusHistory(savedOrder, previousStatus, request.status());
-        return OrderResponse.fromEntity(savedOrder);
+        return toDetailedResponse(savedOrder);
     }
 
     @Override
@@ -163,5 +164,9 @@ public class OrderServiceImpl implements OrderService {
         history.setFromStatus(previousStatus);
         history.setToStatus(requestedStatus);
         orderStatusHistoryRepository.save(history);
+    }
+
+    private OrderResponse toDetailedResponse(Order order) {
+        return OrderResponse.fromEntity(order, orderItemRepository.findByOrderId(order.getId()));
     }
 }
