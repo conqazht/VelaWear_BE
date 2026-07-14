@@ -7,6 +7,8 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +22,7 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.coupon.dto.CouponFilterRequest;
 import vn.conganh.commercial.feature.coupon.dto.CouponResponse;
 import vn.conganh.commercial.feature.coupon.dto.CreateCouponRequest;
+import vn.conganh.commercial.feature.coupon.dto.MyCouponsResponse;
 import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
 
 @RestController
@@ -35,6 +38,12 @@ public class CouponController {
             @ParameterObject CouponFilterRequest filter,
             @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(couponService.getAllCoupons(filter, pageable)));
+    }
+
+    @GetMapping(path = "/me")
+    public ResponseEntity<ApiResponse<MyCouponsResponse>> getMyCoupons(
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(ApiResponse.success(couponService.getMyCoupons(jwt.getSubject())));
     }
 
     @GetMapping(path = "/{id}")

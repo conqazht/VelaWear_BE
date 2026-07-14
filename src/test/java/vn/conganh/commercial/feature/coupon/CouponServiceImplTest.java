@@ -30,7 +30,11 @@ import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.coupon.dto.CouponResponse;
 import vn.conganh.commercial.feature.coupon.dto.CreateCouponRequest;
+import vn.conganh.commercial.feature.coupon.dto.MyCouponsResponse;
 import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
+import vn.conganh.commercial.feature.order.Order;
+import vn.conganh.commercial.feature.user.User;
+import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
 
@@ -41,11 +45,17 @@ class CouponServiceImplTest {
     @Mock
     private CouponRepository couponRepository;
 
+    @Mock
+    private CouponUsageRepository couponUsageRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
     private CouponServiceImpl couponService;
 
     @BeforeEach
     void setUp() {
-        couponService = new CouponServiceImpl(couponRepository);
+        couponService = new CouponServiceImpl(couponRepository, couponUsageRepository, userRepository);
     }
 
     @Nested
@@ -132,6 +142,39 @@ class CouponServiceImplTest {
             // Act & Assert
             assertThatThrownBy(() -> couponService.getCouponById(99L))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("getMyCoupons - trả coupon khả dụng và lịch sử sử dụng của đúng tài khoản")
+        void getMyCoupons_existingUsage_returnsOverview() {
+            User user = new User();
+            ReflectionTestUtils.setField(user, "id", 7L);
+            Coupon coupon = coupon(1L, "SALE10");
+            Order order = new Order();
+            ReflectionTestUtils.setField(order, "id", 9L);
+            order.setOrderCode("VW-TEST-9");
+            CouponUsage usage = new CouponUsage();
+            ReflectionTestUtils.setField(usage, "id", 11L);
+            usage.setCoupon(coupon);
+            usage.setUser(user);
+            usage.setOrder(order);
+            usage.setDiscountAmount(BigDecimal.valueOf(50000));
+            usage.setUsedAt(Instant.parse("2026-07-01T00:00:00Z"));
+
+            when(userRepository.findByEmailAndDeletedAtIsNull("customer@test.local"))
+                    .thenReturn(Optional.of(user));
+            when(couponRepository
+                    .findAllByStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByEndDateAsc(
+                            eq(CouponStatus.ACTIVE), any(Instant.class), any(Instant.class)))
+                    .thenReturn(List.of(coupon));
+            when(couponUsageRepository.findAllDetailedByUserId(7L)).thenReturn(List.of(usage));
+
+            MyCouponsResponse response = couponService.getMyCoupons("customer@test.local");
+
+            assertThat(response.availableCoupons()).extracting(CouponResponse::code).containsExactly("SALE10");
+            assertThat(response.usageHistory()).hasSize(1);
+            assertThat(response.usageHistory().getFirst().orderCode()).isEqualTo("VW-TEST-9");
+            assertThat(response.usageHistory().getFirst().discountAmount()).isEqualByComparingTo("50000");
         }
     }
 
