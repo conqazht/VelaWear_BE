@@ -144,6 +144,54 @@ class ProductServiceImplTest {
             assertThat(response.name()).isEqualTo("New");
             assertThat(response.slug()).isEqualTo("old");
             assertThat(response.status()).isEqualTo("INACTIVE");
+            assertThat(response.description()).isEqualTo("new desc");
+            assertThat(response.shortDescription()).isEqualTo("new desc");
+            assertThat(response.seoTitle()).isEqualTo("New");
+            assertThat(response.seoDescription()).isEqualTo("new desc");
+        }
+
+        @Test
+        @DisplayName("updateProduct - giữ nguyên metadata bản dịch vi không có trong request")
+        void updateProduct_existingVietnameseTranslation_preservesOmittedTranslationFields() {
+            // Arrange
+            Product product = product(1L, "Old", "old");
+            product.setDescription("Old core description");
+            ProductTranslation translation = productTranslation(1L, "vi", "Tên cũ", "old");
+            translation.setMaterial("Len merino");
+            translation.setCareInstruction("Giặt tay");
+            translation.setSeoTitle("SEO title được giữ");
+            translation.setSeoDescription("SEO description được giữ");
+            UpdateProductRequest request = new UpdateProductRequest(
+                    3L,
+                    4L,
+                    "New",
+                    "New description",
+                    "INACTIVE");
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi"))
+                    .thenReturn(Optional.of(translation));
+            when(productTranslationRepository.save(any(ProductTranslation.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Act
+            ProductResponse response = productService.updateProduct(1L, request);
+
+            // Assert
+            assertThat(product.getName()).isEqualTo("New");
+            assertThat(product.getDescription()).isEqualTo("New description");
+            assertThat(translation.getName()).isEqualTo("New");
+            assertThat(translation.getDescription()).isEqualTo("New description");
+            assertThat(translation.getShortDescription()).isEqualTo("Mô tả ngắn");
+            assertThat(translation.getMaterial()).isEqualTo("Len merino");
+            assertThat(translation.getCareInstruction()).isEqualTo("Giặt tay");
+            assertThat(translation.getSeoTitle()).isEqualTo("SEO title được giữ");
+            assertThat(translation.getSeoDescription()).isEqualTo("SEO description được giữ");
+            assertThat(response.shortDescription()).isEqualTo("Mô tả ngắn");
+            assertThat(response.material()).isEqualTo("Len merino");
+            assertThat(response.careInstruction()).isEqualTo("Giặt tay");
+            assertThat(response.seoTitle()).isEqualTo("SEO title được giữ");
+            assertThat(response.seoDescription()).isEqualTo("SEO description được giữ");
         }
     }
 

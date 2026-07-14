@@ -108,13 +108,17 @@ public class CategoryServiceImpl implements CategoryService {
         Category category = findCategory(id);
         apply(category, request.parentId(), request.name(), category.getSlug(), request.sortOrder(), request.status());
         Category saved = categoryRepository.save(category);
-        CategoryTranslation translation = saveDefaultTranslation(
-                saved,
-                request.name(),
-                saved.getSlug(),
-                null,
-                request.name(),
-                null);
+        Optional<CategoryTranslation> existingTranslation = categoryTranslationRepository
+                .findByCategoryIdAndLocaleCode(saved.getId(), CatalogLocaleResolver.DEFAULT_LOCALE);
+        CategoryTranslation translation = existingTranslation.orElseGet(CategoryTranslation::new);
+        translation.setCategoryId(saved.getId());
+        translation.setLocaleCode(CatalogLocaleResolver.DEFAULT_LOCALE);
+        translation.setName(request.name());
+        translation.setSlug(saved.getSlug());
+        if (existingTranslation.isEmpty()) {
+            translation.setSeoTitle(request.name());
+        }
+        translation = categoryTranslationRepository.save(translation);
         return CategoryResponse.fromEntity(saved, translation);
     }
 

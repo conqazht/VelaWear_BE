@@ -163,6 +163,43 @@ class CategoryServiceImplTest {
             assertThat(response.name()).isEqualTo("New");
             assertThat(response.slug()).isEqualTo("old");
             assertThat(response.status()).isEqualTo("INACTIVE");
+            assertThat(response.description()).isNull();
+            assertThat(response.seoTitle()).isEqualTo("New");
+            assertThat(response.seoDescription()).isNull();
+        }
+
+        @Test
+        @DisplayName("updateCategory - giữ nguyên metadata bản dịch vi không có trong request")
+        void updateCategory_existingVietnameseTranslation_preservesOmittedTranslationFields() {
+            // Arrange
+            Category category = category(1L, "Old", "old");
+            CategoryTranslation translation = categoryTranslation(1L, "vi", "Tên cũ", "old");
+            translation.setDescription("Mô tả được giữ");
+            translation.setSeoTitle("SEO title được giữ");
+            translation.setSeoDescription("SEO description được giữ");
+            UpdateCategoryRequest request = new UpdateCategoryRequest(2L, "New", 3, "INACTIVE");
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi"))
+                    .thenReturn(Optional.of(translation));
+            when(categoryTranslationRepository.save(any(CategoryTranslation.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Act
+            CategoryResponse response = categoryService.updateCategory(1L, request);
+
+            // Assert
+            assertThat(category.getParentId()).isEqualTo(2L);
+            assertThat(category.getName()).isEqualTo("New");
+            assertThat(category.getSortOrder()).isEqualTo(3);
+            assertThat(category.getStatus()).isEqualTo("INACTIVE");
+            assertThat(translation.getName()).isEqualTo("New");
+            assertThat(translation.getDescription()).isEqualTo("Mô tả được giữ");
+            assertThat(translation.getSeoTitle()).isEqualTo("SEO title được giữ");
+            assertThat(translation.getSeoDescription()).isEqualTo("SEO description được giữ");
+            assertThat(response.description()).isEqualTo("Mô tả được giữ");
+            assertThat(response.seoTitle()).isEqualTo("SEO title được giữ");
+            assertThat(response.seoDescription()).isEqualTo("SEO description được giữ");
         }
     }
 
