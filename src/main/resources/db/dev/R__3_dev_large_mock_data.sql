@@ -1,3 +1,36 @@
+-- Remove variants left by older random dev seeds from the four stable fixtures.
+-- Keeping only the declared SKUs prevents one product from retaining a mixture
+-- of apparel, numeric shoe, and accessory size systems after a repeatable rerun.
+DELETE FROM product_images WHERE variant_id IN (
+    SELECT pv.id
+    FROM product_variants pv
+    JOIN products p ON p.id = pv.product_id
+    WHERE p.slug IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
+      AND pv.sku NOT IN ('VW-TEE-BLK-M', 'VW-TEE-RED-L', 'UT-DRESS-YLW-S', 'NS-JACKET-PUR-M', 'SV-TOTE-ORG-OS')
+);
+
+DELETE FROM cart_items WHERE variant_id IN (
+    SELECT pv.id
+    FROM product_variants pv
+    JOIN products p ON p.id = pv.product_id
+    WHERE p.slug IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
+      AND pv.sku NOT IN ('VW-TEE-BLK-M', 'VW-TEE-RED-L', 'UT-DRESS-YLW-S', 'NS-JACKET-PUR-M', 'SV-TOTE-ORG-OS')
+);
+
+DELETE FROM inventory_logs WHERE variant_id IN (
+    SELECT pv.id
+    FROM product_variants pv
+    JOIN products p ON p.id = pv.product_id
+    WHERE p.slug IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
+      AND pv.sku NOT IN ('VW-TEE-BLK-M', 'VW-TEE-RED-L', 'UT-DRESS-YLW-S', 'NS-JACKET-PUR-M', 'SV-TOTE-ORG-OS')
+);
+
+DELETE FROM product_variants pv
+USING products p
+WHERE p.id = pv.product_id
+  AND p.slug IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
+  AND pv.sku NOT IN ('VW-TEE-BLK-M', 'VW-TEE-RED-L', 'UT-DRESS-YLW-S', 'NS-JACKET-PUR-M', 'SV-TOTE-ORG-OS');
+
 -- Clean up existing mock products/variants/categories/brands to ensure repeatable migrations
 DELETE FROM review_images WHERE review_id IN (
     SELECT id FROM reviews WHERE order_item_id IN (
@@ -109,6 +142,187 @@ SELECT id, 'vi', 'Giày', 'giay', 'Giày lười da, giày thể thao phong các
 INSERT INTO category_translations (category_id, locale_code, name, slug, description, seo_title, seo_description)
 SELECT id, 'vi', 'Phụ kiện', 'phu-kien', 'Túi tote da thật, thắt lưng da, mũ.', 'Phụ kiện', 'Phụ kiện thời trang tối giản' FROM categories WHERE slug = 'phu-kien' ON CONFLICT DO NOTHING;
 
+-- 3. Deterministic product catalog
+-- The previous catalog generated 100 products with RANDOM() colors/sizes and
+-- category-level images. It made reruns unstable and could not map a color to
+-- its actual image. Keep two focused fixtures here: trousers use apparel sizes
+-- only, while sneakers use numeric sizes only.
+INSERT INTO products (name, slug, description, category_id, brand_id, status)
+SELECT 'Tailored Black Trousers',
+       'tailored-black-trousers',
+       'Straight-leg tailored wool trousers with clean front pleats.',
+       c.id,
+       b.id,
+       'ACTIVE'
+FROM categories c
+CROSS JOIN brands b
+WHERE c.slug = 'quan'
+  AND b.slug = 'velawear'
+ON CONFLICT (slug) DO UPDATE
+SET name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    category_id = EXCLUDED.category_id,
+    brand_id = EXCLUDED.brand_id,
+    status = EXCLUDED.status;
+
+INSERT INTO products (name, slug, description, category_id, brand_id, status)
+SELECT 'Minimal White Leather Sneakers',
+       'minimal-white-leather-sneakers',
+       'Minimal low-top sneakers made from smooth white leather.',
+       c.id,
+       b.id,
+       'ACTIVE'
+FROM categories c
+CROSS JOIN brands b
+WHERE c.slug = 'giay'
+  AND b.slug = 'velawear'
+ON CONFLICT (slug) DO UPDATE
+SET name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    category_id = EXCLUDED.category_id,
+    brand_id = EXCLUDED.brand_id,
+    status = EXCLUDED.status;
+
+INSERT INTO product_translations (
+    product_id, locale_code, name, slug, short_description, description,
+    material, care_instruction, seo_title, seo_description
+)
+SELECT p.id, 'vi', 'Quần tây đen may đo', p.slug,
+       'Quần tây đen ống đứng với đường ly sắc nét.',
+       'Thiết kế quần tây len pha, phom ống đứng và cạp may đo gọn gàng.',
+       'Len pha', 'Giặt khô để giữ phom.',
+       'Quần tây đen may đo', 'Quần tây đen dùng hệ size chữ S đến XL.'
+FROM products p
+WHERE p.slug = 'tailored-black-trousers'
+ON CONFLICT (product_id, locale_code) DO UPDATE
+SET name = EXCLUDED.name,
+    slug = EXCLUDED.slug,
+    short_description = EXCLUDED.short_description,
+    description = EXCLUDED.description,
+    material = EXCLUDED.material,
+    care_instruction = EXCLUDED.care_instruction,
+    seo_title = EXCLUDED.seo_title,
+    seo_description = EXCLUDED.seo_description;
+
+INSERT INTO product_translations (
+    product_id, locale_code, name, slug, short_description, description,
+    material, care_instruction, seo_title, seo_description
+)
+SELECT p.id, 'vi', 'Giày sneaker da trắng tối giản', p.slug,
+       'Giày sneaker da trắng cổ thấp, dễ phối đồ.',
+       'Thiết kế sneaker tối giản với thân da mềm và đế cao su bền.',
+       'Da / Cao su', 'Lau sạch bằng khăn mềm.',
+       'Giày sneaker da trắng tối giản', 'Giày sneaker chỉ dùng hệ size số 39 đến 42.'
+FROM products p
+WHERE p.slug = 'minimal-white-leather-sneakers'
+ON CONFLICT (product_id, locale_code) DO UPDATE
+SET name = EXCLUDED.name,
+    slug = EXCLUDED.slug,
+    short_description = EXCLUDED.short_description,
+    description = EXCLUDED.description,
+    material = EXCLUDED.material,
+    care_instruction = EXCLUDED.care_instruction,
+    seo_title = EXCLUDED.seo_title,
+    seo_description = EXCLUDED.seo_description;
+
+INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
+SELECT p.id,
+       'VW-TRS-BLK-' || s.name,
+       899000.00,
+       NULL,
+       25,
+       c.id,
+       s.id,
+       'ACTIVE'
+FROM products p
+CROSS JOIN colors c
+CROSS JOIN sizes s
+WHERE p.slug = 'tailored-black-trousers'
+  AND c.name = 'Black'
+  AND s.name IN ('S', 'M', 'L', 'XL')
+ON CONFLICT (sku) DO UPDATE
+SET price = EXCLUDED.price,
+    sale_price = EXCLUDED.sale_price,
+    stock_quantity = EXCLUDED.stock_quantity,
+    color_id = EXCLUDED.color_id,
+    size_id = EXCLUDED.size_id,
+    status = EXCLUDED.status;
+
+INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
+SELECT p.id,
+       'VW-SNK-WHT-' || s.name,
+       1299000.00,
+       1099000.00,
+       20,
+       c.id,
+       s.id,
+       'ACTIVE'
+FROM products p
+CROSS JOIN colors c
+CROSS JOIN sizes s
+WHERE p.slug = 'minimal-white-leather-sneakers'
+  AND c.name = 'White'
+  AND s.name IN ('39', '40', '41', '42')
+ON CONFLICT (sku) DO UPDATE
+SET price = EXCLUDED.price,
+    sale_price = EXCLUDED.sale_price,
+    stock_quantity = EXCLUDED.stock_quantity,
+    color_id = EXCLUDED.color_id,
+    size_id = EXCLUDED.size_id,
+    status = EXCLUDED.status;
+
+DELETE FROM product_images WHERE product_id IN (
+    SELECT id FROM products WHERE slug IN ('tailored-black-trousers', 'minimal-white-leather-sneakers')
+);
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/tailored_black_trousers.png', TRUE, 1
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TRS-BLK-M'
+WHERE p.slug = 'tailored-black-trousers';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/tailored_black_trousers_back.png', FALSE, 2
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TRS-BLK-M'
+WHERE p.slug = 'tailored-black-trousers';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/tailored_black_trousers_detail.png', FALSE, 3
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TRS-BLK-M'
+WHERE p.slug = 'tailored-black-trousers';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/sneaker_af_1.png', TRUE, 1
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-SNK-WHT-39'
+WHERE p.slug = 'minimal-white-leather-sneakers';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/sneaker_af_2.png', FALSE, 2
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-SNK-WHT-39'
+WHERE p.slug = 'minimal-white-leather-sneakers';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/sneaker_af_3.png', FALSE, 3
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-SNK-WHT-39'
+WHERE p.slug = 'minimal-white-leather-sneakers';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/sneaker_af_4.png', FALSE, 4
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-SNK-WHT-39'
+WHERE p.slug = 'minimal-white-leather-sneakers';
+
+/*
+ * Legacy random product generator intentionally disabled. It remains below
+ * temporarily as migration history, but Flyway ignores it inside this block.
+ * The deterministic catalog above is the active implementation.
+ */
+/*
 -- 3. Products Seeding (100 products distributed across categories)
 DO $$
 DECLARE
@@ -588,6 +802,7 @@ BEGIN
         ON CONFLICT DO NOTHING;
     END LOOP;
 END $$;
+*/
 
 -- 7. Product Attributes (100 records)
 DO $$

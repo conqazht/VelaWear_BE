@@ -1,7 +1,12 @@
 package vn.conganh.commercial.feature.product.dto;
+
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import vn.conganh.commercial.feature.color.Color;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductTranslation;
@@ -25,6 +30,7 @@ public record ProductResponse(
         String image,
         String thumbnail,
         List<String> images,
+        List<ColorImages> colorImages,
         String categoryName,
         String categorySlug,
         BigDecimal price,
@@ -55,16 +61,29 @@ public record ProductResponse(
         String thumbnail = null;
         String mainImage = null;
         List<String> imagePaths = java.util.Collections.emptyList();
+        List<ColorImages> colorImageGroups = java.util.Collections.emptyList();
         if (images != null && !images.isEmpty()) {
-            List<ProductImage> sorted = images.stream()
-                    .sorted(java.util.Comparator.comparing(ProductImage::getSortOrder))
+            List<ProductImage> productLevelImages = images.stream()
+                    .filter(image -> image.getVariant() == null)
+                    .sorted(imageComparator())
                     .toList();
-            imagePaths = sorted.stream().map(ProductImage::getImage).toList();
-            thumbnail = sorted.stream()
-                    .filter(ProductImage::getIsThumbnail)
+            colorImageGroups = groupImagesByColor(images);
+
+            imagePaths = productLevelImages.stream()
+                    .map(ProductImage::getImage)
+                    .distinct()
+                    .toList();
+            thumbnail = productLevelImages.stream()
+                    .filter(image -> Boolean.TRUE.equals(image.getIsThumbnail()))
                     .map(ProductImage::getImage)
                     .findFirst()
-                    .orElse(imagePaths.get(0));
+                    .orElse(imagePaths.isEmpty() ? null : imagePaths.get(0));
+
+            if (imagePaths.isEmpty() && !colorImageGroups.isEmpty()) {
+                ColorImages defaultColorImages = colorImageGroups.get(0);
+                imagePaths = defaultColorImages.images();
+                thumbnail = defaultColorImages.thumbnail();
+            }
             mainImage = thumbnail;
         }
 
@@ -87,11 +106,70 @@ public record ProductResponse(
                 mainImage,
                 thumbnail,
                 imagePaths,
+                colorImageGroups,
                 categoryName,
                 categorySlug,
                 price,
                 salePrice);
     }
+
+    private static List<ColorImages> groupImagesByColor(List<ProductImage> images) {
+        Map<Long, List<ProductImage>> imagesByColor = new LinkedHashMap<>();
+        images.stream()
+                .filter(image -> image.getVariant() != null && image.getVariant().getColor() != null)
+                .sorted(colorImageComparator())
+                .forEach(image -> imagesByColor
+                        .computeIfAbsent(image.getVariant().getColor().getId(), ignored -> new java.util.ArrayList<>())
+                        .add(image));
+
+        return imagesByColor.values().stream()
+                .map(group -> {
+                    Color color = group.get(0).getVariant().getColor();
+                    List<String> paths = group.stream()
+                            .sorted(imageComparator())
+                            .map(ProductImage::getImage)
+                            .distinct()
+                            .toList();
+                    String colorThumbnail = group.stream()
+                            .sorted(imageComparator())
+                            .filter(image -> Boolean.TRUE.equals(image.getIsThumbnail()))
+                            .map(ProductImage::getImage)
+                            .findFirst()
+                            .orElse(paths.get(0));
+                    return new ColorImages(
+                            color.getId(),
+                            color.getName(),
+                            color.getHexCode(),
+                            colorThumbnail,
+                            paths);
+                })
+                .toList();
+    }
+
+    private static Comparator<ProductImage> colorImageComparator() {
+        return Comparator
+                .comparing(
+                        (ProductImage image) -> image.getVariant().getColor().getSortOrder(),
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(
+                        image -> image.getVariant().getColor().getName(),
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(imageComparator());
+    }
+
+    private static Comparator<ProductImage> imageComparator() {
+        return Comparator.comparing(
+                ProductImage::getSortOrder,
+                Comparator.nullsLast(Comparator.naturalOrder()));
+    }
+
+    public record ColorImages(
+            Long colorId,
+            String colorName,
+            String hexCode,
+            String thumbnail,
+            List<String> images
+    ) {}
 
     private static String value(String translated, String fallback) {
         return translated == null || translated.isBlank() ? fallback : translated;

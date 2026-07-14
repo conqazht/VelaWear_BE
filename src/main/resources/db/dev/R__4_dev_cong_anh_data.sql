@@ -123,9 +123,9 @@ FROM orders o
 JOIN dev_cong_anh_user target_user ON target_user.id = o.user_id
 JOIN (
     VALUES
-        ('VW-TEE-BLK-M', 'Black / M', '/images/dev/essential-cotton-tee.jpg', 219000.00::NUMERIC, 1),
-        ('NS-JACKET-PUR-M', 'Purple / M', '/images/dev/nova-structure-jacket.jpg', 1499000.00::NUMERIC, 1),
-        ('SV-TOTE-ORG-OS', 'Orange / One Size', '/images/dev/solace-tote.jpg', 199000.00::NUMERIC, 1)
+        ('VW-TEE-BLK-M', 'Black / M', '/uploads/products/essential_cotton_tee_black.png', 219000.00::NUMERIC, 1),
+        ('NS-JACKET-PUR-M', 'Purple / M', '/uploads/products/north_structured_blazer_purple.png', 1499000.00::NUMERIC, 1),
+        ('SV-TOTE-ORG-OS', 'Orange / One Size', '/uploads/products/studio_leather_tote_orange.png', 199000.00::NUMERIC, 1)
 ) AS fixture(sku, variant_name, image, price, quantity) ON TRUE
 JOIN product_variants pv ON pv.sku = fixture.sku
 JOIN products p ON p.id = pv.product_id
@@ -261,11 +261,11 @@ FROM orders o
 JOIN dev_cong_anh_user target_user ON target_user.id = o.user_id
 JOIN (
     VALUES
-        ('VW-CONGANH-PENDING',   'VW-TEE-BLK-M',      'Black / M',          '/images/dev/essential-cotton-tee.jpg', 219000.00::NUMERIC,  1, 'PENDING'),
-        ('VW-CONGANH-CONFIRMED', 'VW-TEE-RED-L',      'Red / L',            '/images/dev/essential-cotton-tee.jpg', 219000.00::NUMERIC,  2, 'CONFIRMED'),
-        ('VW-CONGANH-SHIPPING',  'NS-JACKET-PUR-M',   'Purple / M',         '/images/dev/nova-structure-jacket.jpg', 1499000.00::NUMERIC, 1, 'CONFIRMED'),
-        ('VW-CONGANH-CANCELLED', 'SV-TOTE-ORG-OS',    'Orange / One Size',  '/images/dev/solace-tote.jpg',          199000.00::NUMERIC,  1, 'CANCELLED'),
-        ('VW-CONGANH-REFUNDED',  'NS-JACKET-PUR-M',   'Purple / M',         '/images/dev/nova-structure-jacket.jpg', 1499000.00::NUMERIC, 1, 'RETURNED')
+        ('VW-CONGANH-PENDING',   'VW-TEE-BLK-M',      'Black / M',          '/uploads/products/essential_cotton_tee_black.png',     219000.00::NUMERIC,  1, 'PENDING'),
+        ('VW-CONGANH-CONFIRMED', 'VW-TEE-RED-L',      'Red / L',            '/uploads/products/essential_cotton_tee_red.png',       219000.00::NUMERIC,  2, 'CONFIRMED'),
+        ('VW-CONGANH-SHIPPING',  'NS-JACKET-PUR-M',   'Purple / M',         '/uploads/products/north_structured_blazer_purple.png', 1499000.00::NUMERIC, 1, 'CONFIRMED'),
+        ('VW-CONGANH-CANCELLED', 'SV-TOTE-ORG-OS',    'Orange / One Size',  '/uploads/products/studio_leather_tote_orange.png',     199000.00::NUMERIC,  1, 'CANCELLED'),
+        ('VW-CONGANH-REFUNDED',  'NS-JACKET-PUR-M',   'Purple / M',         '/uploads/products/north_structured_blazer_purple.png', 1499000.00::NUMERIC, 1, 'RETURNED')
 ) AS fixture(order_code, sku, variant_name, image, price, quantity, item_status)
     ON fixture.order_code = o.order_code
 JOIN product_variants pv ON pv.sku = fixture.sku
