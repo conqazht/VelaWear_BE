@@ -58,4 +58,33 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
         // Assert
         assertThat(danglingReviews).isZero();
     }
+
+    @Test
+    @DisplayName("Công Anh fixture - đủ trạng thái đơn và lịch sử coupon gắn đúng user")
+    void devSeedData_congAnhHasOrderStatsAndCouponHistory() {
+        Integer statusCount = jdbcTemplate.queryForObject("""
+                select count(distinct status)
+                from orders
+                where order_code like 'VW-CONGANH-%'
+                """, Integer.class);
+        Integer couponHistoryCount = jdbcTemplate.queryForObject("""
+                select count(*)
+                from coupon_usages usage
+                join orders o on o.id = usage.order_id
+                join coupons c on c.id = usage.coupon_id
+                where o.order_code like 'VW-CONGANH-%'
+                  and c.code in ('CONGANH15', 'CONGANH20', 'CONGANH80K')
+                """, Integer.class);
+        Integer mismatchedUsers = jdbcTemplate.queryForObject("""
+                select count(*)
+                from coupon_usages usage
+                join orders o on o.id = usage.order_id
+                where o.order_code like 'VW-CONGANH-%'
+                  and usage.user_id <> o.user_id
+                """, Integer.class);
+
+        assertThat(statusCount).isEqualTo(6);
+        assertThat(couponHistoryCount).isEqualTo(2);
+        assertThat(mismatchedUsers).isZero();
+    }
 }
