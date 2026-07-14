@@ -190,7 +190,8 @@ INSERT INTO colors (name, hex_code, sort_order)
 VALUES
     ('Black', '#000000', 1),
     ('Red', '#D32F2F', 2),
-    ('Yellow', '#F2C94C', 3)
+    ('Yellow', '#F2C94C', 3),
+    ('White', '#FFFFFF', 4)
 ON CONFLICT (name) DO UPDATE
 SET
     hex_code = EXCLUDED.hex_code,
@@ -314,41 +315,63 @@ SET
 
 DELETE FROM product_images WHERE product_id IN (
     SELECT id FROM products WHERE slug IN ('essential-cotton-tee', 'urban-linen-dress')
-) AND variant_id IS NULL;
+);
 
--- Essential Cotton Tee
+-- Each image is linked to the variant whose color it represents. The storefront
+-- groups these rows by variant color, so changing Black <-> Red changes gallery.
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/artisanal_fashion_product_shot_for_vela_wear._a_premium_garment_in_crisp_white.png', TRUE, 1
-FROM products p WHERE p.slug = 'essential-cotton-tee';
-
-INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_artisanal_crisp_white_ffffff_linen.png', FALSE, 2
-FROM products p WHERE p.slug = 'essential-cotton-tee';
-
-INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/high_end_fashion_editorial_for_vela_wear._a_male_model_wearing_crisp_white.png', FALSE, 3
-FROM products p WHERE p.slug = 'essential-cotton-tee';
+SELECT p.id, pv.id, '/uploads/products/essential_cotton_tee_black.png', TRUE, 1
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TEE-BLK-M'
+WHERE p.slug = 'essential-cotton-tee';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_crisp_white_ffffff_linen_shirt_and.png', FALSE, 4
-FROM products p WHERE p.slug = 'essential-cotton-tee';
-
--- Urban Linen Dress
-INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_sand_beige_d8cab8_artisanal_dress.png', TRUE, 1
-FROM products p WHERE p.slug = 'urban-linen-dress';
+SELECT p.id, pv.id, '/uploads/products/essential_cotton_tee_black_back.png', FALSE, 2
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TEE-BLK-M'
+WHERE p.slug = 'essential-cotton-tee';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/individual_product_shot_of_the_back_view_of_a_luxury_minimalist_sand_beige.png', FALSE, 2
-FROM products p WHERE p.slug = 'urban-linen-dress';
+SELECT p.id, pv.id, '/uploads/products/essential_cotton_tee_black_detail.png', FALSE, 3
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TEE-BLK-M'
+WHERE p.slug = 'essential-cotton-tee';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/professional_studio_photography_of_an_artisanal_garment_in_warm_sand_beige.png', FALSE, 3
-FROM products p WHERE p.slug = 'urban-linen-dress';
+SELECT p.id, pv.id, '/uploads/products/essential_cotton_tee_red.png', TRUE, 1
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TEE-RED-L'
+WHERE p.slug = 'essential-cotton-tee';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/product_detail_gallery_set_for_a_luxury_minimalist_sand_beige_d8cab8_linen.png', FALSE, 4
-FROM products p WHERE p.slug = 'urban-linen-dress';
+SELECT p.id, pv.id, '/uploads/products/essential_cotton_tee_red_back.png', FALSE, 2
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TEE-RED-L'
+WHERE p.slug = 'essential-cotton-tee';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/essential_cotton_tee_red_detail.png', FALSE, 3
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-TEE-RED-L'
+WHERE p.slug = 'essential-cotton-tee';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/urban_linen_dress_yellow.png', TRUE, 1
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'UT-DRESS-YLW-S'
+WHERE p.slug = 'urban-linen-dress';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/urban_linen_dress_yellow_studio.png', FALSE, 2
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'UT-DRESS-YLW-S'
+WHERE p.slug = 'urban-linen-dress';
+
+INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
+SELECT p.id, pv.id, '/uploads/products/urban_linen_dress_yellow_back.png', FALSE, 3
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'UT-DRESS-YLW-S'
+WHERE p.slug = 'urban-linen-dress';
 
 INSERT INTO product_attributes (product_id, name, value)
 SELECT p.id, 'Material', '100% cotton'
@@ -449,7 +472,7 @@ SELECT o.id,
        p.name,
        'Black / M',
        pv.sku,
-       '/images/dev/essential-cotton-tee.jpg',
+       '/uploads/products/essential_cotton_tee_black.png',
        219000.00,
        2,
        438000.00,

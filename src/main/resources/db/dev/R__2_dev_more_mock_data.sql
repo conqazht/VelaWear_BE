@@ -59,17 +59,17 @@ SET
 
 INSERT INTO colors (name, hex_code, sort_order)
 VALUES
-    ('Purple', '#7B2CBF', 4),
-    ('Orange', '#F97316', 5)
+    ('Purple', '#7B2CBF', 5),
+    ('Orange', '#F97316', 6)
 ON CONFLICT (name) DO UPDATE
 SET
     hex_code = EXCLUDED.hex_code,
     sort_order = EXCLUDED.sort_order;
 
 INSERT INTO products (name, slug, description, category_id, brand_id, status)
-SELECT 'North Utility Jacket',
+SELECT 'North Structured Blazer',
        'north-utility-jacket',
-       'Lightweight utility jacket with roomy pockets.',
+       'Structured tailored blazer with a clean single-button silhouette.',
        c.id,
        b.id,
        'ACTIVE'
@@ -86,9 +86,9 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO products (name, slug, description, category_id, brand_id, status)
-SELECT 'Studio Canvas Tote',
+SELECT 'Studio Leather Tote',
        'studio-canvas-tote',
-       'Durable canvas tote for daily carry.',
+       'Premium pebbled-leather tote for daily carry.',
        c.id,
        b.id,
        'ACTIVE'
@@ -140,41 +140,43 @@ SET
 
 DELETE FROM product_images WHERE product_id IN (
     SELECT id FROM products WHERE slug IN ('north-utility-jacket', 'studio-canvas-tote')
-) AND variant_id IS NULL;
-
--- North Utility Jacket
-INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_luxury_olive_green_556b2f_tailored.png', TRUE, 1
-FROM products p WHERE p.slug = 'north-utility-jacket';
+);
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/premium_fashion_product_shot_of_a_high_quality_tailored_piece_in_olive_green.png', FALSE, 2
-FROM products p WHERE p.slug = 'north-utility-jacket';
+SELECT p.id, pv.id, '/uploads/products/north_structured_blazer_purple.png', TRUE, 1
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'NS-JACKET-PUR-M'
+WHERE p.slug = 'north-utility-jacket';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/professional_studio_photography_for_vela_wear._a_high_quality_tailored_piece_in.png', FALSE, 3
-FROM products p WHERE p.slug = 'north-utility-jacket';
+SELECT p.id, pv.id, '/uploads/products/north_structured_blazer_purple_front.png', FALSE, 2
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'NS-JACKET-PUR-M'
+WHERE p.slug = 'north-utility-jacket';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_luxury_minimalist_olive_green.png', FALSE, 4
-FROM products p WHERE p.slug = 'north-utility-jacket';
-
--- Studio Canvas Tote
-INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/individual_product_shot_of_a_premium_black_000000_leather_tote_bag_perspective.png', TRUE, 1
-FROM products p WHERE p.slug = 'studio-canvas-tote';
+SELECT p.id, pv.id, '/uploads/products/north_structured_blazer_purple_details.png', FALSE, 3
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'NS-JACKET-PUR-M'
+WHERE p.slug = 'north-utility-jacket';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/product_detail_gallery_set_for_a_premium_black_000000_leather_tote_bag._4.png', FALSE, 2
-FROM products p WHERE p.slug = 'studio-canvas-tote';
+SELECT p.id, pv.id, '/uploads/products/studio_leather_tote_orange.png', TRUE, 1
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'SV-TOTE-ORG-OS'
+WHERE p.slug = 'studio-canvas-tote';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/full_product_detail_gallery_set_for_a_single_premium_black_000000_leather_tote.png', FALSE, 3
-FROM products p WHERE p.slug = 'studio-canvas-tote';
+SELECT p.id, pv.id, '/uploads/products/studio_leather_tote_orange_gallery.png', FALSE, 2
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'SV-TOTE-ORG-OS'
+WHERE p.slug = 'studio-canvas-tote';
 
 INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-SELECT p.id, NULL, '/uploads/products/macro_close_up_shot_of_the_black_000000_pebbled_leather_texture_and_embossed.png', FALSE, 4
-FROM products p WHERE p.slug = 'studio-canvas-tote';
+SELECT p.id, pv.id, '/uploads/products/studio_leather_tote_orange_detail.png', FALSE, 3
+FROM products p
+JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'SV-TOTE-ORG-OS'
+WHERE p.slug = 'studio-canvas-tote';
 
 INSERT INTO product_attributes (product_id, name, value)
 SELECT p.id, 'Care', 'Machine wash cold'
@@ -276,7 +278,7 @@ SET status = EXCLUDED.status,
     payment_status = EXCLUDED.payment_status;
 
 INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
-SELECT o.id, pv.id, p.name, 'Purple / M', pv.sku, '/images/dev/north-utility-jacket.jpg', 999000.00, 1, 999000.00, 'CONFIRMED'
+SELECT o.id, pv.id, p.name, 'Purple / M', pv.sku, '/uploads/products/north_structured_blazer_purple.png', 999000.00, 1, 999000.00, 'CONFIRMED'
 FROM orders o
 JOIN product_variants pv ON pv.sku = 'NS-JACKET-PUR-M'
 JOIN products p ON p.id = pv.product_id
@@ -284,7 +286,7 @@ WHERE o.order_code = 'VW-DEV-1002'
   AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.sku = pv.sku);
 
 INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
-SELECT o.id, pv.id, p.name, 'Orange / One Size', pv.sku, '/images/dev/studio-canvas-tote.jpg', 329000.00, 2, 658000.00, 'PENDING'
+SELECT o.id, pv.id, p.name, 'Orange / One Size', pv.sku, '/uploads/products/studio_leather_tote_orange.png', 329000.00, 2, 658000.00, 'PENDING'
 FROM orders o
 JOIN product_variants pv ON pv.sku = 'SV-TOTE-ORG-OS'
 JOIN products p ON p.id = pv.product_id

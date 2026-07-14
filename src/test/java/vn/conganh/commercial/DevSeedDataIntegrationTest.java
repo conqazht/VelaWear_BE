@@ -60,6 +60,94 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Product seed - size đúng loại và mỗi màu có gallery ảnh riêng, không trùng")
+    void devSeedData_productSizesAndColorImagesAreConsistent() {
+        Integer mixedSizeSystems = jdbcTemplate.queryForObject("""
+                select count(*)
+                from (
+                    select pv.product_id
+                    from product_variants pv
+                    join sizes s on s.id = pv.size_id
+                    where pv.deleted_at is null
+                    group by pv.product_id
+                    having count(distinct case
+                        when s.name ~ '^[0-9]+$' then 'NUMERIC'
+                        when s.name in ('XS', 'S', 'M', 'L', 'XL', 'XXL') then 'APPAREL'
+                        else 'ACCESSORY'
+                    end) > 1
+                ) mixed
+                """, Integer.class);
+        Integer categorySizeMismatches = jdbcTemplate.queryForObject("""
+                select count(*)
+                from product_variants pv
+                join products p on p.id = pv.product_id
+                join categories c on c.id = p.category_id
+                join sizes s on s.id = pv.size_id
+                where pv.deleted_at is null
+                  and (
+                      (c.slug in ('t-shirts', 'dresses', 'jackets', 'ao', 'quan', 'vay', 'dam', 'ao-khoac')
+                          and s.name not in ('XS', 'S', 'M', 'L', 'XL', 'XXL'))
+                      or (c.slug = 'giay' and s.name !~ '^[0-9]+$')
+                      or (c.slug in ('accessories', 'phu-kien')
+                          and s.name not in ('ONE SIZE', 'ADJUSTABLE', 'REGULAR', 'LARGE'))
+                  )
+                """, Integer.class);
+        Integer colorsWithoutImages = jdbcTemplate.queryForObject("""
+                select count(*)
+                from (
+                    select pv.product_id, pv.color_id
+                    from product_variants pv
+                    where pv.deleted_at is null
+                      and pv.color_id is not null
+                    group by pv.product_id, pv.color_id
+                    except
+                    select pi.product_id, image_variant.color_id
+                    from product_images pi
+                    join product_variants image_variant on image_variant.id = pi.variant_id
+                    where image_variant.color_id is not null
+                    group by pi.product_id, image_variant.color_id
+                ) missing
+                """, Integer.class);
+        Integer duplicateColorImageUrls = jdbcTemplate.queryForObject("""
+                select count(*)
+                from (
+                    select pi.product_id, image_variant.color_id, pi.image
+                    from product_images pi
+                    join product_variants image_variant on image_variant.id = pi.variant_id
+                    where image_variant.color_id is not null
+                    group by pi.product_id, image_variant.color_id, pi.image
+                    having count(*) > 1
+                ) duplicates
+                """, Integer.class);
+        Integer colorsWithSparseGalleries = jdbcTemplate.queryForObject("""
+                select count(*)
+                from (
+                    select pv.product_id, pv.color_id
+                    from product_variants pv
+                    where pv.deleted_at is null
+                      and pv.color_id is not null
+                    group by pv.product_id, pv.color_id
+                ) product_colors
+                left join (
+                    select pi.product_id, image_variant.color_id, count(distinct pi.image) as image_count
+                    from product_images pi
+                    join product_variants image_variant on image_variant.id = pi.variant_id
+                    where image_variant.color_id is not null
+                    group by pi.product_id, image_variant.color_id
+                ) galleries
+                  on galleries.product_id = product_colors.product_id
+                 and galleries.color_id = product_colors.color_id
+                where coalesce(galleries.image_count, 0) < 3
+                """, Integer.class);
+
+        assertThat(mixedSizeSystems).isZero();
+        assertThat(categorySizeMismatches).isZero();
+        assertThat(colorsWithoutImages).isZero();
+        assertThat(duplicateColorImageUrls).isZero();
+        assertThat(colorsWithSparseGalleries).isZero();
+    }
+
+    @Test
     @DisplayName("Công Anh fixture - đủ trạng thái đơn và lịch sử coupon gắn đúng user")
     void devSeedData_congAnhHasOrderStatsAndCouponHistory() {
         Integer statusCount = jdbcTemplate.queryForObject("""
