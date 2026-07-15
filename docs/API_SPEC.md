@@ -2,6 +2,7 @@
 
 > All endpoints return `ApiResponse<T>` wrapper.
 > Update this file whenever endpoints change.
+> Sale Campaign design, state machine và race-condition notes: [SALE_CAMPAIGN_BACKEND.md](./SALE_CAMPAIGN_BACKEND.md).
 
 ---
 
@@ -39,6 +40,8 @@ Public endpoints:
 | POST | `/api/v1/auth/otp/verify` | Verify email OTP code |
 | POST | `/api/v1/auth/forgot-password/reset` | Reset password using verified OTP |
 | PUT | `/api/v1/auth/me/email` | Change email using verified OTP |
+| GET | `/api/v1/sales` | List published, non-ended STANDARD/FLASH campaigns; phase is returned per row |
+| GET | `/api/v1/sales/{code}` | Public campaign detail and pricing |
 | GET | `/actuator/health` | Health check |
 | GET | `/v3/api-docs/**` | OpenAPI docs |
 | GET | `/swagger-ui/**` | Swagger UI |
@@ -131,6 +134,24 @@ Validation errors include field details:
 }
 ```
 
+Business errors include a stable machine-readable `code`. Frontend must branch on
+`code`, not parse the localized `message`. Successful responses may omit or set
+`code = null`.
+
+```json
+{
+  "statusCode": 409,
+  "code": "FLASH_SALE_SOLD_OUT",
+  "data": {
+    "variantId": 41,
+    "requestedQuantity": 2,
+    "remainingQuantity": 1
+  },
+  "message": "Số lượng Flash Sale còn lại không đủ",
+  "timestamp": "2026-07-15T13:20:10Z"
+}
+```
+
 Common application errors:
 
 | HTTP status | Meaning |
@@ -177,7 +198,8 @@ Supported filters:
 | `GET /colors` | `name`, `hexCode` |
 | `GET /sizes` | `name` |
 | `GET /products` | `categoryId`, `brandId`, `name`, `slug`, `status`, `createdFrom`, `createdTo` |
-| `GET /product-variants` | `productId`, `colorId`, `sizeId`, `sku`, `status`, `priceFrom`, `priceTo`, `salePriceFrom`, `salePriceTo`, `stockFrom`, `stockTo`, `createdFrom`, `createdTo` |
+| `GET /product-variants` | `productId`, `colorId`, `sizeId`, `sku`, `status`, `priceFrom`, `priceTo`, `stockFrom`, `stockTo`, `createdFrom`, `createdTo` |
+| `GET /sale-campaigns` | `search` (name/code), `type`, `status`, `phase` |
 | `GET /coupons` | `code`, `type`, `status`, `valueFrom`, `valueTo`, `minOrderAmountFrom`, `minOrderAmountTo`, `maxDiscountFrom`, `maxDiscountTo`, `usageLimitFrom`, `usageLimitTo`, `usedCountFrom`, `usedCountTo`, `startFrom`, `startTo`, `endFrom`, `endTo` |
 | `GET /users` | `fullName`, `email`, `gender`, `birthDateFrom`, `birthDateTo`, `createdFrom`, `createdTo`, `updatedFrom`, `updatedTo` |
 | `GET /roles` | `name`, `description`, `createdFrom`, `createdTo`, `updatedFrom`, `updatedTo` |
@@ -1057,8 +1079,9 @@ should align to the paginated response contract defined in `Response Format`.
 ### Product Variants
 
 Product variant is the sellable SKU. Variant price can differ by color and size.
-`Product` stores base catalog information; `ProductVariant` stores `price`,
-`salePrice`, `stockQuantity`, `color`, and `size`.
+`Product` stores base catalog information; `ProductVariant` stores the list
+`price`, `stockQuantity`, `color`, and `size`. Promotional price is resolved from
+Sale Campaign; there is no standalone `salePrice` field.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -1075,7 +1098,6 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
   "productId": 1,
   "sku": "RUN-SHOE-BLACK-40",
   "price": 1200000.00,
-  "salePrice": 990000.00,
   "stockQuantity": 50,
   "colorId": 1,
   "sizeId": 1,
@@ -1093,8 +1115,23 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
     "product": { "id": 1, "name": "Running Shoes" },
     "sku": "RUN-SHOE-BLACK-40",
     "price": 1200000.00,
-    "salePrice": 990000.00,
     "stockQuantity": 50,
+    "pricing": {
+      "listPrice": 1200000.00,
+      "effectivePrice": 990000.00,
+      "priceSource": "FLASH_SALE",
+      "campaignId": 12,
+      "campaignItemId": 84,
+      "campaignCode": "FLASH-2000",
+      "campaignName": "Flash Sale 20h",
+      "startsAt": "2026-07-15T13:00:00Z",
+      "endsAt": "2026-07-15T15:00:00Z",
+      "remainingQuota": 3,
+      "maxPerCustomer": 2,
+      "customerRemaining": 1,
+      "couponEligible": false,
+      "availableQuantity": 1
+    },
     "color": { "id": 1, "name": "Black" },
     "size": { "id": 1, "name": "40" },
     "status": "ACTIVE",
@@ -1157,6 +1194,210 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
 | GET | `/reviews/order/{orderId}` | List reviews by order |
 | GET | `/reviews/order-item/{orderItemId}` | List reviews by order item |
 | POST | `/reviews` | Create review |
+
+### Sale Campaign Admin
+
+Admin Sale Campaign là module riêng với Coupon. `ADMIN` và `MANAGER` có quyền
+quản lý; `STAFF` chỉ có quyền đọc. Mọi timestamp gửi/nhận theo ISO-8601 có
+offset/UTC.
+
+Campaign lifecycle lưu trong database là `DRAFT`, `PUBLISHED`, `CANCELLED`.
+`UPCOMING`, `LIVE`, `ENDED` là phase được server tính từ lifecycle và thời gian:
+campaign `CANCELLED` luôn có phase `ENDED`; campaign khác là `UPCOMING` khi
+`now < startsAt`, `LIVE` trong `[startsAt, endsAt)`, và `ENDED` khi
+`now >= endsAt`.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/sale-campaigns` | List/filter campaigns |
+| GET | `/api/v1/sale-campaigns/{id}` | Campaign detail including variants/counters |
+| POST | `/api/v1/sale-campaigns` | Create DRAFT |
+| PUT | `/api/v1/sale-campaigns/{id}` | Update DRAFT or UPCOMING with optimistic version |
+| DELETE | `/api/v1/sale-campaigns/{id}` | Delete DRAFT only |
+| POST | `/api/v1/sale-campaigns/{id}/publish` | Validate prices, variants and overlap, then publish |
+| POST | `/api/v1/sale-campaigns/{id}/cancel` | Cancel UPCOMING campaign |
+| PATCH | `/api/v1/sale-campaigns/{id}/display` | Update display fields while LIVE |
+| POST | `/api/v1/sale-campaigns/{id}/items/{itemId}/increase-quota` | Increase live Flash quota |
+| POST | `/api/v1/sale-campaigns/{id}/end` | End a live campaign early |
+| POST | `/api/v1/sale-campaigns/{id}/end-and-clone` | End live campaign and create successor DRAFT |
+
+`publish`, `cancel` and `end` receive optimistic version as query parameter,
+for example `POST /api/v1/sale-campaigns/12/publish?version=3`. Other write
+actions carry `version` in their JSON body.
+
+**Create Request:**
+
+```json
+{
+  "code": "FLASH-2000",
+  "name": "Flash Sale 20h",
+  "description": "Hai giờ giá sốc",
+  "bannerUrl": "/uploads/sales/flash-2000.webp",
+  "type": "FLASH",
+  "startsAt": "2026-07-15T13:00:00Z",
+  "endsAt": "2026-07-15T15:00:00Z",
+  "items": [
+    {
+      "variantId": 41,
+      "promotionalPrice": 990000,
+      "quota": 20,
+      "maxPerCustomer": 2
+    },
+    {
+      "variantId": 42,
+      "promotionalPrice": 1090000,
+      "quota": 15,
+      "maxPerCustomer": null
+    }
+  ]
+}
+```
+
+For `STANDARD`, `quota` and `maxPerCustomer` must be null. One campaign may
+contain variants from one or many products.
+
+**Detail Response:**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "id": 12,
+    "code": "FLASH-2000",
+    "name": "Flash Sale 20h",
+    "description": "Hai giờ giá sốc",
+    "bannerUrl": "/uploads/sales/flash-2000.webp",
+    "type": "FLASH",
+    "status": "PUBLISHED",
+    "phase": "LIVE",
+    "startsAt": "2026-07-15T13:00:00Z",
+    "endsAt": "2026-07-15T15:00:00Z",
+    "version": 3,
+    "items": [
+      {
+        "id": 84,
+        "variantId": 41,
+        "productId": 7,
+        "sku": "RUN-SHOE-BLACK-40",
+        "productName": "Running Shoes",
+        "productSlug": "running-shoes",
+        "image": "/uploads/products/running-shoes-black.webp",
+        "color": "Black",
+        "size": "40",
+        "referencePrice": 1500000,
+        "promotionalPrice": 990000,
+        "quota": 20,
+        "reservedQuantity": 2,
+        "soldQuantity": 10,
+        "remainingQuota": 8,
+        "maxPerCustomer": 2,
+        "stockQuantity": 6,
+        "availableQuantity": 6
+      }
+    ],
+    "createdAt": "2026-07-14T09:00:00Z",
+    "updatedAt": "2026-07-15T13:10:00Z"
+  },
+  "message": "Success",
+  "timestamp": "2026-07-15T13:20:00Z"
+}
+```
+
+**Optimistic update:**
+
+`PUT` includes the latest `version`. Action endpoints receive the same version
+to reject stale admin screens.
+
+```json
+{
+  "version": 3,
+  "code": "FLASH-2000",
+  "name": "Flash Sale 20h - cập nhật",
+  "description": "Nội dung mới",
+  "bannerUrl": "/uploads/sales/flash-2000-v2.webp",
+  "type": "FLASH",
+  "startsAt": "2026-07-15T13:00:00Z",
+  "endsAt": "2026-07-15T15:30:00Z",
+  "items": [
+    {
+      "variantId": 41,
+      "promotionalPrice": 950000,
+      "quota": 30,
+      "maxPerCustomer": 2
+    }
+  ]
+}
+```
+
+`PUT` là full replacement: `code`, `name`, `type`, thời gian và ít nhất một
+item đều bắt buộc, không chỉ gửi riêng các field vừa sửa.
+
+**Increase quota:**
+
+```json
+{
+  "version": 4,
+  "additionalQuantity": 10
+}
+```
+
+Quota can only increase while LIVE. Decreasing quota or changing price/variant
+after campaign starts returns `CAMPAIGN_ALREADY_STARTED`.
+
+**End and clone:**
+
+```json
+{
+  "version": 5,
+  "code": "FLASH-2200",
+  "name": "Flash Sale 22h",
+  "startsAt": "2026-07-15T15:00:00Z",
+  "endsAt": "2026-07-15T17:00:00Z"
+}
+```
+
+The original is ended at server time. The new campaign copies type, display
+content, variants, promotional prices, quota and customer limits into a new
+`DRAFT`; counters are reset to zero.
+
+### Public Sale and Pricing
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/v1/sales?type=STANDARD` | Public | Non-ended published Standard campaigns |
+| GET | `/api/v1/sales?type=FLASH` | Public | Live/upcoming published Flash campaigns |
+| GET | `/api/v1/sales?type=FLASH&phase=LIVE&phase=UPCOMING` | Public | Filter nhiều phase bằng query parameter lặp |
+| GET | `/api/v1/sales/{code}` | Public | Public detail by stable campaign code |
+
+`type` và `phase` là optional; omitting them returns both types and every public
+phase. To request several phases, repeat `phase` as shown above instead of
+sending one comma-delimited value. The list response wraps the campaign array
+with `serverTime`. The detail endpoint returns the campaign directly. Pricing
+on catalog/product/cart uses:
+
+```json
+{
+  "listPrice": 1500000,
+  "effectivePrice": 990000,
+  "priceSource": "FLASH_SALE",
+  "campaignId": 12,
+  "campaignItemId": 84,
+  "campaignCode": "FLASH-2000",
+  "campaignName": "Flash Sale 20h",
+  "startsAt": "2026-07-15T13:00:00Z",
+  "endsAt": "2026-07-15T15:00:00Z",
+  "remainingQuota": 8,
+  "maxPerCustomer": 2,
+  "customerRemaining": 1,
+  "couponEligible": false,
+  "availableQuantity": 1
+}
+```
+
+`customerRemaining` is null without an authenticated user. `availableQuantity`
+is bounded by stock, remaining Flash quota and customer remaining limit.
+Displayed pricing is not a reservation; add-to-cart does not hold stock or
+Flash quota.
 
 ### Still Planned
 
@@ -1223,6 +1464,19 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
 | POST | `/product-variants` | Bearer | Implemented | Create product variant |
 | PUT | `/product-variants/{id}` | Bearer | Implemented | Update product variant |
 | DELETE | `/product-variants/{id}` | Bearer | Implemented | Delete product variant |
+| GET | `/api/v1/sale-campaigns` | Bearer | Implemented | Admin list/filter campaigns |
+| GET | `/api/v1/sale-campaigns/{id}` | Bearer | Implemented | Admin campaign detail |
+| POST | `/api/v1/sale-campaigns` | Bearer | Implemented | Create campaign DRAFT |
+| PUT | `/api/v1/sale-campaigns/{id}` | Bearer | Implemented | Update DRAFT/UPCOMING with version |
+| DELETE | `/api/v1/sale-campaigns/{id}` | Bearer | Implemented | Delete DRAFT |
+| POST | `/api/v1/sale-campaigns/{id}/publish` | Bearer | Implemented | Publish campaign |
+| POST | `/api/v1/sale-campaigns/{id}/cancel` | Bearer | Implemented | Cancel UPCOMING campaign |
+| PATCH | `/api/v1/sale-campaigns/{id}/display` | Bearer | Implemented | Update LIVE display fields |
+| POST | `/api/v1/sale-campaigns/{id}/items/{itemId}/increase-quota` | Bearer | Implemented | Increase live Flash quota |
+| POST | `/api/v1/sale-campaigns/{id}/end` | Bearer | Implemented | End campaign early |
+| POST | `/api/v1/sale-campaigns/{id}/end-and-clone` | Bearer | Implemented | End and clone to DRAFT |
+| GET | `/api/v1/sales` | Public | Implemented | Public STANDARD/FLASH list |
+| GET | `/api/v1/sales/{code}` | Public | Implemented | Public campaign detail |
 | GET | `/user-addresses` | Bearer | Implemented | List user addresses, optional `userId` filter |
 | GET | `/user-addresses/{id}` | Bearer | Implemented | Get user address |
 | POST | `/user-addresses` | Bearer | Implemented | Create user address |
@@ -1260,88 +1514,260 @@ Product variant is the sellable SKU. Variant price can differ by color and size.
 | GET | `/reviews/order/{orderId}` | Bearer | Implemented | List reviews by order |
 | GET | `/reviews/order-item/{orderItemId}` | Bearer | Implemented | List reviews by order item |
 | POST | `/reviews` | Bearer | Implemented | Create review |
+| POST | `/api/v1/checkout/preview` | Bearer | Implemented | Authoritative checkout pricing preview |
+| POST | `/api/v1/checkout` | Bearer | Implemented | Idempotent checkout and Sale reservation |
+| POST | `/api/v1/checkout/{orderId}/cancel` | Bearer | Implemented | Cancel and release/reverse resources |
 
 ---
 
-## 7. Checkout Implemented
+## 9. Checkout and Sale Reservation
 
-### POST /api/v1/checkout Bearer
+Checkout luôn tải item/quantity từ cart đã lưu trong database. Client không gửi
+giá, quota, subtotal hoặc shipping fee làm nguồn sự thật. Add-to-cart không giữ
+stock/quota; reservation chỉ bắt đầu khi checkout transaction thành công.
 
-Process a new checkout transaction.
-Creates an order from the authenticated user's persisted cart, reserves stock, consumes coupon, and clears the user's cart.
+### POST /api/v1/checkout/preview Bearer
+
+Tính giá hiện hành, coupon eligibility, phí giao hàng và fingerprint trước khi
+người dùng xác nhận đặt đơn.
+
+Checkout flow hiện hỗ trợ `COD` và `SEPAY`; giá trị khác trả `400`.
 
 **Request Body:**
 
-`json
+```json
 {
-  "receiverName": "John Doe",
-  "receiverPhone": "0123456789",
-  "receiverAddress": "123 Main St, City",
-  "paymentMethod": "COD",
-  "shippingFee": 15.00,
+  "paymentMethod": "SEPAY",
   "couponCode": "SUMMER10"
 }
-`
+```
 
-Item quantities and product variant IDs are loaded from the user's cart on the backend. Client-submitted item totals are not accepted as checkout source of truth.
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "items": [
+      {
+        "variantId": 41,
+        "productId": 7,
+        "productName": "Running Shoes",
+        "sku": "RUN-SHOE-BLACK-40",
+        "quantity": 1,
+        "listPrice": 1500000,
+        "price": 990000,
+        "priceSource": "FLASH_SALE",
+        "subtotal": 990000,
+        "saleCampaignItemId": 84,
+        "saleCampaignCode": "FLASH-2000",
+        "saleCampaignName": "Flash Sale 20h",
+        "pricing": {
+          "listPrice": 1500000,
+          "effectivePrice": 990000,
+          "priceSource": "FLASH_SALE",
+          "campaignId": 12,
+          "campaignItemId": 84,
+          "campaignCode": "FLASH-2000",
+          "campaignName": "Flash Sale 20h",
+          "startsAt": "2026-07-15T13:00:00Z",
+          "endsAt": "2026-07-15T15:00:00Z",
+          "remainingQuota": 8,
+          "maxPerCustomer": 2,
+          "customerRemaining": 1,
+          "couponEligible": false,
+          "availableQuantity": 1
+        },
+        "couponEligible": false
+      },
+      {
+        "variantId": 52,
+        "productId": 9,
+        "productName": "Training Tee",
+        "sku": "TEE-WHITE-M",
+        "quantity": 1,
+        "listPrice": 800000,
+        "price": 720000,
+        "priceSource": "STANDARD_SALE",
+        "subtotal": 720000,
+        "saleCampaignItemId": 91,
+        "saleCampaignCode": "SUMMER-2026",
+        "saleCampaignName": "Summer Sale 2026",
+        "pricing": {
+          "listPrice": 800000,
+          "effectivePrice": 720000,
+          "priceSource": "STANDARD_SALE",
+          "campaignId": 13,
+          "campaignItemId": 91,
+          "campaignCode": "SUMMER-2026",
+          "campaignName": "Summer Sale 2026",
+          "startsAt": "2026-07-01T00:00:00Z",
+          "endsAt": "2026-08-01T00:00:00Z",
+          "remainingQuota": null,
+          "maxPerCustomer": null,
+          "customerRemaining": null,
+          "couponEligible": true,
+          "availableQuantity": 18
+        },
+        "couponEligible": true
+      }
+    ],
+    "subtotal": 1710000,
+    "couponEligibleSubtotal": 720000,
+    "shippingFee": 30000,
+    "discountAmount": 72000,
+    "finalAmount": 1668000,
+    "pricingFingerprint": "2dc90d9f2e34099d8b2135608e8ba332e7106cf047b8b98d30f59196f87623d4",
+    "serverTime": "2026-07-15T13:20:00Z"
+  },
+  "message": "Success",
+  "timestamp": "2026-07-15T13:20:00Z"
+}
+```
+
+`FLASH_SALE` rows are excluded from `couponEligibleSubtotal`. `BASE` and
+`STANDARD_SALE` rows continue through normal coupon product/category rules.
+
+### POST /api/v1/checkout Bearer
+
+Creates the order, atomically reserves stock/Flash quota/customer usage,
+consumes coupon, snapshots price source, creates payment/allocation, and clears
+the cart.
+
+**Required Header:**
+
+```http
+Idempotency-Key: 43b34a30-444a-4bb7-9845-8ca560f67df0
+```
+
+**Request Body:**
+
+```json
+{
+  "receiverName": "Nguyen Van A",
+  "receiverPhone": "0901234567",
+  "receiverAddress": "123 Nguyen Hue, TP.HCM",
+  "paymentMethod": "SEPAY",
+  "couponCode": "SUMMER10",
+  "pricingFingerprint": "2dc90d9f2e34099d8b2135608e8ba332e7106cf047b8b98d30f59196f87623d4"
+}
+```
+
+`shippingFee` cũ vẫn có thể xuất hiện trong request để tương thích client cũ
+nhưng không được dùng để tính tiền. Backend lấy phí từ cấu hình
+`app.checkout.shipping-fee` và trả giá trị chuẩn trong preview/checkout.
+`pricingFingerprint` là bắt buộc và phải lấy từ response preview gần nhất;
+thiếu/rỗng trả validation `400`, còn fingerprint đã cũ trả `PRICE_CHANGED`.
 
 **Success Response (201):**
 
-\\\json
+```json
 {
   "statusCode": 201,
   "data": {
     "orderId": 1,
     "orderCode": "VELA-A1B2C3D4",
     "status": "PENDING",
-    "subtotal": 100.00,
-    "shippingFee": 15.00,
-    "discountAmount": 10.00,
-    "finalAmount": 105.00,
-    "receiverName": "John Doe",
-    "receiverPhone": "0123456789",
-    "receiverAddress": "123 Main St, City",
-    "paymentMethod": "COD",
+    "subtotal": 1710000,
+    "shippingFee": 30000,
+    "discountAmount": 72000,
+    "finalAmount": 1668000,
+    "receiverName": "Nguyen Van A",
+    "receiverPhone": "0901234567",
+    "receiverAddress": "123 Nguyen Hue, TP.HCM",
+    "paymentMethod": "SEPAY",
     "paymentStatus": "UNPAID",
-    "items": [],
-    "paymentId": null,
-    "createdAt": "2026-07-04T10:00:00Z"
+    "paymentId": 10,
+    "paymentDueAt": "2026-07-15T13:35:00Z",
+    "reservationExpiresAt": "2026-07-15T13:35:30Z",
+    "items": [
+      {
+        "orderItemId": 101,
+        "variantId": 41,
+        "productName": "Running Shoes",
+        "variantName": "Black / 40",
+        "sku": "RUN-SHOE-BLACK-40",
+        "quantity": 1,
+        "listPrice": 1500000,
+        "price": 990000,
+        "priceSource": "FLASH_SALE",
+        "saleCampaignItemId": 84,
+        "saleCampaignCode": "FLASH-2000",
+        "saleCampaignName": "Flash Sale 20h",
+        "subtotal": 990000
+      }
+    ],
+    "paymentInitiation": {
+      "provider": "SEPAY",
+      "method": "POST",
+      "actionUrl": "https://pay.sepay.vn/v1/checkout/init",
+      "fields": {}
+    },
+    "createdAt": "2026-07-15T13:20:00Z"
   },
   "message": "Created",
-  "timestamp": "2026-07-04T10:00:00"
+  "timestamp": "2026-07-15T13:20:00Z"
 }
-\\\
+```
 
-**Errors:**
+Retry with the same user, `Idempotency-Key`, and request payload returns the
+same order. Reusing the key for another payload returns
+`IDEMPOTENCY_KEY_REUSED`.
+For an unpaid SePay order, the checkout form is returned again only before
+`paymentDueAt`; replay after `reservationExpiresAt` releases resources once and
+does not issue another payment form.
 
-| Status | When |
-|--------|------|
-| 400 | Validation failed (e.g. empty cart, invalid coupon code) |
-| 401 | Unauthorized / Missing Token |
-| 404 | User not found |
-| 409 | Insufficient Stock or Invalid Request State |
+**Business Errors:**
 
----
+| Code | HTTP | When |
+|------|------|------|
+| `COUPON_INVALID` | 400 | Coupon does not exist, expired, or fails its conditions |
+| `IDEMPOTENCY_KEY_INVALID` | 400 | Idempotency header is blank or longer than 100 characters |
+| `MISSING_REQUEST_HEADER` | 400 | A required header such as `Idempotency-Key` is absent |
+| `INSUFFICIENT_STOCK` | 409 | Variant stock is lower than cart quantity |
+| `FLASH_SALE_SOLD_OUT` | 409 | Flash quota is insufficient |
+| `FLASH_SALE_ENDED` | 409 | Campaign is no longer eligible |
+| `FLASH_SALE_LIMIT_EXCEEDED` | 409 | Customer cumulative limit would be exceeded |
+| `PRICE_CHANGED` | 409 | Pricing fingerprint no longer matches server pricing |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | Same idempotency key is used with another request hash |
+
+No partial reservation remains after an error: stock, quota, customer usage,
+coupon, order and payment participate in one transaction.
 
 ### POST /api/v1/checkout/{orderId}/cancel Bearer
 
-Cancel a pending order. Restores stock, releases coupon usage, and updates order status.
+Cancels an eligible order and releases/reverses stock, coupon, Flash allocation
+and customer usage exactly once.
 
 **Success Response (200):**
 
-\\\json
+```json
 {
   "statusCode": 200,
   "data": null,
   "message": "Success",
-  "timestamp": "2026-07-04T10:05:00"
+  "timestamp": "2026-07-15T13:25:00Z"
 }
-\\\
-
-**Errors:**
+```
 
 | Status | When |
 |--------|------|
-| 400 | Invalid Order Transition (e.g., already completed) |
-| 403 | Order does not belong to the user |
+| 400 | Invalid order transition |
+| 400 | Order does not belong to authenticated user |
 | 404 | Order not found |
+| 409 | Concurrent payment/cancel/timeout transition already won |
+
+### Payment timeout and late IPN
+
+- Online payment is due in 15 minutes; reservation expires 30 seconds later.
+- Payment IPN and timeout scheduler lock/check the same persisted state.
+- If payment succeeds before release, allocation moves `RESERVED -> CONFIRMED`.
+- Timeout/cancel moves `RESERVED -> RELEASED`.
+- Money received after release sets payment state to `REFUND_PENDING`; the order
+  is not automatically restored.
+- A second captured gateway transaction for an already paid order is recorded
+  as `REFUND_PENDING`; it does not confirm stock/quota again or overwrite the
+  original transaction code.
+- COD creates `CONFIRMED` allocations immediately. Valid cancellation moves
+  them to `REVERSED` exactly once. COD collection may move `UNPAID -> PAID`;
+  shipped/completed orders cannot use cancellation to restore stock.

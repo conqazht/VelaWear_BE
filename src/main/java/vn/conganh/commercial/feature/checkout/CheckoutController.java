@@ -11,9 +11,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutRequest;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutResponse;
+import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewRequest;
+import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewResponse;
 
 @RequiredArgsConstructor
 @RestController
@@ -25,11 +28,19 @@ public class CheckoutController {
     @PostMapping
     public ResponseEntity<ApiResponse<CheckoutResponse>> checkout(
             @RequestBody @Valid CheckoutRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @AuthenticationPrincipal Jwt jwt) {
         String email = jwt.getSubject();
-        CheckoutResponse response = checkoutService.checkout(request, email);
+        CheckoutResponse response = checkoutService.checkout(request, email, idempotencyKey);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(response));
+    }
+
+    @PostMapping("/preview")
+    public ResponseEntity<ApiResponse<CheckoutPreviewResponse>> preview(
+            @RequestBody @Valid CheckoutPreviewRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(ApiResponse.success(checkoutService.preview(request, jwt.getSubject())));
     }
 
     @PostMapping("/{orderId}/cancel")

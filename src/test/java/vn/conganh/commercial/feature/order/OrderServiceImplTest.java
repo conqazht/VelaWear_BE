@@ -38,6 +38,8 @@ import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
+import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
+import vn.conganh.commercial.feature.payment.PaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Order - OrderServiceImpl")
@@ -53,12 +55,18 @@ class OrderServiceImplTest {
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
     @Mock
     private OrderItemRepository orderItemRepository;
+    @Mock
+    private OrderResourceLifecycleService resourceLifecycleService;
+    @Mock
+    private PaymentRepository paymentRepository;
 
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderRepository, userRepository, orderStatusHistoryRepository, orderItemRepository);
+        orderService = new OrderServiceImpl(
+                orderRepository, userRepository, orderStatusHistoryRepository,
+                orderItemRepository, resourceLifecycleService, paymentRepository);
     }
 
     @Nested
@@ -206,7 +214,7 @@ class OrderServiceImplTest {
             // Arrange
             Order order = order(10L, user(1L), "PENDING");
             UpdateOrderRequest request = updateRequest("SHIPPING");
-            when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
             when(orderRepository.save(order)).thenReturn(order);
 
             // Act
@@ -227,7 +235,7 @@ class OrderServiceImplTest {
             // Arrange
             Order order = order(10L, user(1L), "PENDING");
             UpdateOrderRequest request = updateRequest("PENDING");
-            when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
             when(orderRepository.save(order)).thenReturn(order);
 
             // Act
@@ -235,6 +243,40 @@ class OrderServiceImplTest {
 
             // Assert
             verify(orderStatusHistoryRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("updateOrder - cho phép ghi nhận COD đã thu tiền")
+        void updateOrder_checkoutCodCollected_marksPaid() {
+            Order order = order(10L, user(1L), "COMPLETED");
+            order.setCheckoutIdempotencyKey("cod-key");
+            order.setCheckoutRequestHash("hash");
+            order.setPaymentMethod("COD");
+            order.setPaymentStatus("UNPAID");
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
+            when(orderRepository.save(order)).thenReturn(order);
+
+            OrderResponse response = orderService.updateOrder(
+                    10L,
+                    new UpdateOrderRequest(null, null, null, null, null, null, null, null, "PAID"));
+
+            assertThat(response.paymentStatus()).isEqualTo("PAID");
+        }
+
+        @Test
+        @DisplayName("updateOrder - không hủy đơn đã chuyển sang giao hàng")
+        void updateOrder_shippingCannotCancel_doesNotReleaseResources() {
+            Order order = order(10L, user(1L), "SHIPPING");
+            order.setPaymentStatus("UNPAID");
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
+
+            assertThatThrownBy(() -> orderService.updateOrder(
+                    10L,
+                    new UpdateOrderRequest("CANCELLED", null, null, null, null, null, null, null, null)))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("PENDING or CONFIRMED");
+
+            verify(resourceLifecycleService, never()).releaseLockedOrder(any(), any(), any());
         }
     }
 
@@ -247,7 +289,7 @@ class OrderServiceImplTest {
         void deleteOrder_existingOrder_deletesOrder() {
             // Arrange
             Order order = order(10L, user(1L), "PENDING");
-            when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
 
             // Act
             orderService.deleteOrder(10L);

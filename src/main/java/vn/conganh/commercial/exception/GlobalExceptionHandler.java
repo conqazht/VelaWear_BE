@@ -15,6 +15,7 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -44,7 +45,15 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AppException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException exception) {
+    public ResponseEntity<ApiResponse<?>> handleAppException(AppException exception) {
+        if (exception instanceof CodedBusinessException coded) {
+            return ResponseEntity.status(exception.getStatus())
+                    .body(ApiResponse.error(
+                            exception.getStatus().value(),
+                            coded.getCode(),
+                            exception.getMessage(),
+                            coded.getDetails()));
+        }
         return ResponseEntity.status(exception.getStatus())
                 .body(ApiResponse.error(exception.getStatus().value(), exception.getMessage()));
     }
@@ -90,6 +99,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleMissingMultipartRequest(Exception exception) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Required upload parameter is missing"));
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponse<?>> handleMissingRequestHeader(MissingRequestHeaderException exception) {
+        return ResponseEntity.badRequest().body(ApiResponse.error(
+                HttpStatus.BAD_REQUEST.value(),
+                "MISSING_REQUEST_HEADER",
+                "Required request header is missing: " + exception.getHeaderName(),
+                Map.of("header", exception.getHeaderName())));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

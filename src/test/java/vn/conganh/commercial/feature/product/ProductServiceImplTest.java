@@ -26,6 +26,8 @@ import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Product - ProductServiceImpl")
@@ -49,6 +51,11 @@ class ProductServiceImplTest {
     @Mock
     private ProductVariantRepository productVariantRepository;
 
+    @Mock
+    private VariantPricingService variantPricingService;
+    @Mock
+    private SaleCampaignItemRepository saleCampaignItemRepository;
+
     private ProductServiceImpl productService;
 
     @BeforeEach
@@ -59,8 +66,10 @@ class ProductServiceImplTest {
                 productImageRepository,
                 categoryRepository,
                 categoryTranslationRepository,
-                productVariantRepository);
-        lenient().when(productVariantRepository.findRepresentativePricesByProductIds(any())).thenReturn(List.of());
+                productVariantRepository,
+                variantPricingService,
+                saleCampaignItemRepository);
+        lenient().when(productVariantRepository.findByProductIdInAndDeletedAtIsNull(any())).thenReturn(List.of());
     }
 
     @Nested
@@ -131,7 +140,7 @@ class ProductServiceImplTest {
             // Arrange
             Product product = product(1L, "Old", "old");
             UpdateProductRequest request = new UpdateProductRequest(3L, 4L, "New", "new desc", "INACTIVE");
-            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productRepository.findWithLockByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
             when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi")).thenReturn(Optional.empty());
             when(productTranslationRepository.save(any(ProductTranslation.class)))
@@ -167,7 +176,7 @@ class ProductServiceImplTest {
                     "New",
                     "New description",
                     "INACTIVE");
-            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productRepository.findWithLockByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
             when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi"))
                     .thenReturn(Optional.of(translation));
@@ -246,7 +255,7 @@ class ProductServiceImplTest {
         void deleteProduct_existingProduct_setsInactiveAndDeletedAt() {
             // Arrange
             Product product = product(1L, "Sneaker", "sneaker");
-            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productRepository.findWithLockByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
 
             // Act
             productService.deleteProduct(1L);

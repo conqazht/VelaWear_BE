@@ -12,8 +12,6 @@ public record ProductVariantFilterRequest(
         String status,
         BigDecimal priceFrom,
         BigDecimal priceTo,
-        BigDecimal salePriceFrom,
-        BigDecimal salePriceTo,
         Integer stockFrom,
         Integer stockTo,
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)

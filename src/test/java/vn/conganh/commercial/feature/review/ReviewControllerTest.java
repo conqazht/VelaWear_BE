@@ -173,9 +173,10 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
         Long variantId = seedVariant(productId, colorId, sizeId);
         Long orderId = insertOrderRow(userId, unique("review-order").toUpperCase(), "COMPLETED");
         Long orderItemId = insertForId("""
-                insert into order_items (order_id, variant_id, product_name, variant_name, sku, image, price,
-                    quantity, subtotal, status)
-                values (?, ?, 'Review Product', 'Black / M', ?, null, 100000, 1, 100000, 'CONFIRMED')
+                insert into order_items (order_id, variant_id, product_name, variant_name, sku, image,
+                    list_price, price, price_source, quantity, subtotal, status)
+                values (?, ?, 'Review Product', 'Black / M', ?, null,
+                    100000, 100000, 'BASE', 1, 100000, 'CONFIRMED')
                 returning id
                 """, orderId, variantId, unique("review-sku").toUpperCase());
         Long reviewId = insertForId("""

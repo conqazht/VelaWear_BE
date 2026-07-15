@@ -10,6 +10,7 @@ import vn.conganh.commercial.feature.color.Color;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductTranslation;
+import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 
 public record ProductResponse(
         Long id,
@@ -34,7 +35,7 @@ public record ProductResponse(
         String categoryName,
         String categorySlug,
         BigDecimal price,
-        BigDecimal salePrice
+        VariantPricingResponse pricing
 ) {
 
     public static ProductResponse fromEntity(Product product) {
@@ -56,7 +57,7 @@ public record ProductResponse(
             String categoryName,
             String categorySlug,
             BigDecimal price,
-            BigDecimal salePrice
+            VariantPricingResponse pricing
     ) {
         String thumbnail = null;
         String mainImage = null;
@@ -110,7 +111,7 @@ public record ProductResponse(
                 categoryName,
                 categorySlug,
                 price,
-                salePrice);
+                pricing);
     }
 
     private static List<ColorImages> groupImagesByColor(List<ProductImage> images) {

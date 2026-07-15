@@ -104,8 +104,8 @@ SET
     brand_id = EXCLUDED.brand_id,
     status = EXCLUDED.status;
 
-INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'NS-JACKET-PUR-M', 1199000.00, 999000.00, 24, c.id, s.id, 'ACTIVE'
+INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
+SELECT p.id, 'NS-JACKET-PUR-M', 1199000.00, 24, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
@@ -115,14 +115,13 @@ WHERE p.slug = 'north-utility-jacket'
 ON CONFLICT (sku) DO UPDATE
 SET
     price = EXCLUDED.price,
-    sale_price = EXCLUDED.sale_price,
     stock_quantity = EXCLUDED.stock_quantity,
     color_id = EXCLUDED.color_id,
     size_id = EXCLUDED.size_id,
     status = EXCLUDED.status;
 
-INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'SV-TOTE-ORG-OS', 329000.00, NULL, 120, c.id, s.id, 'ACTIVE'
+INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
+SELECT p.id, 'SV-TOTE-ORG-OS', 329000.00, 120, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
@@ -132,7 +131,6 @@ WHERE p.slug = 'studio-canvas-tote'
 ON CONFLICT (sku) DO UPDATE
 SET
     price = EXCLUDED.price,
-    sale_price = EXCLUDED.sale_price,
     stock_quantity = EXCLUDED.stock_quantity,
     color_id = EXCLUDED.color_id,
     size_id = EXCLUDED.size_id,
@@ -277,16 +275,16 @@ SET status = EXCLUDED.status,
     payment_method = EXCLUDED.payment_method,
     payment_status = EXCLUDED.payment_status;
 
-INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
-SELECT o.id, pv.id, p.name, 'Purple / M', pv.sku, '/uploads/products/north_structured_blazer_purple.png', 999000.00, 1, 999000.00, 'CONFIRMED'
+INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, list_price, price, quantity, subtotal, status)
+SELECT o.id, pv.id, p.name, 'Purple / M', pv.sku, '/uploads/products/north_structured_blazer_purple.png', 999000.00, 999000.00, 1, 999000.00, 'CONFIRMED'
 FROM orders o
 JOIN product_variants pv ON pv.sku = 'NS-JACKET-PUR-M'
 JOIN products p ON p.id = pv.product_id
 WHERE o.order_code = 'VW-DEV-1002'
   AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.sku = pv.sku);
 
-INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
-SELECT o.id, pv.id, p.name, 'Orange / One Size', pv.sku, '/uploads/products/studio_leather_tote_orange.png', 329000.00, 2, 658000.00, 'PENDING'
+INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, list_price, price, quantity, subtotal, status)
+SELECT o.id, pv.id, p.name, 'Orange / One Size', pv.sku, '/uploads/products/studio_leather_tote_orange.png', 329000.00, 329000.00, 2, 658000.00, 'PENDING'
 FROM orders o
 JOIN product_variants pv ON pv.sku = 'SV-TOTE-ORG-OS'
 JOIN products p ON p.id = pv.product_id

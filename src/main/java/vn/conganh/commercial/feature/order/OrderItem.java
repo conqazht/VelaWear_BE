@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import vn.conganh.commercial.feature.salecampaign.PriceSource;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
 
 @Getter
 @Setter
@@ -50,6 +52,23 @@ public class OrderItem {
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal price;
+
+    @Column(name = "list_price", nullable = false, precision = 15, scale = 2)
+    private BigDecimal listPrice;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "price_source", nullable = false, length = 30)
+    private PriceSource priceSource = PriceSource.BASE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sale_campaign_item_id")
+    private SaleCampaignItem saleCampaignItem;
+
+    @Column(name = "sale_campaign_code", length = 50)
+    private String saleCampaignCode;
+
+    @Column(name = "sale_campaign_name")
+    private String saleCampaignName;
 
     @Column(nullable = false)
     private int quantity;

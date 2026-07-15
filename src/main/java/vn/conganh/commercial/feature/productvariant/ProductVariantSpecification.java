@@ -30,13 +30,6 @@ public final class ProductVariantSpecification {
                 FilterSpecifications.addRange(
                         predicates,
                         cb,
-                        from.<BigDecimal>get("salePrice"),
-                        filter.salePriceFrom(),
-                        filter.salePriceTo(),
-                        "salePrice");
-                FilterSpecifications.addRange(
-                        predicates,
-                        cb,
                         from.<Integer>get("stockQuantity"),
                         filter.stockFrom(),
                         filter.stockTo(),

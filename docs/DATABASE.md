@@ -2,6 +2,7 @@
 
 > PostgreSQL database design for VelaWear commercial e-commerce backend.
 > Update this file whenever schema changes.
+> Giải thích nghiệp vụ và luồng concurrency của bốn bảng Sale xem [SALE_CAMPAIGN_BACKEND.md](./SALE_CAMPAIGN_BACKEND.md).
 
 ---
 
@@ -26,7 +27,7 @@ Notes:
 
 ## Entity Relationship Diagram
 
-Full ERD for the current 28-table VelaWear schema. Main business relationships use direct `N:M` notation for readability; physical join tables are listed separately.
+Full ERD for the current 36-table VelaWear schema. Main business relationships use direct `N:M` notation for readability; physical join tables are listed separately.
 
 ```text
 RBAC / Account
@@ -48,6 +49,8 @@ RBAC / Account
        ├──────────────────► refresh_tokens(id, token, user_id, expires_at, revoked, device_info, ip_address, created_at)
        │ 1:N
        ├──────────────────► user_addresses(id, user_id, receiver_name, phone, province, district, ward, address_detail, is_default)
+       │ 1:N
+       ├──────────────────► social_accounts(id, user_id, provider, provider_user_id, provider_email, provider_email_verified)
        │ 1:1
        └──────────────────► carts(id, user_id, created_at)
 
@@ -86,10 +89,9 @@ Catalog
         │ product_id (FK)  │   │ product_id (FK)  │   │ product_id (FK)    │
         │ sku (UQ)         │   │ variant_id NULL  │   │ name               │
         │ price            │   │ image            │   │ value              │
-        │ sale_price       │   │ is_thumbnail     │   └────────────────────┘
-        │ stock_quantity   │   │ sort_order       │
-        │ color_id (FK)    │   └──────────────────┘
-        │ size_id (FK)     │
+        │ stock_quantity   │   │ is_thumbnail     │   └────────────────────┘
+        │ color_id (FK)    │   │ sort_order       │
+        │ size_id (FK)     │   └──────────────────┘
         │ status           │
         │ created_at       │
         │ updated_at       │
@@ -106,41 +108,70 @@ Catalog
         │ sort_order   │       └──────────────┘
         └──────────────┘
 
+Catalog i18n
+locales 1:N product_translations N:1 products
+locales 1:N category_translations N:1 categories
+
+Sale Campaign
+┌──────────────────┐       1:N       ┌─────────────────────┐       N:1       ┌──────────────────┐
+│  sale_campaigns  │───────────────►│ sale_campaign_items │───────────────►│ product_variants │
+├──────────────────┤                 ├─────────────────────┤                 ├──────────────────┤
+│ id (PK)          │                 │ id (PK)             │                 │ id (PK)          │
+│ code (UQ)        │                 │ campaign_id (FK)    │                 │ sku (UQ)         │
+│ type             │                 │ variant_id (FK)     │                 │ price            │
+│ status           │                 │ reference_price     │                 │ stock_quantity   │
+│ starts_at        │                 │ promotional_price   │                 └──────────────────┘
+│ ends_at          │                 │ quota               │
+│ version          │                 │ reserved_quantity   │
+└────────┬─────────┘                 │ sold_quantity       │
+         │                           │ max_per_customer    │
+         │                           └──────┬──────────┬────┘
+         │                                  │ 1:N      │ 1:N
+         │                                  ▼          ▼
+         │                    ┌──────────────────────┐  ┌──────────────────┐
+         │                    │sale_customer_usages │  │ sale_allocations │
+         │                    ├──────────────────────┤  ├──────────────────┤
+         │                    │ campaign_item_id FK  │  │ campaign_item_id │
+         │                    │ user_id (FK)         │  │ order_item_id UQ │
+         │                    │ reserved_quantity    │  │ user_id (FK)     │
+         │                    │ purchased_quantity   │  │ quantity         │
+         │                    └──────────────────────┘  │ status           │
+         │                                              └──────────────────┘
+         │ N:1 creator/publisher
+         ▼
+       users
+
 Checkout / Orders / Payment
-┌──────────────┐       1:N       ┌──────────────────┐       1:N       ┌──────────────────┐
-│    users     │───────────────►│     orders       │───────────────►│   order_items    │
-├──────────────┤                 ├──────────────────┤                 ├──────────────────┤
-│ id (PK)      │                 │ id (PK)          │                 │ id (PK)          │
-│ email (UQ)   │                 │ user_id (FK)     │                 │ order_id (FK)    │
-└──────┬───────┘                 │ order_code (UQ)  │                 │ variant_id NULL  │
-       │ 1:1                     │ status           │                 │ product_name     │
-       ▼                         │ subtotal         │                 │ variant_name     │
-┌──────────────┐       1:N       │ shipping_fee     │                 │ sku              │
-│    carts     │───────────────►│ discount_amount  │                 │ image            │
-├──────────────┤                 │ final_amount     │                 │ price            │
-│ id (PK)      │                 │ receiver_name    │                 │ quantity         │
-│ user_id (UQ) │                 │ receiver_phone   │                 │ subtotal         │
-│ created_at   │                 │ receiver_address │                 │ status           │
-└──────────────┘                 │ payment_method   │                 │ created_at       │
-       │ 1:N                     │ payment_status   │                 └────────┬─────────┘
-       ▼                         │ created_at       │                          │ N:1 optional
-┌──────────────┐                 │ updated_at       │                          ▼
-│  cart_items  │                 └──────┬───────────┘                 ┌──────────────────┐
-├──────────────┤                        │ 1:N                         │ product_variants │
-│ id (PK)      │                        ▼                             ├──────────────────┤
-│ cart_id (FK) │                 ┌──────────────┐                     │ id (PK)          │
-│ variant_id   │                 │   payments   │                     │ sku (UQ)         │
-│ quantity     │                 ├──────────────┤                     └──────────────────┘
-└──────┬───────┘                 │ id (PK)      │
-       │ N:1                     │ order_id     │
-       ▼                         │ provider     │
-product_variants                 │ transaction_code │
-                                 │ amount       │
-                                 │ status       │
-                                 │ paid_at      │
-                                 │ created_at   │
-                                 │ updated_at   │
-                                 └──────┬───────┘
+users 1:N orders 1:N order_items
+carts 1:N cart_items N:1 product_variants
+
+┌─────────────────────────┐       1:N       ┌──────────────────────────┐
+│         orders          │───────────────►│       order_items        │
+├─────────────────────────┤                 ├──────────────────────────┤
+│ id (PK)                 │                 │ id (PK)                  │
+│ user_id (FK)            │                 │ order_id (FK)            │
+│ order_code (UQ)         │                 │ variant_id NULL          │
+│ status/payment_status   │                 │ product/variant snapshot │
+│ monetary totals         │                 │ list_price               │
+│ receiver snapshot       │                 │ price                    │
+│ payment_due_at          │                 │ price_source             │
+│ reservation_expires_at  │                 │ sale_campaign_item_id FK │
+│ resources_released_at   │                 │ campaign code/name       │
+│ checkout_idempotency_key│                 │ quantity/subtotal/status │
+│ checkout_request_hash   │                 │ created_at               │
+│ created_at/updated_at   │                 └────────────┬─────────────┘
+└────────────┬────────────┘                              │ N:1 optional
+             │ 1:N                                      ├──► product_variants
+             ▼                                          └──► sale_campaign_items
+┌─────────────────────────┐
+│        payments         │
+├─────────────────────────┤
+│ id (PK), order_id (FK)  │
+│ provider/transaction    │
+│ amount/status           │
+│ paid_at                 │
+│ created_at/updated_at   │
+└────────────┬────────────┘
                                         │ 1:N
                                         ▼
                                  ┌──────────────────────┐
@@ -348,6 +379,23 @@ Notes:
 - Cleanup job can delete expired or revoked rows based on token retention policy.
 - Prefer `ON DELETE RESTRICT` for `user_id`; revoke tokens when users are soft-deleted.
 
+### social_accounts
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
+| user_id | BIGINT | FK -> users(id), NOT NULL, ON DELETE CASCADE | Tài khoản nội bộ |
+| provider | VARCHAR(30) | NOT NULL | Nhà cung cấp OAuth/OIDC |
+| provider_user_id | VARCHAR(255) | NOT NULL | Subject/id tại provider |
+| provider_email | VARCHAR(255) | NULLABLE | Email provider trả về |
+| provider_email_verified | BOOLEAN | NOT NULL, DEFAULT false | Provider đã xác minh email |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Constraints:
+- `UNIQUE (provider, provider_user_id)`
+- `UNIQUE (user_id, provider)`
+
 ### user_addresses
 
 | Column | Type | Constraints | Description |
@@ -414,6 +462,61 @@ Notes:
 - Application logic should prevent circular parent-child category trees.
 - Cleanup job: hard-delete soft-deleted categories only after child categories/products are moved or archived.
 
+### locales
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| code | VARCHAR(10) | PK, regex `^[a-z]{2}(-[a-z]{2})?$` | Locale code, ví dụ `vi`, `en`, `vi-vn` |
+| name | VARCHAR(100) | NOT NULL | Tên locale |
+| is_default | BOOLEAN | NOT NULL, DEFAULT false | Locale mặc định |
+| is_enabled | BOOLEAN | NOT NULL, DEFAULT true | Có được sử dụng hay không |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Indexes:
+- `UNIQUE INDEX uidx_locales_single_default ON locales(is_default) WHERE is_default = TRUE`
+
+### product_translations
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| product_id | BIGINT | PK/FK -> products(id), ON DELETE CASCADE | Product được dịch |
+| locale_code | VARCHAR(10) | PK/FK -> locales(code), ON DELETE RESTRICT | Ngôn ngữ |
+| name | VARCHAR(255) | NOT NULL | Tên bản địa hóa |
+| slug | VARCHAR(280) | NOT NULL | Slug theo locale |
+| short_description | VARCHAR(500) | NULLABLE | Mô tả ngắn |
+| description | TEXT | NULLABLE | Mô tả đầy đủ |
+| material | TEXT | NULLABLE | Chất liệu |
+| care_instruction | TEXT | NULLABLE | Hướng dẫn bảo quản |
+| seo_title | VARCHAR(255) | NULLABLE | SEO title |
+| seo_description | VARCHAR(500) | NULLABLE | SEO description |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Indexes and constraints:
+- Composite PK `(product_id, locale_code)`.
+- `UNIQUE (locale_code, slug)`.
+- `INDEX idx_product_translations_locale_code ON product_translations(locale_code)`.
+
+### category_translations
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| category_id | BIGINT | PK/FK -> categories(id), ON DELETE CASCADE | Category được dịch |
+| locale_code | VARCHAR(10) | PK/FK -> locales(code), ON DELETE RESTRICT | Ngôn ngữ |
+| name | VARCHAR(150) | NOT NULL | Tên bản địa hóa |
+| slug | VARCHAR(180) | NOT NULL | Slug theo locale |
+| description | TEXT | NULLABLE | Mô tả |
+| seo_title | VARCHAR(255) | NULLABLE | SEO title |
+| seo_description | VARCHAR(500) | NULLABLE | SEO description |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Indexes and constraints:
+- Composite PK `(category_id, locale_code)`.
+- `UNIQUE (locale_code, slug)`.
+- `INDEX idx_category_translations_locale_code ON category_translations(locale_code)`.
+
 ### colors
 
 | Column | Type | Constraints | Description |
@@ -467,8 +570,7 @@ Notes:
 | id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
 | product_id | BIGINT | FK -> products(id), NOT NULL | Parent product |
 | sku | VARCHAR(100) | NOT NULL, UNIQUE | Stock keeping unit |
-| price | NUMERIC(15,2) | NOT NULL, CHECK price >= 0 | Regular price |
-| sale_price | NUMERIC(15,2) | NULLABLE, CHECK sale_price >= 0 | Sale price |
+| price | NUMERIC(15,2) | NOT NULL, CHECK price >= 0 | Giá niêm yết; mọi giá khuyến mãi nằm trong Sale Campaign |
 | stock_quantity | INT | NOT NULL, DEFAULT 0, CHECK stock_quantity >= 0 | Current sellable stock |
 | color_id | BIGINT | FK -> colors(id), NULLABLE | Variant color |
 | size_id | BIGINT | FK -> sizes(id), NULLABLE | Variant size |
@@ -488,10 +590,119 @@ Constraints:
 - Unique variant option per product: `UNIQUE (product_id, color_id, size_id)`
 
 Notes:
-- Add check constraint: `sale_price IS NULL OR sale_price <= price`.
+- Active schema không còn cột `sale_price`; `V1` chỉ còn là lịch sử migration. Giá hiệu lực được resolve từ `sale_campaign_items` rồi fallback về `price`.
 - The composite unique constraint works well when each product has at most one variant per color/size pair.
 - If a product can have duplicate color/size variants for special releases, remove `idx_product_variants_product_color_size` and rely on unique SKU only.
 - Cleanup job: keep soft-deleted variants while order/reporting history can still reference them; purge only after retention policy allows it.
+
+### sale_campaigns
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
+| code | VARCHAR(50) | NOT NULL, UNIQUE | Mã ổn định dùng cho URL, log và audit |
+| name | VARCHAR(255) | NOT NULL | Tên hiển thị |
+| description | TEXT | NULLABLE | Nội dung campaign |
+| banner_url | VARCHAR(500) | NULLABLE | Banner storefront |
+| type | VARCHAR(20) | NOT NULL | `STANDARD`, `FLASH` |
+| status | VARCHAR(20) | NOT NULL, DEFAULT `DRAFT` | `DRAFT`, `PUBLISHED`, `CANCELLED` |
+| starts_at | TIMESTAMPTZ | NOT NULL | Mốc bắt đầu, inclusive |
+| ends_at | TIMESTAMPTZ | NOT NULL | Mốc kết thúc, exclusive |
+| version | BIGINT | NOT NULL, DEFAULT 0 | Optimistic locking khi admin sửa |
+| created_by | BIGINT | FK -> users(id), NULLABLE, ON DELETE SET NULL | Người tạo |
+| published_by | BIGINT | FK -> users(id), NULLABLE, ON DELETE SET NULL | Người publish gần nhất |
+| published_at | TIMESTAMPTZ | NULLABLE | Thời điểm publish |
+| cancelled_at | TIMESTAMPTZ | NULLABLE | Thời điểm hủy UPCOMING |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Indexes:
+- `INDEX idx_sale_campaigns_public_window ON sale_campaigns(type, status, starts_at, ends_at)`
+
+Constraints:
+- `CHECK (type IN ('STANDARD', 'FLASH'))`
+- `CHECK (status IN ('DRAFT', 'PUBLISHED', 'CANCELLED'))`
+- `CHECK (ends_at > starts_at)`
+
+Notes:
+- `UPCOMING`, `LIVE`, `ENDED` không lưu thành cột. `CANCELLED` luôn được ánh xạ thành `ENDED`; các status khác tính phase từ `starts_at`, `ends_at` và thời gian hiện tại. Campaign chỉ có hiệu lực khi `status = PUBLISHED`.
+- Campaign đã publish không hard-delete; chỉ DRAFT mới được xóa.
+
+### sale_campaign_items
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
+| campaign_id | BIGINT | FK -> sale_campaigns(id), NOT NULL, ON DELETE CASCADE | Campaign cha |
+| variant_id | BIGINT | FK -> product_variants(id), NOT NULL, ON DELETE RESTRICT | SKU tham gia |
+| reference_price | NUMERIC(15,2) | NOT NULL, CHECK >= 0 | Snapshot giá tham chiếu lúc publish |
+| promotional_price | NUMERIC(15,2) | NOT NULL, CHECK > 0 | Giá campaign |
+| quota | INT | NULLABLE, CHECK > 0 khi khác null | Bắt buộc với FLASH, null với STANDARD |
+| reserved_quantity | INT | NOT NULL, DEFAULT 0 | Suất Flash đang giữ cho thanh toán online |
+| sold_quantity | INT | NOT NULL, DEFAULT 0 | Suất đã xác nhận/COD |
+| max_per_customer | INT | NULLABLE | Giới hạn cộng dồn theo khách; null là không giới hạn |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Indexes:
+- `UNIQUE (campaign_id, variant_id)`
+- `INDEX idx_sale_campaign_items_variant ON sale_campaign_items(variant_id)`
+- `INDEX idx_sale_campaign_items_campaign ON sale_campaign_items(campaign_id)`
+
+Constraints:
+- `CHECK (promotional_price < reference_price)`
+- `CHECK (reserved_quantity >= 0 AND sold_quantity >= 0)`
+- `CHECK (quota IS NULL OR quota > 0)`
+- `CHECK (quota IS NULL OR reserved_quantity + sold_quantity <= quota)`
+- `CHECK (max_per_customer IS NULL OR (max_per_customer > 0 AND (quota IS NULL OR max_per_customer <= quota)))`
+
+Notes:
+- Invariant theo loại ở service: `STANDARD` bắt buộc `quota IS NULL`, `max_per_customer IS NULL`, counters bằng 0; `FLASH` bắt buộc `quota > 0`, còn `max_per_customer` có thể null hoặc nằm trong `1..quota`.
+- Các `CHECK` phía trên bảo vệ tính hợp lệ tổng quát của từng cột/counter; việc ràng buộc `type` của bảng cha với item được service kiểm tra trong transaction create/update/publish.
+- Cấm overlap cùng loại trên cùng variant được kiểm tra trong transaction publish/update, sau khi khóa các variant theo thứ tự ID.
+
+### sale_customer_usages
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
+| campaign_item_id | BIGINT | FK -> sale_campaign_items(id), NOT NULL, ON DELETE CASCADE | Item Flash |
+| user_id | BIGINT | FK -> users(id), NOT NULL, ON DELETE RESTRICT | Khách hàng |
+| reserved_quantity | INT | NOT NULL, DEFAULT 0, CHECK >= 0 | Số lượng đang giữ |
+| purchased_quantity | INT | NOT NULL, DEFAULT 0, CHECK >= 0 | Số lượng đã xác nhận |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Indexes and constraints:
+- `UNIQUE (campaign_item_id, user_id)` là khóa cạnh tranh cho giới hạn mỗi khách.
+- `INDEX idx_sale_customer_usages_user ON sale_customer_usages(user_id)` phục vụ lịch sử/đối soát theo khách.
+
+Notes:
+- Counter được reserve/confirm/release/reverse bằng atomic conditional update; không `SUM(order_items)` rồi mới insert.
+
+### sale_allocations
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
+| campaign_item_id | BIGINT | FK -> sale_campaign_items(id), NOT NULL, ON DELETE RESTRICT | Nguồn quota |
+| order_item_id | BIGINT | FK -> order_items(id), NOT NULL, UNIQUE, ON DELETE RESTRICT | Mỗi order item có tối đa một allocation |
+| user_id | BIGINT | FK -> users(id), NOT NULL, ON DELETE RESTRICT | Chủ allocation |
+| quantity | INT | NOT NULL, CHECK > 0 | Số lượng quota |
+| status | VARCHAR(20) | NOT NULL | `RESERVED`, `CONFIRMED`, `RELEASED`, `REVERSED` |
+| reserved_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Thời điểm giữ |
+| confirmed_at | TIMESTAMPTZ | NULLABLE | Thời điểm xác nhận |
+| released_at | TIMESTAMPTZ | NULLABLE | Thời điểm release reservation |
+| reversed_at | TIMESTAMPTZ | NULLABLE | Thời điểm reverse allocation đã confirm |
+
+Indexes:
+- `INDEX idx_sale_allocations_item_status ON sale_allocations(campaign_item_id, status)`
+- `INDEX idx_sale_allocations_user ON sale_allocations(user_id)`
+
+Notes:
+- Online checkout tạo `RESERVED`, payment success chuyển `CONFIRMED`, timeout/cancel chuyển `RELEASED`.
+- COD tạo `CONFIRMED`; hủy hợp lệ chuyển `REVERSED`.
+- Transition phải dùng điều kiện trên status cũ để webhook/retry không cập nhật counter hai lần.
 
 ### product_images
 
@@ -599,17 +810,29 @@ Notes:
 | receiver_name | VARCHAR(150) | NOT NULL | Snapshot at checkout |
 | receiver_phone | VARCHAR(20) | NOT NULL | Snapshot at checkout |
 | receiver_address | VARCHAR(500) | NOT NULL | Snapshot at checkout |
-| payment_method | VARCHAR(30) | NOT NULL | COD, VNPAY, MOMO, BANK_TRANSFER |
-| payment_status | VARCHAR(30) | NOT NULL | UNPAID, PAID, FAILED, REFUNDED |
+| payment_method | VARCHAR(30) | NOT NULL | COD, VNPAY, MOMO, BANK_TRANSFER, SEPAY |
+| payment_status | VARCHAR(30) | NOT NULL | UNPAID, PAID, FAILED, REFUND_PENDING, REFUNDED |
+| payment_due_at | TIMESTAMPTZ | NULLABLE | Hạn thanh toán online, mặc định sau 15 phút |
+| reservation_expires_at | TIMESTAMPTZ | NULLABLE | Hạn giữ stock/quota, mặc định sau `payment_due_at` 30 giây |
+| resources_released_at | TIMESTAMPTZ | NULLABLE | Idempotency marker khi đã hoàn stock/coupon/quota |
+| checkout_idempotency_key | VARCHAR(100) | NULLABLE | Key do client tạo cho một ý định checkout |
+| checkout_request_hash | VARCHAR(64) | NULLABLE | SHA-256 payload dùng phát hiện tái sử dụng key sai |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
 | updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
 
 Indexes:
 - `INDEX idx_orders_user_id ON orders(user_id)`
+- `UNIQUE uq_orders_user_idempotency (user_id, checkout_idempotency_key)`
+- `INDEX idx_orders_expiring_reservations ON orders(reservation_expires_at) WHERE status = 'PENDING' AND payment_status = 'UNPAID' AND resources_released_at IS NULL` cho timeout scheduler
+
+Constraints:
+- `checkout_idempotency_key` và `checkout_request_hash` phải cùng null hoặc cùng khác null (`ck_orders_idempotency_pair`).
 
 Notes:
 - Order receiver fields are snapshots and should not be normalized to `user_addresses`.
 - `updated_at` tracks direct order field changes; `order_status_histories` still records every status transition.
+- Retry cùng user/key/hash trả lại order hiện có; cùng key nhưng hash khác phải bị từ chối.
+- Cancel, payment failure và timeout phải khóa order rồi kiểm tra `resources_released_at` để chỉ hoàn tài nguyên một lần.
 - Add check constraint: `final_amount = subtotal + shipping_fee - discount_amount` if totals are always database-enforced. Otherwise keep this validation in service logic to allow rare adjustment cases.
 
 ### order_items
@@ -623,7 +846,12 @@ Notes:
 | variant_name | VARCHAR(255) | NULLABLE | Snapshot variant label |
 | sku | VARCHAR(100) | NOT NULL | Snapshot SKU |
 | image | VARCHAR(500) | NULLABLE | Snapshot image |
-| price | NUMERIC(15,2) | NOT NULL, CHECK price >= 0 | Snapshot unit price |
+| list_price | NUMERIC(15,2) | NOT NULL, CHECK list_price >= 0 | Snapshot giá niêm yết |
+| price | NUMERIC(15,2) | NOT NULL, CHECK price >= 0 | Đơn giá thực trả trước coupon |
+| price_source | VARCHAR(30) | NOT NULL | BASE, STANDARD_SALE, FLASH_SALE |
+| sale_campaign_item_id | BIGINT | FK -> sale_campaign_items(id), NULLABLE, ON DELETE RESTRICT | Null với BASE; liên kết audit với dòng sale |
+| sale_campaign_code | VARCHAR(50) | NULLABLE | Snapshot mã campaign |
+| sale_campaign_name | VARCHAR(255) | NULLABLE | Snapshot tên campaign |
 | quantity | INT | NOT NULL, CHECK quantity > 0 | |
 | subtotal | NUMERIC(15,2) | NOT NULL, CHECK subtotal >= 0 | price * quantity |
 | status | VARCHAR(30) | NOT NULL | PENDING, CONFIRMED, CANCELLED, RETURNED |
@@ -632,12 +860,14 @@ Notes:
 Indexes:
 - `INDEX idx_order_items_order_id ON order_items(order_id)`
 - `INDEX idx_order_items_variant_id ON order_items(variant_id)`
+- `INDEX idx_order_items_sale_campaign_item ON order_items(sale_campaign_item_id)`
 - `INDEX idx_order_items_status ON order_items(status)`
 
 Notes:
 - `order_id` uses `ON DELETE RESTRICT` because order items are commercial history and should not be cascade-deleted with an order.
 - `variant_id` is nullable so old order items still remain valid if a variant is removed.
-- Snapshot fields (`product_name`, `variant_name`, `sku`, `image`, `price`) must be filled at checkout and never recomputed from catalog tables.
+- Snapshot fields (`product_name`, `variant_name`, `sku`, `image`, `list_price`, `price`, campaign code/name) must be filled at checkout and never recomputed from catalog tables.
+- `price_source = BASE` yêu cầu `sale_campaign_item_id IS NULL`; hai nguồn SALE yêu cầu foreign key khác null.
 - Add check constraint: `subtotal = price * quantity` if subtotal is always strictly derived.
 
 ### payments
@@ -646,10 +876,10 @@ Notes:
 |--------|------|-------------|-------------|
 | id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
 | order_id | BIGINT | FK -> orders(id), NOT NULL | Related order |
-| provider | VARCHAR(50) | NOT NULL | COD, VNPAY, MOMO, STRIPE |
+| provider | VARCHAR(50) | NOT NULL | COD, SEPAY, VNPAY, MOMO, STRIPE |
 | transaction_code | VARCHAR(100) | NULLABLE, UNIQUE | Latest provider transaction code |
 | amount | NUMERIC(15,2) | NOT NULL, CHECK amount >= 0 | Payment amount |
-| status | VARCHAR(30) | NOT NULL | PENDING, SUCCESS, FAILED, CANCELLED, REFUNDED |
+| status | VARCHAR(30) | NOT NULL | PENDING, SUCCESS, FAILED, CANCELLED, REFUND_PENDING, REFUNDED |
 | paid_at | TIMESTAMPTZ | NULLABLE | Payment success time |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
 | updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
@@ -660,6 +890,7 @@ Indexes:
 Notes:
 - If only one payment attempt per order is allowed, add `UNIQUE (order_id)`.
 - Current design allows multiple payment attempts per order and stores detailed attempts in `payment_transactions`.
+- `REFUND_PENDING` được dùng khi tiền đến sau khi order đã hết hạn và tài nguyên đã release; hệ thống không tự phục hồi đơn.
 
 ### payment_transactions
 
@@ -668,12 +899,13 @@ Notes:
 | id | BIGINT GENERATED BY DEFAULT AS IDENTITY | PK | |
 | payment_id | BIGINT | FK -> payments(id), NOT NULL | Parent payment |
 | transaction_code | VARCHAR(100) | NULLABLE, UNIQUE when not null | Provider transaction ID/code |
-| status | VARCHAR(30) | NOT NULL | PENDING, SUCCESS, FAILED, CANCELLED |
+| status | VARCHAR(30) | NOT NULL | PENDING, SUCCESS, FAILED, CANCELLED, REFUND_PENDING |
 | gateway_response | JSONB | NULLABLE | Raw/sanitized provider response |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
 
 Indexes:
 - `INDEX idx_payment_transactions_payment_id ON payment_transactions(payment_id)`
+- `REFUND_PENDING` đánh dấu giao dịch gateway đã capture nhưng phải hoàn lại, ví dụ tiền đến sau timeout hoặc khách chuyển trùng cho cùng đơn.
 
 Notes:
 - `payment_id` uses `ON DELETE RESTRICT` because payment transaction records are financial/audit history.
@@ -822,6 +1054,9 @@ Notes:
 | permission_role | `idx_permission_role_role_id` | `role_id` | Fast role-to-permission lookup |
 | refresh_tokens | `idx_refresh_tokens_user_id` | `user_id` | Lookup tokens by user |
 | refresh_tokens | `idx_refresh_tokens_expires_at` | `expires_at` | Expired token cleanup job |
+| locales | `uidx_locales_single_default` | `is_default` | Partial unique index bảo đảm chỉ một locale mặc định |
+| product_translations | `idx_product_translations_locale_code` | `locale_code` | Load/filter product translation theo locale |
+| category_translations | `idx_category_translations_locale_code` | `locale_code` | Load/filter category translation theo locale |
 | user_addresses | `idx_user_addresses_user_id` | `user_id` | Lookup addresses by user |
 | user_addresses | `idx_user_addresses_is_default` | `is_default` | Filter default shipping addresses |
 | brands | `idx_brands_deleted_at` | `deleted_at` | Soft-delete cleanup job |
@@ -842,9 +1077,17 @@ Notes:
 | product_variants | `idx_product_variants_deleted_at` | `deleted_at` | Soft-delete cleanup/report retention job |
 | product_variants | `idx_product_variants_status` | `status` | Filter variants by status |
 | product_variants | `idx_product_variants_price` | `price` | Filter variants by price range |
-| product_variants | `idx_product_variants_sale_price` | `sale_price` | Filter variants by sale price range |
 | product_variants | `idx_product_variants_stock_quantity` | `stock_quantity` | Filter variants by stock range |
 | product_variants | `idx_product_variants_created_at` | `created_at` | Filter variants by creation date |
+| sale_campaigns | `idx_sale_campaigns_public_window` | `type`, `status`, `starts_at`, `ends_at` | Resolve/filter public campaign |
+| sale_campaign_items | `uq_sale_campaign_items_campaign_variant` | `campaign_id`, `variant_id` | Một variant chỉ xuất hiện một lần trong campaign |
+| sale_campaign_items | `idx_sale_campaign_items_variant` | `variant_id` | Resolve campaign theo variant |
+| sale_campaign_items | `idx_sale_campaign_items_campaign` | `campaign_id` | Load item của campaign |
+| sale_customer_usages | `uq_sale_customer_usages_item_user` | `campaign_item_id`, `user_id` | Khóa counter giới hạn mỗi khách |
+| sale_customer_usages | `idx_sale_customer_usages_user` | `user_id` | Đối soát usage theo khách |
+| sale_allocations | `uq_sale_allocations_order_item` | `order_item_id` | Idempotency allocation theo dòng đơn |
+| sale_allocations | `idx_sale_allocations_item_status` | `campaign_item_id`, `status` | Đối soát/transition quota item |
+| sale_allocations | `idx_sale_allocations_user` | `user_id` | Lịch sử allocation của khách |
 | product_images | `idx_product_images_product_id` | `product_id` | Lookup images by product |
 | product_images | `idx_product_images_variant_id` | `variant_id` | Lookup images by variant |
 | product_attributes | `idx_product_attributes_product_id` | `product_id` | Lookup attributes by product |
@@ -866,8 +1109,11 @@ Notes:
 | orders | `idx_orders_final_amount` | `final_amount` | Filter orders by final amount range |
 | orders | `idx_orders_created_at` | `created_at` | Filter orders by creation date |
 | orders | `idx_orders_updated_at` | `updated_at` | Filter orders by update date |
+| orders | `uq_orders_user_idempotency` | `user_id`, `checkout_idempotency_key` | Retry checkout trả cùng order |
+| orders | `idx_orders_expiring_reservations` | `reservation_expires_at` | Partial index cho scheduler tìm reservation quá hạn chưa release |
 | order_items | `idx_order_items_order_id` | `order_id` | Lookup items by order |
 | order_items | `idx_order_items_variant_id` | `variant_id` | Product/variant sales history |
+| order_items | `idx_order_items_sale_campaign_item` | `sale_campaign_item_id` | Audit doanh thu theo campaign item |
 | order_items | `idx_order_items_status` | `status` | Filter item-level state |
 | payments | `idx_payments_order_id` | `order_id` | Lookup payments by order |
 | payments | `idx_payments_provider` | `provider` | Filter payments by provider |
@@ -914,18 +1160,32 @@ Soft-delete cleanup indexes:
 | User -> UserRole -> Role | OneToMany + ManyToOne | UserRole | `@JoinColumn(name = "user_id")`, `@JoinColumn(name = "role_id")` |
 | Role -> PermissionRole -> Permission | OneToMany + ManyToOne | PermissionRole | `@JoinColumn(name = "role_id")`, `@JoinColumn(name = "permission_id")` |
 | User -> RefreshToken | OneToMany | RefreshToken | `@JoinColumn(name = "user_id")` |
+| User -> SocialAccount | OneToMany | SocialAccount | `@JoinColumn(name = "user_id")` |
 | User -> UserAddress | OneToMany | UserAddress | `@JoinColumn(name = "user_id")` |
 | Category -> Category | ManyToOne self-reference | Category | `@JoinColumn(name = "parent_id")` |
 | Category -> Product | OneToMany | Product | `@JoinColumn(name = "category_id")` |
 | Brand -> Product | OneToMany | Product | `@JoinColumn(name = "brand_id")` |
+| Locale -> ProductTranslation | OneToMany | ProductTranslation | Composite key includes `locale_code` |
+| Product -> ProductTranslation | OneToMany | ProductTranslation | Composite key includes `product_id` |
+| Locale -> CategoryTranslation | OneToMany | CategoryTranslation | Composite key includes `locale_code` |
+| Category -> CategoryTranslation | OneToMany | CategoryTranslation | Composite key includes `category_id` |
 | Product -> ProductVariant | OneToMany | ProductVariant | `@JoinColumn(name = "product_id")` |
 | Product -> ProductImage | OneToMany | ProductImage | `@JoinColumn(name = "product_id")` |
 | ProductVariant -> ProductImage | OneToMany optional | ProductImage | `@JoinColumn(name = "variant_id")` |
+| User -> SaleCampaign | OneToMany | SaleCampaign | `@JoinColumn(name = "created_by")` / `published_by` |
+| SaleCampaign -> SaleCampaignItem | OneToMany | SaleCampaignItem | `@JoinColumn(name = "campaign_id")` |
+| ProductVariant -> SaleCampaignItem | OneToMany | SaleCampaignItem | `@JoinColumn(name = "variant_id")` |
+| SaleCampaignItem -> SaleCustomerUsage | OneToMany | SaleCustomerUsage | `@JoinColumn(name = "campaign_item_id")` |
+| User -> SaleCustomerUsage | OneToMany | SaleCustomerUsage | `@JoinColumn(name = "user_id")` |
+| SaleCampaignItem -> SaleAllocation | OneToMany | SaleAllocation | `@JoinColumn(name = "campaign_item_id")` |
+| OrderItem -> SaleAllocation | ManyToOne mapping, UNIQUE makes it effective one-to-one | SaleAllocation | `@JoinColumn(name = "order_item_id", unique = true)` |
+| User -> SaleAllocation | OneToMany | SaleAllocation | `@JoinColumn(name = "user_id")` |
 | ProductVariant -> CartItem | OneToMany | CartItem | `@JoinColumn(name = "variant_id")` |
 | User -> Cart | OneToOne | Cart | `@JoinColumn(name = "user_id")` |
 | Cart -> CartItem | OneToMany | CartItem | `@JoinColumn(name = "cart_id")` |
 | User -> Order | OneToMany | Order | `@JoinColumn(name = "user_id")` |
 | Order -> OrderItem | OneToMany | OrderItem | `@JoinColumn(name = "order_id")` |
+| SaleCampaignItem -> OrderItem | OneToMany optional | OrderItem | `@JoinColumn(name = "sale_campaign_item_id")` |
 | Order -> Payment | OneToMany | Payment | `@JoinColumn(name = "order_id")` |
 | Payment -> PaymentTransaction | OneToMany | PaymentTransaction | `@JoinColumn(name = "payment_id")` |
 | Coupon -> CouponUsage | OneToMany | CouponUsage | `@JoinColumn(name = "coupon_id")` |
@@ -950,6 +1210,10 @@ Soft-delete cleanup indexes:
 - Deleting a role physically can cascade join table rows, but production workflows should usually disable/deactivate roles instead.
 - Deleting a product should normally be soft delete. Orders and order items must remain readable.
 - `updated_at` should be handled by Hibernate `@UpdateTimestamp` and/or PostgreSQL trigger. Keep the strategy consistent.
+- `SaleCampaign.version` dùng `@Version`; conflict phải trả lỗi nghiệp vụ thay vì ghi đè im lặng.
+- Counter stock/quota/customer usage không được cập nhật bằng read-modify-save. Repository phải dùng atomic conditional update và kiểm tra affected row.
+- Khi cần khóa nhiều variant/campaign item, luôn khóa theo ID tăng dần để giảm nguy cơ deadlock.
+- Allocation transition phải có status cũ trong điều kiện cập nhật (`RESERVED -> CONFIRMED/RELEASED`, `CONFIRMED -> REVERSED`).
 
 ---
 
@@ -1051,6 +1315,43 @@ private Color color;
 @ManyToOne(fetch = FetchType.LAZY)
 @JoinColumn(name = "size_id")
 private Size size;
+```
+
+### SaleCampaign.java
+
+```java
+@Version
+@Column(name = "version", nullable = false)
+private long version;
+
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "created_by")
+private User createdBy;
+
+@OneToMany(mappedBy = "campaign", fetch = FetchType.LAZY)
+private List<SaleCampaignItem> items = new ArrayList<>();
+```
+
+### SaleCampaignItem.java
+
+```java
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "campaign_id", nullable = false)
+private SaleCampaign campaign;
+
+@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "variant_id", nullable = false)
+private ProductVariant variant;
+```
+
+### SaleCustomerUsage.java / SaleAllocation.java
+
+```java
+// Cả hai entity đều tham chiếu campaign item và user bằng LAZY.
+// SaleAllocation map ManyToOne tới OrderItem nhưng order_item_id có UNIQUE,
+// vì vậy quan hệ ở mức database là tối đa một allocation cho mỗi order item.
+// Counter/state transition được cập nhật bằng repository query atomic,
+// không dựa vào dirty checking của entity đã đọc từ trước.
 ```
 
 ### Order.java
@@ -1180,12 +1481,15 @@ private List<ReviewImage> images = new ArrayList<>();
 
 ## Migration Notes
 
-- **Total tables: 28** — users, roles, user_role, permissions, permission_role, refresh_tokens, user_addresses, brands, categories, colors, sizes, products, product_variants, product_images, product_attributes, carts, cart_items, coupons, orders, order_items, payments, payment_transactions, coupon_usages, reviews, review_images, inventory_logs, wishlists, order_status_histories.
+- **Total tables: 36** — users, roles, user_role, permissions, permission_role, refresh_tokens, social_accounts, user_addresses, locales, brands, categories, category_translations, colors, sizes, products, product_translations, product_variants, product_images, product_attributes, carts, cart_items, coupons, sale_campaigns, sale_campaign_items, sale_customer_usages, sale_allocations, orders, order_items, payments, payment_transactions, coupon_usages, reviews, review_images, inventory_logs, wishlists, order_status_histories.
 - PostgreSQL is the only supported database for dev, test, and prod profiles.
 - Schema should be managed by Flyway migrations:
   - `dev` profile: Flyway runs migrations; Hibernate should use `validate` or controlled `update` only while prototyping.
   - `test` profile: PostgreSQL test database; Flyway runs migrations; Hibernate validates.
   - `prod` profile: Flyway migrations only; Hibernate validates.
+- `V7__add_catalog_i18n.sql` tạo `locales`, `product_translations`, `category_translations`; `V8__add_social_accounts.sql` tạo `social_accounts`.
+- `V14__create_sale_campaigns.sql` tạo bốn bảng Sale, order/order item snapshots, payment constraints, indexes, trigger và RBAC permissions.
+- `V15__remove_legacy_variant_sale_price.sql` là contract migration: drop index, hai check constraint và cột `product_variants.sale_price` sau khi code đã chuyển sang campaign-backed pricing.
 - Use `TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP` for audit timestamps.
 - For `updated_at`, create a reusable PostgreSQL trigger function:
 
@@ -1199,7 +1503,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-- Add `BEFORE UPDATE` triggers for tables with `updated_at`: users, roles, permissions, brands, categories, products, product_variants, orders, payments.
+- Add `BEFORE UPDATE` triggers for tables with `updated_at`: users, roles, permissions, social_accounts, locales, product_translations, category_translations, brands, categories, products, product_variants, sale_campaigns, sale_campaign_items, sale_customer_usages, orders, payments.
 - Soft-delete cleanup jobs must index and purge based on business importance:
   - Low importance: wishlists can be purged sooner.
   - Medium importance: carts, refresh tokens can be cleaned regularly.
@@ -1216,6 +1520,12 @@ $$ LANGUAGE plpgsql;
   - Insert `coupon_usages`.
   - Increment `coupons.used_count`.
   - Commit together with order creation/payment flow according to checkout design.
+- Sale quota, customer usage, stock, coupon, order, payment và allocation phải commit trong cùng transaction checkout. Một bước thất bại phải rollback tất cả counter đã reserve trước đó.
+- Atomic quota condition: `reserved_quantity + sold_quantity + requested_quantity <= quota`.
+- Atomic customer condition: `reserved_quantity + purchased_quantity + requested_quantity <= max_per_customer` khi có giới hạn.
+- Scheduler, cancel và IPN phải khóa order/payment và dùng conditional state transition; `orders.resources_released_at` ngăn hoàn tài nguyên hai lần.
+- `product_variants.sale_price`, hai check constraint liên quan và `idx_product_variants_sale_price` bị drop ở migration mới. Không sửa `V1`/`V6`; Flyway migrations là lịch sử bất biến.
+- Dữ liệu `sale_price` cũ không được backfill theo quyết định nghiệp vụ. Sau migration, mọi sale mới bắt buộc thuộc một campaign có thời gian rõ ràng.
 - Join table migration must use composite primary keys:
   - `PRIMARY KEY (user_id, role_id)` for `user_role`
   - `PRIMARY KEY (permission_id, role_id)` for `permission_role`

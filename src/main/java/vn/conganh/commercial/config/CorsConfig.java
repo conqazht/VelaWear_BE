@@ -25,7 +25,7 @@ public class CorsConfig {
                 Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
         configuration.setAllowedHeaders(
-                Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
+                Arrays.asList("Authorization", "Content-Type", "Cache-Control", "Idempotency-Key"));
 
         configuration.setAllowCredentials(true);
 

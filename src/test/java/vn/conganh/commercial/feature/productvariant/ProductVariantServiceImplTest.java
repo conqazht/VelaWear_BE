@@ -27,6 +27,8 @@ import vn.conganh.commercial.feature.productvariant.dto.CreateProductVariantRequ
 import vn.conganh.commercial.feature.productvariant.dto.ProductVariantResponse;
 import vn.conganh.commercial.feature.size.Size;
 import vn.conganh.commercial.feature.size.SizeRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module ProductVariant - ProductVariantServiceImpl")
@@ -44,12 +46,21 @@ class ProductVariantServiceImplTest {
     @Mock
     private SizeRepository sizeRepository;
 
+    @Mock
+    private VariantPricingService variantPricingService;
+
+    @Mock
+    private SaleCampaignItemRepository saleCampaignItemRepository;
+
     private ProductVariantServiceImpl productVariantService;
 
     @BeforeEach
     void setUp() {
         productVariantService = new ProductVariantServiceImpl(
-                productVariantRepository, productRepository, colorRepository, sizeRepository);
+                productVariantRepository, productRepository, colorRepository, sizeRepository,
+                variantPricingService, saleCampaignItemRepository);
+        org.mockito.Mockito.lenient().when(variantPricingService.resolve(any()))
+                .thenReturn(java.util.Map.of());
     }
 
     @Nested
@@ -62,7 +73,7 @@ class ProductVariantServiceImplTest {
             // Arrange
             Product product = product(1L);
             CreateProductVariantRequest request = new CreateProductVariantRequest(
-                    1L, "SKU-001", BigDecimal.valueOf(100000), null, null, null, null, null);
+                    1L, "SKU-001", BigDecimal.valueOf(100000), null, null, null, null);
             when(productVariantRepository.existsBySku("SKU-001")).thenReturn(false);
             when(productRepository.findById(1L)).thenReturn(Optional.of(product));
             when(productVariantRepository.save(any(ProductVariant.class))).thenAnswer(invocation -> {
@@ -86,7 +97,7 @@ class ProductVariantServiceImplTest {
         void create_duplicateSku_throwsInvalidRequestExceptionAndDoesNotSave() {
             // Arrange
             CreateProductVariantRequest request = new CreateProductVariantRequest(
-                    1L, "SKU-001", BigDecimal.TEN, null, 1, null, null, "ACTIVE");
+                    1L, "SKU-001", BigDecimal.TEN, 1, null, null, "ACTIVE");
             when(productVariantRepository.existsBySku("SKU-001")).thenReturn(true);
 
             // Act & Assert
@@ -100,7 +111,7 @@ class ProductVariantServiceImplTest {
         void create_missingProduct_throwsResourceNotFoundException() {
             // Arrange
             CreateProductVariantRequest request = new CreateProductVariantRequest(
-                    99L, "SKU-001", BigDecimal.TEN, null, 1, null, null, "ACTIVE");
+                    99L, "SKU-001", BigDecimal.TEN, 1, null, null, "ACTIVE");
             when(productVariantRepository.existsBySku("SKU-001")).thenReturn(false);
             when(productRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -117,7 +128,7 @@ class ProductVariantServiceImplTest {
             Color color = color(2L, "Black");
             Size size = size(3L, "XL");
             CreateProductVariantRequest request = new CreateProductVariantRequest(
-                    1L, "SKU-002", BigDecimal.TEN, null, 5, 2L, 3L, "ACTIVE");
+                    1L, "SKU-002", BigDecimal.TEN, 5, 2L, 3L, "ACTIVE");
             when(productVariantRepository.existsBySku("SKU-002")).thenReturn(false);
             when(productRepository.findById(1L)).thenReturn(Optional.of(product));
             when(colorRepository.findById(2L)).thenReturn(Optional.of(color));

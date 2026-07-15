@@ -26,7 +26,10 @@ import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
-import vn.conganh.commercial.feature.productvariant.ProductVariantRepository.RepresentativePrice;
+import vn.conganh.commercial.feature.productvariant.ProductVariant;
+import vn.conganh.commercial.feature.salecampaign.VariantPricing;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +41,8 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final CategoryTranslationRepository categoryTranslationRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final VariantPricingService variantPricingService;
+    private final SaleCampaignItemRepository saleCampaignItemRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -70,7 +75,7 @@ public class ProductServiceImpl implements ProductService {
         Map<Long, CategoryTranslation> catTranslationMap = catTranslations.stream()
                 .collect(Collectors.toMap(CategoryTranslation::getCategoryId, Function.identity()));
 
-        Map<Long, RepresentativePrice> representativePrices = loadRepresentativePrices(productIds);
+        Map<Long, VariantPricing> representativePrices = loadRepresentativePrices(productIds);
 
         return ResultPaginationDTO.fromPage(products.map(product -> {
             Category category = categoryMap.get(product.getCategoryId());
@@ -78,7 +83,7 @@ public class ProductServiceImpl implements ProductService {
             String catName = catTrans != null ? catTrans.getName() : (category != null ? category.getName() : null);
             String catSlug = category != null ? category.getSlug() : null;
             
-            RepresentativePrice representativePrice = representativePrices.get(product.getId());
+            VariantPricing representativePrice = representativePrices.get(product.getId());
 
             return ProductResponse.fromEntity(
                     product,
@@ -86,8 +91,8 @@ public class ProductServiceImpl implements ProductService {
                     imagesMap.get(product.getId()),
                     catName,
                     catSlug,
-                    representativePrice == null ? null : representativePrice.getPrice(),
-                    representativePrice == null ? null : representativePrice.getSalePrice());
+                    representativePrice == null ? null : representativePrice.listPrice(),
+                    representativePrice == null ? null : representativePrice.toResponse());
         }));
     }
 
@@ -114,7 +119,7 @@ public class ProductServiceImpl implements ProductService {
             categoryName = catTranslation.map(CategoryTranslation::getName).orElse(category.getName());
         }
         
-        RepresentativePrice representativePrice = findRepresentativePrice(product.getId());
+        VariantPricing representativePrice = findRepresentativePrice(product.getId());
 
         return ProductResponse.fromEntity(
                 product,
@@ -122,8 +127,8 @@ public class ProductServiceImpl implements ProductService {
                 images,
                 categoryName,
                 categorySlug,
-                representativePrice == null ? null : representativePrice.getPrice(),
-                representativePrice == null ? null : representativePrice.getSalePrice());
+                representativePrice == null ? null : representativePrice.listPrice(),
+                representativePrice == null ? null : representativePrice.toResponse());
     }
 
     @Override
@@ -148,7 +153,7 @@ public class ProductServiceImpl implements ProductService {
                 categoryName = catTranslation.map(CategoryTranslation::getName).orElse(category.getName());
             }
             
-            RepresentativePrice representativePrice = findRepresentativePrice(product.getId());
+            VariantPricing representativePrice = findRepresentativePrice(product.getId());
 
             return ProductResponse.fromEntity(
                     product,
@@ -156,8 +161,8 @@ public class ProductServiceImpl implements ProductService {
                     images,
                     categoryName,
                     categorySlug,
-                    representativePrice == null ? null : representativePrice.getPrice(),
-                    representativePrice == null ? null : representativePrice.getSalePrice());
+                    representativePrice == null ? null : representativePrice.listPrice(),
+                    representativePrice == null ? null : representativePrice.toResponse());
         }
 
         Product product = productRepository.findBySlugAndDeletedAtIsNull(slug)
@@ -174,7 +179,7 @@ public class ProductServiceImpl implements ProductService {
             categoryName = catTranslation.map(CategoryTranslation::getName).orElse(category.getName());
         }
         
-        RepresentativePrice representativePrice = findRepresentativePrice(product.getId());
+        VariantPricing representativePrice = findRepresentativePrice(product.getId());
 
         return ProductResponse.fromEntity(
                 product,
@@ -182,8 +187,8 @@ public class ProductServiceImpl implements ProductService {
                 images,
                 categoryName,
                 categorySlug,
-                representativePrice == null ? null : representativePrice.getPrice(),
-                representativePrice == null ? null : representativePrice.getSalePrice());
+                representativePrice == null ? null : representativePrice.listPrice(),
+                representativePrice == null ? null : representativePrice.toResponse());
     }
 
     @Override
@@ -210,7 +215,11 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponse updateProduct(Long id, UpdateProductRequest request) {
-        Product product = findProduct(id);
+        Product product = findProductWithLock(id);
+        if (!java.util.Objects.equals(product.getStatus(), request.status())
+                && !"ACTIVE".equals(request.status())) {
+            assertNotInOutstandingCampaign(id);
+        }
         product.setCategoryId(request.categoryId());
         product.setBrandId(request.brandId());
         product.setName(request.name());
@@ -237,7 +246,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public void deleteProduct(Long id) {
-        Product product = findProduct(id);
+        Product product = findProductWithLock(id);
+        assertNotInOutstandingCampaign(id);
         product.setStatus("INACTIVE");
         product.setDeletedAt(Instant.now());
         productRepository.save(product);
@@ -246,6 +256,18 @@ public class ProductServiceImpl implements ProductService {
     private Product findProduct(Long id) {
         return productRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+    }
+
+    private Product findProductWithLock(Long id) {
+        return productRepository.findWithLockByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+    }
+
+    private void assertNotInOutstandingCampaign(Long productId) {
+        if (saleCampaignItemRepository.existsProtectedProduct(productId, Instant.now())) {
+            throw new InvalidRequestException(
+                    "Product belongs to a draft, upcoming, or live sale campaign; update that campaign first");
+        }
     }
 
     private void validateUniqueProduct(String slug) {
@@ -273,16 +295,28 @@ public class ProductServiceImpl implements ProductService {
         return productTranslationRepository.findByProductIdAndLocaleCode(productId, CatalogLocaleResolver.DEFAULT_LOCALE);
     }
 
-    private RepresentativePrice findRepresentativePrice(Long productId) {
+    private VariantPricing findRepresentativePrice(Long productId) {
         return loadRepresentativePrices(List.of(productId)).get(productId);
     }
 
-    private Map<Long, RepresentativePrice> loadRepresentativePrices(List<Long> productIds) {
+    private Map<Long, VariantPricing> loadRepresentativePrices(List<Long> productIds) {
         if (productIds.isEmpty()) {
             return Map.of();
         }
-        return productVariantRepository.findRepresentativePricesByProductIds(productIds).stream()
-                .collect(Collectors.toMap(RepresentativePrice::getProductId, Function.identity()));
+        List<ProductVariant> variants = productVariantRepository.findByProductIdInAndDeletedAtIsNull(productIds);
+        Map<Long, VariantPricing> pricingByVariant = variantPricingService.resolve(variants);
+        return variants.stream()
+                .filter(variant -> pricingByVariant.containsKey(variant.getId()))
+                .collect(Collectors.groupingBy(variant -> variant.getProduct().getId()))
+                .entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> entry.getValue().stream()
+                                .map(variant -> pricingByVariant.get(variant.getId()))
+                                .min(java.util.Comparator
+                                        .comparing(VariantPricing::effectivePrice)
+                                        .thenComparing(VariantPricing::variantId))
+                                .orElseThrow()));
     }
 
     private Map<Long, ProductTranslation> loadTranslations(List<Long> productIds, String localeCode) {

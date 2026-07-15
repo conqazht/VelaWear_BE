@@ -21,6 +21,8 @@ public record CheckoutResponse(
         List<CheckoutItemResponse> items,
         Long paymentId,
         PaymentInitiationResponse paymentInitiation,
+        Instant paymentDueAt,
+        Instant reservationExpiresAt,
         Instant createdAt
 ) {
 
@@ -42,7 +44,7 @@ public record CheckoutResponse(
             Instant createdAt) {
         this(orderId, orderCode, status, subtotal, shippingFee, discountAmount, finalAmount,
                 receiverName, receiverPhone, receiverAddress, paymentMethod, paymentStatus,
-                items, paymentId, null, createdAt);
+                items, paymentId, null, null, null, createdAt);
     }
 
     public static CheckoutResponse fromEntity(Order order,
@@ -65,6 +67,8 @@ public record CheckoutResponse(
                 items,
                 paymentId,
                 paymentInitiation,
+                order.getPaymentDueAt(),
+                order.getReservationExpiresAt(),
                 order.getCreatedAt()
         );
     }

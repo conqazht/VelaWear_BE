@@ -29,6 +29,7 @@ import vn.conganh.commercial.feature.payment.PaymentTransactionRepository;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 import vn.conganh.commercial.util.constant.PaymentTransactionStatus;
+import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
 
 @RequiredArgsConstructor
 @Service
@@ -41,6 +42,7 @@ public class SePayService {
     private final PaymentRepository paymentRepository;
     private final PaymentTransactionRepository transactionRepository;
     private final ObjectMapper objectMapper;
+    private final OrderResourceLifecycleService resourceLifecycleService;
 
     public SePayCheckoutForm createCheckoutForm(Order order) {
         validateProductionConfiguration();
@@ -99,19 +101,42 @@ public class SePayService {
             throw new InvalidRequestException("SePay transaction is already linked to another payment");
         }
 
+        boolean additionalCapturedPayment = payment.getTransactionCode() != null
+                || payment.getStatus() == PaymentStatus.SUCCESS
+                || payment.getStatus() == PaymentStatus.REFUND_PENDING
+                || "PAID".equals(order.getPaymentStatus())
+                || "REFUND_PENDING".equals(order.getPaymentStatus());
+
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setPayment(payment);
         transaction.setTransactionCode(transactionCode);
-        transaction.setStatus(PaymentTransactionStatus.SUCCESS);
+        transaction.setStatus(additionalCapturedPayment
+                ? PaymentTransactionStatus.REFUND_PENDING
+                : PaymentTransactionStatus.SUCCESS);
         transaction.setGatewayResponse(objectMapper.writeValueAsString(request));
         transactionRepository.save(transaction);
 
-        payment.setTransactionCode(transactionCode);
-        payment.setStatus(PaymentStatus.SUCCESS);
-        payment.setPaidAt(Instant.now());
-        paymentRepository.save(payment);
+        if (additionalCapturedPayment) {
+            payment.setStatus(PaymentStatus.REFUND_PENDING);
+            order.setPaymentStatus("REFUND_PENDING");
+            paymentRepository.save(payment);
+            orderRepository.save(order);
+            return;
+        }
 
-        order.setPaymentStatus("PAID");
+        boolean accepted = resourceLifecycleService.confirmLockedOrder(order);
+        payment.setTransactionCode(transactionCode);
+        payment.setPaidAt(Instant.now());
+        if (accepted) {
+            payment.setStatus(PaymentStatus.SUCCESS);
+            order.setPaymentStatus("PAID");
+        } else {
+            transaction.setStatus(PaymentTransactionStatus.REFUND_PENDING);
+            transactionRepository.save(transaction);
+            payment.setStatus(PaymentStatus.REFUND_PENDING);
+            order.setPaymentStatus("REFUND_PENDING");
+        }
+        paymentRepository.save(payment);
         orderRepository.save(order);
     }
 

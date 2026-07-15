@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.cart.dto;
 
 import java.math.BigDecimal;
+import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 
 public record CartItemResponse(
         Long id,
@@ -12,6 +13,8 @@ public record CartItemResponse(
         String sku,
         String color,
         String size,
+        BigDecimal listPrice,
         BigDecimal price,
+        VariantPricingResponse pricing,
         int quantity
 ) {}

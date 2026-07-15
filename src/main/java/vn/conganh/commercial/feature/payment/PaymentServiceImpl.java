@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderRepository;
@@ -38,6 +39,7 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse createPayment(CreatePaymentRequest request) {
         Order order = orderRepository.findById(request.orderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.orderId()));
+        assertNotCheckoutManaged(order);
         Payment payment = new Payment();
         payment.setOrder(order);
         payment.setProvider(request.provider());
@@ -52,9 +54,11 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentResponse updatePayment(Long id, UpdatePaymentRequest request) {
         Payment payment = findPayment(id);
+        assertNotCheckoutManaged(payment.getOrder());
         if (request.orderId() != null) {
             Order order = orderRepository.findById(request.orderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.orderId()));
+            assertNotCheckoutManaged(order);
             payment.setOrder(order);
         }
         payment.setProvider(request.provider());
@@ -68,11 +72,20 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public void deletePayment(Long id) {
-        paymentRepository.delete(findPayment(id));
+        Payment payment = findPayment(id);
+        assertNotCheckoutManaged(payment.getOrder());
+        paymentRepository.delete(payment);
     }
 
     private Payment findPayment(Long id) {
         return paymentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment", "id", id));
+    }
+
+    private void assertNotCheckoutManaged(Order order) {
+        if (order != null && order.getCheckoutIdempotencyKey() != null) {
+            throw new InvalidRequestException(
+                    "Checkout payment is managed by the payment gateway and order resource lifecycle");
+        }
     }
 }

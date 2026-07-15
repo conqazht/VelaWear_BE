@@ -262,8 +262,8 @@ SET
     brand_id = EXCLUDED.brand_id,
     status = EXCLUDED.status;
 
-INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'VW-TEE-BLK-M', 249000.00, 219000.00, 80, c.id, s.id, 'ACTIVE'
+INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
+SELECT p.id, 'VW-TEE-BLK-M', 249000.00, 80, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
@@ -273,14 +273,13 @@ WHERE p.slug = 'essential-cotton-tee'
 ON CONFLICT (sku) DO UPDATE
 SET
     price = EXCLUDED.price,
-    sale_price = EXCLUDED.sale_price,
     stock_quantity = EXCLUDED.stock_quantity,
     color_id = EXCLUDED.color_id,
     size_id = EXCLUDED.size_id,
     status = EXCLUDED.status;
 
-INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'VW-TEE-RED-L', 249000.00, NULL, 55, c.id, s.id, 'ACTIVE'
+INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
+SELECT p.id, 'VW-TEE-RED-L', 249000.00, 55, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
@@ -290,14 +289,13 @@ WHERE p.slug = 'essential-cotton-tee'
 ON CONFLICT (sku) DO UPDATE
 SET
     price = EXCLUDED.price,
-    sale_price = EXCLUDED.sale_price,
     stock_quantity = EXCLUDED.stock_quantity,
     color_id = EXCLUDED.color_id,
     size_id = EXCLUDED.size_id,
     status = EXCLUDED.status;
 
-INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'UT-DRESS-YLW-S', 699000.00, 649000.00, 30, c.id, s.id, 'ACTIVE'
+INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
+SELECT p.id, 'UT-DRESS-YLW-S', 699000.00, 30, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
@@ -307,7 +305,6 @@ WHERE p.slug = 'urban-linen-dress'
 ON CONFLICT (sku) DO UPDATE
 SET
     price = EXCLUDED.price,
-    sale_price = EXCLUDED.sale_price,
     stock_quantity = EXCLUDED.stock_quantity,
     color_id = EXCLUDED.color_id,
     size_id = EXCLUDED.size_id,
@@ -466,13 +463,14 @@ SET
     payment_method = EXCLUDED.payment_method,
     payment_status = EXCLUDED.payment_status;
 
-INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
+INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, list_price, price, quantity, subtotal, status)
 SELECT o.id,
        pv.id,
        p.name,
        'Black / M',
        pv.sku,
        '/uploads/products/essential_cotton_tee_black.png',
+       219000.00,
        219000.00,
        2,
        438000.00,

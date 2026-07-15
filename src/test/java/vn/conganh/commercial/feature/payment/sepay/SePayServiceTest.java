@@ -27,6 +27,7 @@ import vn.conganh.commercial.feature.payment.PaymentTransactionRepository;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 import vn.conganh.commercial.util.constant.PaymentTransactionStatus;
+import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
 
 @ExtendWith(MockitoExtension.class)
 class SePayServiceTest {
@@ -39,6 +40,8 @@ class SePayServiceTest {
     private PaymentTransactionRepository transactionRepository;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private OrderResourceLifecycleService resourceLifecycleService;
 
     private SePayService service;
     private Order order;
@@ -56,7 +59,10 @@ class SePayServiceTest {
         properties.setErrorUrl("https://shop.test/error");
         properties.setCancelUrl("https://shop.test/cancel");
         service = new SePayService(
-                properties, orderRepository, paymentRepository, transactionRepository, objectMapper);
+                properties, orderRepository, paymentRepository, transactionRepository, objectMapper,
+                resourceLifecycleService);
+        org.mockito.Mockito.lenient()
+                .when(resourceLifecycleService.confirmLockedOrder(any(Order.class))).thenReturn(true);
 
         order = new Order();
         ReflectionTestUtils.setField(order, "id", 10L);

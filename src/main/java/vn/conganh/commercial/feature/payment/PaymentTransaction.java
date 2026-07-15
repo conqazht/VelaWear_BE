@@ -17,6 +17,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import vn.conganh.commercial.util.constant.PaymentTransactionStatus;
 
 @Getter
@@ -43,6 +45,7 @@ public class PaymentTransaction {
     private PaymentTransactionStatus status = PaymentTransactionStatus.PENDING;
 
     @Column(name = "gateway_response", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String gatewayResponse;
 
     @CreationTimestamp
