@@ -229,7 +229,7 @@ public final class ProductSpecification {
 
                     if (filter.minPrice() != null || filter.maxPrice() != null) {
                         jakarta.persistence.criteria.Expression<java.math.BigDecimal> activePrice =
-                                cb.coalesce(variantRoot.get("salePrice"), variantRoot.get("price"));
+                                variantRoot.get("price");
 
                         if (filter.minPrice() != null) {
                             subPredicates.add(cb.greaterThanOrEqualTo(activePrice, filter.minPrice()));

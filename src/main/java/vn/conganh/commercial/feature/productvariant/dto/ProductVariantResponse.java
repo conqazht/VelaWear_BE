@@ -3,13 +3,15 @@ package vn.conganh.commercial.feature.productvariant.dto;
 import java.math.BigDecimal;
 import java.time.Instant;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
+import vn.conganh.commercial.feature.salecampaign.VariantPricing;
+import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 
 public record ProductVariantResponse(
         Long id,
         ProductInfo product,
         String sku,
         BigDecimal price,
-        BigDecimal salePrice,
+        VariantPricingResponse pricing,
         Integer stockQuantity,
         ColorInfo color,
         SizeInfo size,
@@ -18,6 +20,10 @@ public record ProductVariantResponse(
         Instant updatedAt
 ) {
     public static ProductVariantResponse fromEntity(ProductVariant variant) {
+        return fromEntity(variant, null);
+    }
+
+    public static ProductVariantResponse fromEntity(ProductVariant variant, VariantPricing pricing) {
         ProductInfo productInfo = null;
         if (variant.getProduct() != null) {
             productInfo = new ProductInfo(variant.getProduct().getId(), variant.getProduct().getName());
@@ -35,7 +41,7 @@ public record ProductVariantResponse(
                 productInfo,
                 variant.getSku(),
                 variant.getPrice(),
-                variant.getSalePrice(),
+                pricing == null ? null : pricing.toResponse(),
                 variant.getStockQuantity(),
                 colorInfo,
                 sizeInfo,

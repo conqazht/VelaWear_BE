@@ -27,6 +27,7 @@ import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 
@@ -39,6 +40,7 @@ public class CartServiceImpl implements CartService {
     private final UserRepository userRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ProductImageRepository productImageRepository;
+    private final VariantPricingService variantPricingService;
 
     @Override
     @Transactional(readOnly = true)
@@ -92,7 +94,11 @@ public class CartServiceImpl implements CartService {
     public CartResponse replaceMyCartItems(String email, ReplaceCartItemsRequest request) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
-        Cart cart = getOrCreateCart(user);
+        getOrCreateCart(user);
+        // Checkout uses the same cart-row write lock. This makes a cart replacement
+        // linearizable with checkout reading and clearing the cart.
+        Cart cart = cartRepository.findWithLockByUserId(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Cart", "userId", user.getId()));
 
         Map<Long, Integer> requestedItems = request.items().stream()
                 .collect(Collectors.toMap(
@@ -131,7 +137,7 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public void deleteCart(Long id) {
-        Cart cart = cartRepository.findById(id)
+        Cart cart = cartRepository.findWithLockById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart", "id", id));
         cartRepository.delete(cart);
     }
@@ -150,6 +156,8 @@ public class CartServiceImpl implements CartService {
                 .findAllByIdInAndDeletedAtIsNull(cartItems.stream().map(CartItem::getVariantId).toList())
                 .stream()
                 .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
+        Map<Long, vn.conganh.commercial.feature.salecampaign.VariantPricing> pricingByVariant =
+                variantPricingService.resolve(variants.values(), java.time.Instant.now(), cart.getUser().getId());
         List<Long> productIds = variants.values().stream()
                 .map(ProductVariant::getProduct)
                 .filter(java.util.Objects::nonNull)
@@ -174,10 +182,12 @@ public class CartServiceImpl implements CartService {
                     ProductVariant variant = variants.get(item.getVariantId());
                     if (variant == null) {
                         return new CartItemResponse(item.getId(), item.getVariantId(), null, null,
-                                "Unavailable product", null, null, null, null, BigDecimal.ZERO, item.getQuantity());
+                                "Unavailable product", null, null, null, null,
+                                BigDecimal.ZERO, BigDecimal.ZERO, null, item.getQuantity());
                     }
                     Product product = variant.getProduct();
-                    BigDecimal price = variant.getSalePrice() != null ? variant.getSalePrice() : variant.getPrice();
+                    var pricing = pricingByVariant.get(variant.getId());
+                    BigDecimal price = pricing == null ? variant.getPrice() : pricing.effectivePrice();
                     return new CartItemResponse(
                             item.getId(),
                             variant.getId(),
@@ -188,7 +198,9 @@ public class CartServiceImpl implements CartService {
                             variant.getSku(),
                             variant.getColor() != null ? variant.getColor().getName() : null,
                             variant.getSize() != null ? variant.getSize().getName() : null,
+                            variant.getPrice(),
                             price,
+                            pricing == null ? null : pricing.toResponse(),
                             item.getQuantity());
                 })
                 .toList();

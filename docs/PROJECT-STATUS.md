@@ -1,7 +1,13 @@
+### Sale Campaign end-to-end
+
+- **Date/Time**: 2026-07-15
+- **Summary of Changes**: Added scheduled `STANDARD` and quota-limited `FLASH` campaigns, admin/public APIs, campaign-backed pricing, checkout preview/idempotency, atomic Flash quota/customer limits, payment reservation lifecycle, timeout/late-IPN handling, RBAC, tests and Vietnamese technical documentation. Legacy `product_variants.sale_price` is removed by V15; prices now come from base price or a published campaign.
+- **Verification Performed**: Flyway V1–V15 plus repeatable development seeds and Hibernate schema validation passed on PostgreSQL Testcontainers; full regression suite is tracked in the feature handoff.
+
 ### Fix Product Price Mismatch between Catalog and Detail Page
 
 - **Date/Time**: 2026-07-08T19:49:00+07:00
-- **Summary of Changes**: Updated ProductServiceImpl to query variants and identify the minimum salePrice or price for each product. Added price and salePrice to ProductResponse to expose it correctly to the frontend.
+- **Summary of Changes**: Historical implementation used the minimum legacy `salePrice`/base price. This behavior is superseded by the Sale Campaign pricing engine introduced on 2026-07-15.
 - **Verification Performed**: mvnw clean compile (Backend) passed.
 - **Known Follow-ups**: None.
 

@@ -68,6 +68,21 @@ public class Order {
     @Column(name = "payment_status", nullable = false, length = 30)
     private String paymentStatus;
 
+    @Column(name = "payment_due_at")
+    private Instant paymentDueAt;
+
+    @Column(name = "reservation_expires_at")
+    private Instant reservationExpiresAt;
+
+    @Column(name = "resources_released_at")
+    private Instant resourcesReleasedAt;
+
+    @Column(name = "checkout_idempotency_key", length = 100)
+    private String checkoutIdempotencyKey;
+
+    @Column(name = "checkout_request_hash", length = 64)
+    private String checkoutRequestHash;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     @Setter(AccessLevel.NONE)

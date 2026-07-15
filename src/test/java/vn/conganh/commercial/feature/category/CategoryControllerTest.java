@@ -412,15 +412,15 @@ class CategoryControllerTest extends AuthenticatedIntegrationTest {
         Long sizeId = seedSize().id();
         String suffix = unique("variant").toUpperCase();
         Long id = insertForId("""
-                insert into product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id,
+                insert into product_variants (product_id, sku, price, stock_quantity, color_id, size_id,
                     status, created_at, updated_at)
-                values (?, ?, 100000, 90000, 5, ?, ?, 'ACTIVE', now() - interval '1 day', now() - interval '1 day')
+                values (?, ?, 100000, 5, ?, ?, 'ACTIVE', now() - interval '1 day', now() - interval '1 day')
                 returning id
                 """, productId, suffix, colorId, sizeId);
         return new SeededEntity(id,
-                json("productId", productId, "sku", suffix + "-UPD", "price", 120000, "salePrice", 95000,
+                json("productId", productId, "sku", suffix + "-UPD", "price", 120000,
                         "stockQuantity", 7, "colorId", colorId, "sizeId", sizeId, "status", "ACTIVE"),
-                json("productId", productId, "sku", "", "price", 120000, "salePrice", 95000,
+                json("productId", productId, "sku", "", "price", 120000,
                         "stockQuantity", 7, "colorId", colorId, "sizeId", sizeId, "status", "ACTIVE"));
     }
 

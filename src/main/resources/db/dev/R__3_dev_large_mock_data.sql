@@ -225,11 +225,10 @@ SET name = EXCLUDED.name,
     seo_title = EXCLUDED.seo_title,
     seo_description = EXCLUDED.seo_description;
 
-INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
+INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
 SELECT p.id,
        'VW-TRS-BLK-' || s.name,
        899000.00,
-       NULL,
        25,
        c.id,
        s.id,
@@ -242,17 +241,15 @@ WHERE p.slug = 'tailored-black-trousers'
   AND s.name IN ('S', 'M', 'L', 'XL')
 ON CONFLICT (sku) DO UPDATE
 SET price = EXCLUDED.price,
-    sale_price = EXCLUDED.sale_price,
     stock_quantity = EXCLUDED.stock_quantity,
     color_id = EXCLUDED.color_id,
     size_id = EXCLUDED.size_id,
     status = EXCLUDED.status;
 
-INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
+INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
 SELECT p.id,
        'VW-SNK-WHT-' || s.name,
        1299000.00,
-       1099000.00,
        20,
        c.id,
        s.id,
@@ -265,7 +262,6 @@ WHERE p.slug = 'minimal-white-leather-sneakers'
   AND s.name IN ('39', '40', '41', '42')
 ON CONFLICT (sku) DO UPDATE
 SET price = EXCLUDED.price,
-    sale_price = EXCLUDED.sale_price,
     stock_quantity = EXCLUDED.stock_quantity,
     color_id = EXCLUDED.color_id,
     size_id = EXCLUDED.size_id,
@@ -633,12 +629,11 @@ BEGIN
             
             var_count := var_count + 1;
             
-            INSERT INTO product_variants (product_id, sku, price, sale_price, stock_quantity, color_id, size_id, status)
+            INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
             VALUES (
                 prod_rec.id, 
                 'SKU-' || prod_rec.id || '-' || var_count || '-' || FLOOR(RANDOM() * 1000)::INT, 
                 150000.00 + (FLOOR(RANDOM() * 1000000)::INT), 
-                NULL, 
                 10 + (FLOOR(RANDOM() * 90))::INT, 
                 col_id, 
                 sz_id, 
@@ -904,8 +899,8 @@ BEGIN
         SELECT id INTO ord_id FROM orders ORDER BY RANDOM() LIMIT 1;
         SELECT id, sku, (SELECT name FROM products WHERE id = product_id) INTO v_id, v_sku, p_name FROM product_variants ORDER BY RANDOM() LIMIT 1;
         IF ord_id IS NOT NULL AND v_id IS NOT NULL THEN
-            INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, price, quantity, subtotal, status)
-            VALUES (ord_id, v_id, p_name, 'Variant ' || i, v_sku, '/images/dev/product.jpg', 200000.00, 1, 200000.00, 'CONFIRMED')
+            INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, list_price, price, quantity, subtotal, status)
+            VALUES (ord_id, v_id, p_name, 'Variant ' || i, v_sku, '/images/dev/product.jpg', 200000.00, 200000.00, 1, 200000.00, 'CONFIRMED')
             ON CONFLICT DO NOTHING;
         END IF;
     END LOOP;

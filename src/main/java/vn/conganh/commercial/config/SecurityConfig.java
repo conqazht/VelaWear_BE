@@ -92,6 +92,8 @@ public class SecurityConfig {
                                 "/api/v1/brands/**",
                                 "/api/v1/product-variants",
                                 "/api/v1/product-variants/**",
+                                "/api/v1/sales",
+                                "/api/v1/sales/**",
                                 "/api/v1/reviews/product/**").permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/me",

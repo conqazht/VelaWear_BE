@@ -23,6 +23,9 @@ public record OrderResponse(
         String receiverAddress,
         String paymentMethod,
         String paymentStatus,
+        Instant paymentDueAt,
+        Instant reservationExpiresAt,
+        Instant resourcesReleasedAt,
         Instant createdAt,
         Instant updatedAt,
         List<OrderItemResponse> items
@@ -46,6 +49,9 @@ public record OrderResponse(
                 order.getReceiverAddress(),
                 order.getPaymentMethod(),
                 order.getPaymentStatus(),
+                order.getPaymentDueAt(),
+                order.getReservationExpiresAt(),
+                order.getResourcesReleasedAt(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
                 List.of());
@@ -69,6 +75,9 @@ public record OrderResponse(
                 response.receiverAddress(),
                 response.paymentMethod(),
                 response.paymentStatus(),
+                response.paymentDueAt(),
+                response.reservationExpiresAt(),
+                response.resourcesReleasedAt(),
                 response.createdAt(),
                 response.updatedAt(),
                 items == null

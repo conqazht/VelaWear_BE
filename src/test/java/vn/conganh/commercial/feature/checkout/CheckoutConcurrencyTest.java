@@ -25,12 +25,13 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import vn.conganh.commercial.exception.CouponNotValidException;
-import vn.conganh.commercial.exception.InsufficientStockException;
+import vn.conganh.commercial.exception.CodedBusinessException;
 import vn.conganh.commercial.feature.cart.Cart;
 import vn.conganh.commercial.feature.cart.CartItem;
 import vn.conganh.commercial.feature.cart.CartItemRepository;
 import vn.conganh.commercial.feature.cart.CartRepository;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutRequest;
+import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewRequest;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutResponse;
 import vn.conganh.commercial.feature.coupon.Coupon;
 import vn.conganh.commercial.feature.coupon.CouponRepository;
@@ -164,31 +165,43 @@ class CheckoutConcurrencyTest {
         addCartItem(testUser, variant, 1);
         addCartItem(secondUser, variant, 1);
 
-        CheckoutRequest request = new CheckoutRequest(
+        CheckoutRequest firstRequest = new CheckoutRequest(
                 "Receiver",
                 "0123456789",
                 "Address",
                 "COD",
                 BigDecimal.ZERO,
-                null
+                null,
+                checkoutService.preview(
+                        new CheckoutPreviewRequest("COD", null), testUser.getEmail()).pricingFingerprint()
         );
+        CheckoutRequest secondRequest = new CheckoutRequest(
+                "Receiver",
+                "0123456789",
+                "Address",
+                "COD",
+                BigDecimal.ZERO,
+                null,
+                checkoutService.preview(
+                        new CheckoutPreviewRequest("COD", null), secondUser.getEmail()).pricingFingerprint());
 
-        Callable<CheckoutResponse> firstBuyerTask = () -> checkoutService.checkout(request, testUser.getEmail());
-        Callable<CheckoutResponse> secondBuyerTask = () -> checkoutService.checkout(request, secondUser.getEmail());
+        Callable<CheckoutResponse> firstBuyerTask = () -> checkoutService.checkout(firstRequest, testUser.getEmail());
+        Callable<CheckoutResponse> secondBuyerTask = () -> checkoutService.checkout(secondRequest, secondUser.getEmail());
         
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<CheckoutResponse> future1 = executorService.submit(firstBuyerTask);
             Future<CheckoutResponse> future2 = executorService.submit(secondBuyerTask);
 
             int successCount = 0;
-            int insufficientStockExceptionCount = 0;
+            int insufficientStockErrorCount = 0;
 
             try {
                 future1.get();
                 successCount++;
             } catch (Exception e) {
-                if (e.getCause() instanceof InsufficientStockException) {
-                    insufficientStockExceptionCount++;
+                if (e.getCause() instanceof CodedBusinessException coded
+                        && "INSUFFICIENT_STOCK".equals(coded.getCode())) {
+                    insufficientStockErrorCount++;
                 }
             }
 
@@ -196,13 +209,15 @@ class CheckoutConcurrencyTest {
                 future2.get();
                 successCount++;
             } catch (Exception e) {
-                if (e.getCause() instanceof InsufficientStockException) {
-                    insufficientStockExceptionCount++;
+                if (e.getCause() instanceof CodedBusinessException coded
+                        && "INSUFFICIENT_STOCK".equals(coded.getCode())) {
+                    insufficientStockErrorCount++;
                 }
             }
 
             assertEquals(1, successCount, "Only one checkout should succeed");
-            assertEquals(1, insufficientStockExceptionCount, "One checkout should fail with InsufficientStockException");
+            assertEquals(1, insufficientStockErrorCount,
+                    "One checkout should fail with INSUFFICIENT_STOCK");
         }
 
         ProductVariant updatedVariant = productVariantRepository.findById(variant.getId()).orElseThrow();
@@ -235,17 +250,30 @@ class CheckoutConcurrencyTest {
         coupon.setStatus(CouponStatus.ACTIVE);
         coupon = couponRepository.save(coupon);
 
-        CheckoutRequest request = new CheckoutRequest(
+        CheckoutRequest firstRequest = new CheckoutRequest(
                 "Receiver",
                 "0123456789",
                 "Address",
                 "COD",
                 BigDecimal.ZERO,
-                coupon.getCode()
+                coupon.getCode(),
+                checkoutService.preview(
+                        new CheckoutPreviewRequest("COD", coupon.getCode()),
+                        testUser.getEmail()).pricingFingerprint()
         );
+        CheckoutRequest secondRequest = new CheckoutRequest(
+                "Receiver",
+                "0123456789",
+                "Address",
+                "COD",
+                BigDecimal.ZERO,
+                coupon.getCode(),
+                checkoutService.preview(
+                        new CheckoutPreviewRequest("COD", coupon.getCode()),
+                        secondUser.getEmail()).pricingFingerprint());
 
-        Callable<CheckoutResponse> firstBuyerTask = () -> checkoutService.checkout(request, testUser.getEmail());
-        Callable<CheckoutResponse> secondBuyerTask = () -> checkoutService.checkout(request, secondUser.getEmail());
+        Callable<CheckoutResponse> firstBuyerTask = () -> checkoutService.checkout(firstRequest, testUser.getEmail());
+        Callable<CheckoutResponse> secondBuyerTask = () -> checkoutService.checkout(secondRequest, secondUser.getEmail());
         
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<CheckoutResponse> future1 = executorService.submit(firstBuyerTask);

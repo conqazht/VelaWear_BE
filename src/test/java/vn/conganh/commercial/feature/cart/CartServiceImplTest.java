@@ -30,11 +30,13 @@ import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
+import vn.conganh.commercial.feature.cart.dto.ReplaceCartItemsRequest;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Cart - CartServiceImpl")
@@ -55,6 +57,9 @@ class CartServiceImplTest {
     @Mock
     private ProductImageRepository productImageRepository;
 
+    @Mock
+    private VariantPricingService variantPricingService;
+
     private CartServiceImpl cartService;
 
     @BeforeEach
@@ -64,7 +69,24 @@ class CartServiceImplTest {
                 cartItemRepository,
                 userRepository,
                 productVariantRepository,
-                productImageRepository);
+                productImageRepository,
+                variantPricingService);
+    }
+
+    @Test
+    @DisplayName("replaceMyCartItems - khóa cùng cart row với checkout")
+    void replaceMyCartItems_usesCheckoutCartLock() {
+        User user = user(1L);
+        Cart cart = cart(10L, user);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(cart));
+        when(cartRepository.findWithLockByUserId(1L)).thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCartId(10L)).thenReturn(List.of());
+        when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(List.of())).thenReturn(List.of());
+
+        cartService.replaceMyCartItems("test@example.com", new ReplaceCartItemsRequest(List.of()));
+
+        verify(cartRepository).findWithLockByUserId(1L);
     }
 
     @Nested
@@ -181,7 +203,7 @@ class CartServiceImplTest {
         void deleteCart_existingCart_deletesCart() {
             // Arrange
             Cart cart = cart(10L, user(1L));
-            when(cartRepository.findById(10L)).thenReturn(Optional.of(cart));
+            when(cartRepository.findWithLockById(10L)).thenReturn(Optional.of(cart));
 
             // Act
             cartService.deleteCart(10L);

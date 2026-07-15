@@ -84,7 +84,8 @@ class CheckoutControllerTest {
                 Instant.now()
         );
 
-        when(checkoutService.checkout(any(), eq("test@example.com"))).thenReturn(mockResponse);
+        when(checkoutService.checkout(any(), eq("test@example.com"), eq("checkout-test-key")))
+                .thenReturn(mockResponse);
 
         String requestBody = """
                 {
@@ -92,12 +93,14 @@ class CheckoutControllerTest {
                     "receiverPhone": "0123456789",
                     "receiverAddress": "Address",
                     "paymentMethod": "COD",
-                    "shippingFee": 15
+                    "shippingFee": 15,
+                    "pricingFingerprint": "preview-fingerprint"
                 }
                 """;
 
         mockMvc.perform(post("/api/v1/checkout")
                         .with(jwt().jwt(jwt -> jwt.subject("test@example.com")))
+                        .header("Idempotency-Key", "checkout-test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isCreated())
@@ -115,7 +118,31 @@ class CheckoutControllerTest {
                     "receiverPhone": "0123456789",
                     "receiverAddress": "Address",
                     "paymentMethod": "COD",
-                    "shippingFee": 15
+                    "shippingFee": 15,
+                    "pricingFingerprint": "preview-fingerprint"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/checkout")
+                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")))
+                        .header("Idempotency-Key", "validation-test-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400))
+                .andExpect(jsonPath("$.data.receiverName").value("Receiver name is required"));
+    }
+
+    @Test
+    @DisplayName("Should return stable 400 when Idempotency-Key is missing")
+    void checkout_missingIdempotencyKey_returns400() throws Exception {
+        String requestBody = """
+                {
+                    "receiverName": "Receiver",
+                    "receiverPhone": "0123456789",
+                    "receiverAddress": "Address",
+                    "paymentMethod": "COD",
+                    "pricingFingerprint": "preview-fingerprint"
                 }
                 """;
 
@@ -124,8 +151,8 @@ class CheckoutControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.statusCode").value(400))
-                .andExpect(jsonPath("$.data.receiverName").value("Receiver name is required"));
+                .andExpect(jsonPath("$.code").value("MISSING_REQUEST_HEADER"))
+                .andExpect(jsonPath("$.data.header").value("Idempotency-Key"));
     }
 
     @Test

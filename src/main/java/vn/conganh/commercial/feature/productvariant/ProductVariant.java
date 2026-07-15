@@ -43,9 +43,6 @@ public class ProductVariant {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal price = BigDecimal.ZERO;
 
-    @Column(name = "sale_price", precision = 15, scale = 2)
-    private BigDecimal salePrice;
-
     @Column(name = "stock_quantity")
     private Integer stockQuantity = 0;
 

@@ -19,9 +19,6 @@ public record UpdateProductVariantRequest(
         @DecimalMin(value = "0.00", message = "Price must be greater than or equal to 0")
         BigDecimal price,
 
-        @DecimalMin(value = "0.00", message = "Sale price must be greater than or equal to 0")
-        BigDecimal salePrice,
-
         Integer stockQuantity,
 
         Long colorId,
@@ -31,5 +28,4 @@ public record UpdateProductVariantRequest(
         @NotBlank(message = "Status is required")
         @Size(max = 20, message = "Status must be at most 20 characters")
         String status
-) {
-}
+) {}

@@ -2,9 +2,14 @@ package vn.conganh.commercial.feature.checkout;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -13,19 +18,24 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import vn.conganh.commercial.exception.EmptyCartException;
-import vn.conganh.commercial.exception.InsufficientStockException;
+import vn.conganh.commercial.exception.CodedBusinessException;
 import vn.conganh.commercial.exception.CouponNotValidException;
+import vn.conganh.commercial.exception.EmptyCartException;
 import vn.conganh.commercial.exception.InvalidOrderTransitionException;
-import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.exception.InvalidRequestException;
+import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.cart.Cart;
 import vn.conganh.commercial.feature.cart.CartItem;
 import vn.conganh.commercial.feature.cart.CartItemRepository;
 import vn.conganh.commercial.feature.cart.CartRepository;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutItemResponse;
+import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewItemResponse;
+import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewRequest;
+import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewResponse;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutRequest;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutResponse;
 import vn.conganh.commercial.feature.checkout.dto.PaymentInitiationResponse;
@@ -37,8 +47,6 @@ import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
 import vn.conganh.commercial.feature.order.OrderRepository;
-import vn.conganh.commercial.feature.order.OrderStatusHistory;
-import vn.conganh.commercial.feature.order.OrderStatusHistoryRepository;
 import vn.conganh.commercial.feature.payment.Payment;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 import vn.conganh.commercial.feature.payment.sepay.SePayCheckoutForm;
@@ -50,8 +58,20 @@ import vn.conganh.commercial.feature.productvariant.InventoryLog;
 import vn.conganh.commercial.feature.productvariant.InventoryLogRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.PriceSource;
+import vn.conganh.commercial.feature.salecampaign.SaleAllocation;
+import vn.conganh.commercial.feature.salecampaign.SaleAllocationRepository;
+import vn.conganh.commercial.feature.salecampaign.SaleAllocationStatus;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignRepository;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus;
+import vn.conganh.commercial.feature.salecampaign.SaleCustomerUsageRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricing;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
@@ -61,10 +81,12 @@ import vn.conganh.commercial.util.constant.PaymentStatus;
 @Service
 public class CheckoutServiceImpl implements CheckoutService {
 
+    private static final Duration PAYMENT_WINDOW = Duration.ofMinutes(15);
+    private static final Duration PAYMENT_GRACE = Duration.ofSeconds(30);
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
-    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
-    private final ProductVariantRepository productVariantRepository;
+    private final ProductVariantRepository variantRepository;
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
     private final CartRepository cartRepository;
@@ -74,155 +96,103 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final ProductImageRepository productImageRepository;
     private final UserRepository userRepository;
     private final SePayService sePayService;
+    private final VariantPricingService pricingService;
+    private final SaleCampaignItemRepository campaignItemRepository;
+    private final SaleCampaignRepository campaignRepository;
+    private final SaleCustomerUsageRepository customerUsageRepository;
+    private final SaleAllocationRepository allocationRepository;
+    private final OrderResourceLifecycleService lifecycleService;
+
+    @Value("${app.checkout.shipping-fee:30000}")
+    private BigDecimal configuredShippingFee;
+
+    @Override
+    @Transactional(readOnly = true)
+    public CheckoutPreviewResponse preview(CheckoutPreviewRequest request, String userEmail) {
+        User user = findUser(userEmail);
+        validatePaymentMethod(request.paymentMethod());
+        Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow(EmptyCartException::new);
+        Quote quote = buildQuote(user, cart, request.couponCode(), Instant.now());
+        return quote.toResponse();
+    }
 
     @Override
     @Transactional
     public CheckoutResponse checkout(CheckoutRequest request, String userEmail) {
-        log.info("[VelaWear/Checkout] - ACTION: Start checkout for user {}", userEmail);
-        
-        User user = userRepository.findByEmailAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "email", userEmail));
+        return checkout(request, userEmail, UUID.randomUUID().toString());
+    }
 
-        Cart cart = cartRepository.findByUserId(user.getId())
-                .orElseThrow(EmptyCartException::new);
-        List<CartItem> items = cartItemRepository.findByCartId(cart.getId());
-        if (items.isEmpty()) {
-            throw new EmptyCartException();
-        }
+    @Override
+    @Transactional
+    public CheckoutResponse checkout(CheckoutRequest request, String userEmail, String idempotencyKey) {
+        User user = findUser(userEmail);
+        validatePaymentMethod(request.paymentMethod());
+        String normalizedKey = normalizeIdempotencyKey(idempotencyKey);
+        String requestHash = requestHash(request);
 
-        List<Long> variantIds = items.stream()
-                .map(CartItem::getVariantId)
-                .distinct()
-                .toList();
-        List<ProductVariant> variants = productVariantRepository.findAllByIdInAndDeletedAtIsNull(variantIds);
-
-        Map<Long, ProductVariant> variantMap = variants.stream()
-                .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
-
-        for (CartItem item : items) {
-            ProductVariant variant = variantMap.get(item.getVariantId());
-            if (variant == null || !"ACTIVE".equals(variant.getStatus())) {
-                throw new InvalidRequestException("Product variant not available: " + item.getVariantId());
+        Cart cart = cartRepository.findWithLockByUserId(user.getId()).orElseThrow(EmptyCartException::new);
+        Optional<Order> existing = orderRepository.findWithLockByUserIdAndCheckoutIdempotencyKey(
+                user.getId(), normalizedKey);
+        if (existing.isPresent()) {
+            if (!requestHash.equals(existing.get().getCheckoutRequestHash())) {
+                throw conflict("IDEMPOTENCY_KEY_REUSED",
+                        "Idempotency-Key was already used with a different checkout request", Map.of());
             }
+            return existingResponse(existing.get());
         }
 
-        BigDecimal subtotal = BigDecimal.ZERO;
-        for (CartItem item : items) {
-            ProductVariant variant = variantMap.get(item.getVariantId());
-            BigDecimal effectivePrice = variant.getSalePrice() != null ? variant.getSalePrice() : variant.getPrice();
-            subtotal = subtotal.add(effectivePrice.multiply(BigDecimal.valueOf(item.getQuantity())));
+        Instant now = Instant.now();
+        Quote quote = buildQuote(user, cart, request.couponCode(), now);
+        if (!java.util.Objects.equals(request.pricingFingerprint(), quote.pricingFingerprint())) {
+            throw conflict("PRICE_CHANGED", "Cart price changed after preview",
+                    Map.of("pricingFingerprint", quote.pricingFingerprint(), "preview", quote.toResponse()));
         }
 
-        BigDecimal shippingFee = request.shippingFee() != null ? request.shippingFee() : BigDecimal.ZERO;
-        BigDecimal discountAmount = BigDecimal.ZERO;
+        lockAndRecheckStandardCampaigns(quote.lines());
 
-        String orderCode = "VELA-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-
+        boolean online = !"COD".equalsIgnoreCase(request.paymentMethod());
         Order order = new Order();
         order.setUser(user);
-        order.setOrderCode(orderCode);
+        order.setOrderCode(newOrderCode());
         order.setStatus("PENDING");
-        order.setSubtotal(subtotal);
-        order.setShippingFee(shippingFee);
-        order.setDiscountAmount(discountAmount);
-        order.setFinalAmount(subtotal.add(shippingFee));
+        order.setSubtotal(quote.subtotal());
+        order.setShippingFee(quote.shippingFee());
+        order.setDiscountAmount(quote.discountAmount());
+        order.setFinalAmount(quote.finalAmount());
         order.setReceiverName(request.receiverName());
         order.setReceiverPhone(request.receiverPhone());
         order.setReceiverAddress(request.receiverAddress());
-        order.setPaymentMethod(request.paymentMethod());
+        order.setPaymentMethod(request.paymentMethod().toUpperCase());
         order.setPaymentStatus("UNPAID");
+        order.setCheckoutIdempotencyKey(normalizedKey);
+        order.setCheckoutRequestHash(requestHash);
+        if (online) {
+            order.setPaymentDueAt(now.plus(PAYMENT_WINDOW));
+            order.setReservationExpiresAt(now.plus(PAYMENT_WINDOW).plus(PAYMENT_GRACE));
+        }
         order = orderRepository.save(order);
 
-        if (request.couponCode() != null && !request.couponCode().isBlank()) {
-            Coupon coupon = couponRepository.findByCode(request.couponCode())
-                    .orElseThrow(() -> new CouponNotValidException("Coupon not found"));
+        reserveFlashAndStock(quote.lines(), user, now);
+        consumeCoupon(quote, user, order, now);
 
-            if (coupon.getMinOrderAmount() != null && subtotal.compareTo(coupon.getMinOrderAmount()) < 0) {
-                throw new CouponNotValidException("Order subtotal does not meet minimum amount");
-            }
-
-            if (coupon.getType() == CouponType.PERCENTAGE) {
-                discountAmount = subtotal.multiply(coupon.getValue()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-                if (coupon.getMaxDiscount() != null && discountAmount.compareTo(coupon.getMaxDiscount()) > 0) {
-                    discountAmount = coupon.getMaxDiscount();
-                }
-            } else {
-                discountAmount = coupon.getValue();
-            }
-
-            int consumed = couponRepository.consumeUsage(coupon.getId(), Instant.now());
-            if (consumed == 0) {
-                throw new CouponNotValidException("Coupon is no longer available or usage limit reached");
-            }
-
-            CouponUsage couponUsage = new CouponUsage();
-            couponUsage.setCoupon(coupon);
-            couponUsage.setUser(user);
-            couponUsage.setOrder(order);
-            couponUsage.setDiscountAmount(discountAmount);
-            couponUsageRepository.save(couponUsage);
-
-            order.setDiscountAmount(discountAmount);
-            BigDecimal finalAmount = subtotal.add(shippingFee).subtract(discountAmount);
-            if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
-                finalAmount = BigDecimal.ZERO;
-            }
-            order.setFinalAmount(finalAmount);
-            order = orderRepository.save(order);
-        }
-
-        for (CartItem item : items) {
-            int reserved = productVariantRepository.decrementStock(item.getVariantId(), item.getQuantity());
-            if (reserved == 0) {
-                ProductVariant variant = variantMap.get(item.getVariantId());
-                throw new InsufficientStockException(
-                        variant.getSku() != null ? variant.getSku() : "ID:" + item.getVariantId());
-            }
-        }
-
-        List<OrderItem> orderItems = new ArrayList<>();
-        for (CartItem item : items) {
-            ProductVariant variant = variantMap.get(item.getVariantId());
-            Product product = variant.getProduct();
-            BigDecimal effectivePrice = variant.getSalePrice() != null ? variant.getSalePrice() : variant.getPrice();
-
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            orderItem.setVariantId(variant.getId());
-            orderItem.setProductName(product.getName());
-            orderItem.setVariantName(buildVariantName(variant));
-            orderItem.setSku(variant.getSku());
-            orderItem.setImage(resolveItemImage(variant, product));
-            orderItem.setPrice(effectivePrice);
-            orderItem.setQuantity(item.getQuantity());
-            orderItem.setSubtotal(effectivePrice.multiply(BigDecimal.valueOf(item.getQuantity())));
-            orderItem.setStatus("PENDING");
-            orderItems.add(orderItem);
-        }
-        orderItems = orderItemRepository.saveAll(orderItems);
+        List<OrderItem> orderItems = createOrderItems(quote.lines(), order);
+        createAllocations(quote.lines(), orderItems, user, online);
 
         for (OrderItem orderItem : orderItems) {
-            ProductVariant variant = variantMap.get(orderItem.getVariantId());
-            writeInventoryLog(variant, -orderItem.getQuantity(), "ORDER", "ORDER_ITEM", orderItem.getId());
+            writeInventoryLog(quote.variantMap().get(orderItem.getVariantId()),
+                    -orderItem.getQuantity(), "ORDER", "ORDER_ITEM", orderItem.getId(), null);
+        }
+
+        if (!online) {
+            lifecycleService.confirmLockedOrder(order);
         }
 
         Long paymentId = null;
         PaymentInitiationResponse paymentInitiation = null;
-        boolean isOnlinePayment = !"COD".equalsIgnoreCase(request.paymentMethod());
-        if (isOnlinePayment) {
-            PaymentProvider provider;
-            try {
-                provider = PaymentProvider.valueOf(request.paymentMethod().toUpperCase());
-            } catch (IllegalArgumentException exception) {
-                throw new InvalidRequestException("Unsupported payment method: " + request.paymentMethod());
-            }
-            if (provider != PaymentProvider.SEPAY) {
-                throw new InvalidRequestException("Only SEPAY is currently available for online payment");
-            }
-
+        if (online) {
             Payment payment = new Payment();
             payment.setOrder(order);
-            payment.setProvider(provider);
+            payment.setProvider(PaymentProvider.SEPAY);
             payment.setAmount(order.getFinalAmount());
             payment.setStatus(PaymentStatus.PENDING);
             payment = paymentRepository.save(payment);
@@ -230,131 +200,387 @@ public class CheckoutServiceImpl implements CheckoutService {
 
             SePayCheckoutForm checkoutForm = sePayService.createCheckoutForm(order);
             paymentInitiation = new PaymentInitiationResponse(
-                    provider.name(),
-                    "POST",
-                    checkoutForm.actionUrl(),
-                    checkoutForm.fields());
+                    PaymentProvider.SEPAY.name(), "POST", checkoutForm.actionUrl(), checkoutForm.fields());
         }
 
         cartItemRepository.deleteByCartId(cart.getId());
-
-        List<CheckoutItemResponse> itemResponses = orderItems.stream()
-                .map(CheckoutItemResponse::fromEntity)
-                .toList();
-                
-        log.info("[VelaWear/Checkout] - ACTION: Checkout successful for user {}, order code {}", userEmail, orderCode);
-        return CheckoutResponse.fromEntity(order, itemResponses, paymentId, paymentInitiation);
+        return CheckoutResponse.fromEntity(
+                order,
+                orderItems.stream().map(CheckoutItemResponse::fromEntity).toList(),
+                paymentId,
+                paymentInitiation);
     }
 
     @Override
     @Transactional
     public void cancelOrder(long orderId, String userEmail) {
-        log.info("[VelaWear/Checkout] - ACTION: Start cancel order id {} for user {}", orderId, userEmail);
-        
-        User user = userRepository.findByEmailAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "email", userEmail));
-
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
-
+        User user = findUser(userEmail);
+        Order order = lifecycleService.findLocked(orderId);
         if (!order.getUser().getId().equals(user.getId())) {
             throw new InvalidRequestException("Order does not belong to user");
         }
-
         if ("CANCELLED".equals(order.getStatus())) {
             return;
         }
-
         if ("PAID".equals(order.getPaymentStatus())) {
             throw new InvalidRequestException("A paid order cannot be cancelled");
         }
-
         if (!"PENDING".equals(order.getStatus())) {
             throw new InvalidOrderTransitionException(order.getStatus(), "CANCELLED");
         }
-
-        restoreOrderResources(order);
-
-        String previousStatus = order.getStatus();
-        order.setStatus("CANCELLED");
-        orderRepository.save(order);
-
-        OrderStatusHistory history = new OrderStatusHistory();
-        history.setOrder(order);
-        history.setFromStatus(previousStatus);
-        history.setToStatus("CANCELLED");
-        orderStatusHistoryRepository.save(history);
-        
-        log.info("[VelaWear/Checkout] - ACTION: Cancel order successful for id {}", orderId);
+        lifecycleService.releaseLockedOrder(order, "FAILED", "CUSTOMER_CANCELLED");
+        paymentRepository.findWithLockByOrderId(orderId).ifPresent(payment -> {
+            if (payment.getStatus() == PaymentStatus.PENDING) {
+                payment.setStatus(PaymentStatus.CANCELLED);
+                paymentRepository.save(payment);
+            }
+        });
     }
 
     @Override
     @Transactional
     public void handlePaymentFailure(long orderId) {
-        log.info("[VelaWear/Checkout] - ACTION: Handle payment failure for order id {}", orderId);
-        
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
-
-        if (isTerminalStatus(order.getStatus())) {
+        Order order = lifecycleService.findLocked(orderId);
+        if (order.getResourcesReleasedAt() != null || "CANCELLED".equals(order.getStatus())) {
             return;
         }
-
         if (!"PENDING".equals(order.getStatus())) {
             throw new InvalidOrderTransitionException(order.getStatus(), "CANCELLED");
         }
-
-        restoreOrderResources(order);
-
-        String previousStatus = order.getStatus();
-        order.setStatus("CANCELLED");
-        order.setPaymentStatus("FAILED");
-        orderRepository.save(order);
-
-        paymentRepository.findByOrderId(order.getId()).ifPresent(payment -> {
+        lifecycleService.releaseLockedOrder(order, "FAILED", "PAYMENT_FAILED");
+        paymentRepository.findWithLockByOrderId(orderId).ifPresent(payment -> {
             payment.setStatus(PaymentStatus.FAILED);
             paymentRepository.save(payment);
         });
-
-        OrderStatusHistory history = new OrderStatusHistory();
-        history.setOrder(order);
-        history.setFromStatus(previousStatus);
-        history.setToStatus("CANCELLED");
-        orderStatusHistoryRepository.save(history);
-        
-        log.info("[VelaWear/Checkout] - ACTION: Handled payment failure for order id {}", orderId);
     }
 
-    private void writeInventoryLog(ProductVariant variant, int changeQuantity, String type, String referenceType, Long referenceId) {
-        InventoryLog logRecord = new InventoryLog();
-        logRecord.setVariant(variant);
-        logRecord.setChangeQuantity(changeQuantity);
-        logRecord.setType(type);
-        logRecord.setReferenceType(referenceType);
-        logRecord.setReferenceId(referenceId);
-        inventoryLogRepository.save(logRecord);
+    private Quote buildQuote(User user, Cart cart, String couponCode, Instant now) {
+        List<CartItem> cartItems = cartItemRepository.findByCartId(cart.getId()).stream()
+                .sorted(Comparator.comparing(CartItem::getVariantId))
+                .toList();
+        if (cartItems.isEmpty()) {
+            throw new EmptyCartException();
+        }
+        List<Long> variantIds = cartItems.stream().map(CartItem::getVariantId).distinct().toList();
+        List<ProductVariant> variants = variantRepository.findAllByIdInAndDeletedAtIsNull(variantIds);
+        Map<Long, ProductVariant> variantMap = variants.stream()
+                .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
+        if (variantMap.size() != variantIds.size()) {
+            throw new InvalidRequestException("One or more product variants are unavailable");
+        }
+        for (ProductVariant variant : variants) {
+            if (!"ACTIVE".equals(variant.getStatus())
+                    || variant.getProduct().getDeletedAt() != null
+                    || !"ACTIVE".equals(variant.getProduct().getStatus())) {
+                throw new InvalidRequestException("Product variant not available: " + variant.getId());
+            }
+        }
+
+        Map<Long, VariantPricing> pricing = pricingService.resolve(variants, now, user.getId());
+        List<QuoteLine> lines = cartItems.stream()
+                .map(item -> new QuoteLine(item, variantMap.get(item.getVariantId()), pricing.get(item.getVariantId())))
+                .toList();
+        BigDecimal subtotal = lines.stream()
+                .map(line -> line.pricing().effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal eligibleSubtotal = lines.stream()
+                .filter(line -> line.pricing().priceSource() != PriceSource.FLASH_SALE)
+                .map(line -> line.pricing().effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Coupon coupon = findAndValidateCoupon(couponCode, eligibleSubtotal, now);
+        BigDecimal discount = coupon == null ? BigDecimal.ZERO : calculateDiscount(coupon, eligibleSubtotal);
+        BigDecimal shippingFee = configuredShippingFee == null ? BigDecimal.ZERO : configuredShippingFee;
+        BigDecimal finalAmount = subtotal.add(shippingFee).subtract(discount).max(BigDecimal.ZERO);
+        String fingerprint = pricingFingerprint(
+                lines, coupon, eligibleSubtotal, shippingFee, discount, finalAmount);
+        return new Quote(now, fingerprint, lines, variantMap, coupon,
+                subtotal, eligibleSubtotal, shippingFee, discount, finalAmount);
+    }
+
+    private void reserveFlashAndStock(List<QuoteLine> lines, User user, Instant now) {
+        for (QuoteLine line : lines) {
+            VariantPricing pricing = line.pricing();
+            int quantity = line.item().getQuantity();
+            if (pricing.isFlash()) {
+                SaleCampaignItem campaignItem = pricing.campaignItem();
+                customerUsageRepository.createCounterIfAbsent(campaignItem.getId(), user.getId());
+                int max = campaignItem.getMaxPerCustomer() == null
+                        ? Integer.MAX_VALUE : campaignItem.getMaxPerCustomer();
+                if (campaignItemRepository.reserveQuota(campaignItem.getId(), quantity, now) != 1) {
+                    String code = !campaignItem.getCampaign().getEndsAt().isAfter(now)
+                            ? "FLASH_SALE_ENDED" : "FLASH_SALE_SOLD_OUT";
+                    throw conflict(code, "Flash sale quota is no longer available",
+                            Map.of("variantId", line.variant().getId()));
+                }
+                if (customerUsageRepository.reserveWithinLimit(
+                        campaignItem.getId(), user.getId(), quantity, max) != 1) {
+                    throw conflict("FLASH_SALE_LIMIT_EXCEEDED", "Flash sale customer limit exceeded",
+                            Map.of("variantId", line.variant().getId(), "maxPerCustomer", max));
+                }
+            }
+            if (variantRepository.decrementStock(line.variant().getId(), quantity) != 1) {
+                throw conflict("INSUFFICIENT_STOCK", "Product stock is no longer sufficient",
+                        Map.of("variantId", line.variant().getId(), "sku", line.variant().getSku()));
+            }
+        }
+    }
+
+    private void lockAndRecheckStandardCampaigns(List<QuoteLine> lines) {
+        List<Long> campaignIds = lines.stream()
+                .filter(line -> line.pricing().priceSource() == PriceSource.STANDARD_SALE)
+                .map(line -> line.pricing().campaignItem().getCampaign().getId())
+                .distinct()
+                .sorted()
+                .toList();
+        if (campaignIds.isEmpty()) {
+            return;
+        }
+        Instant lockedAt = Instant.now();
+        List<vn.conganh.commercial.feature.salecampaign.SaleCampaign> lockedCampaigns =
+                campaignRepository.findAllStatesWithLockByIdIn(campaignIds);
+        boolean stillLive = lockedCampaigns.size() == campaignIds.size()
+                && lockedCampaigns.stream().allMatch(campaign ->
+                        campaign.getStatus() == SaleCampaignStatus.PUBLISHED
+                                && !lockedAt.isBefore(campaign.getStartsAt())
+                                && lockedAt.isBefore(campaign.getEndsAt()));
+        if (!stillLive) {
+            throw conflict("PRICE_CHANGED", "A scheduled sale ended while checkout was being confirmed", Map.of());
+        }
+    }
+
+    private void consumeCoupon(Quote quote, User user, Order order, Instant now) {
+        if (quote.coupon() == null) {
+            return;
+        }
+        if (couponRepository.consumeUsage(quote.coupon().getId(), now) != 1) {
+            throw new CouponNotValidException("Coupon is no longer available or usage limit reached");
+        }
+        CouponUsage usage = new CouponUsage();
+        usage.setCoupon(quote.coupon());
+        usage.setUser(user);
+        usage.setOrder(order);
+        usage.setDiscountAmount(quote.discountAmount());
+        couponUsageRepository.save(usage);
+    }
+
+    private List<OrderItem> createOrderItems(List<QuoteLine> lines, Order order) {
+        List<OrderItem> orderItems = new ArrayList<>();
+        for (QuoteLine line : lines) {
+            ProductVariant variant = line.variant();
+            Product product = variant.getProduct();
+            VariantPricing pricing = line.pricing();
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(order);
+            orderItem.setVariantId(variant.getId());
+            orderItem.setProductName(product.getName());
+            orderItem.setVariantName(buildVariantName(variant));
+            orderItem.setSku(variant.getSku());
+            orderItem.setImage(resolveItemImage(variant, product));
+            orderItem.setListPrice(pricing.listPrice());
+            orderItem.setPrice(pricing.effectivePrice());
+            orderItem.setPriceSource(pricing.priceSource());
+            orderItem.setSaleCampaignItem(pricing.campaignItem());
+            if (pricing.campaignItem() != null) {
+                orderItem.setSaleCampaignCode(pricing.campaignItem().getCampaign().getCode());
+                orderItem.setSaleCampaignName(pricing.campaignItem().getCampaign().getName());
+            }
+            orderItem.setQuantity(line.item().getQuantity());
+            orderItem.setSubtotal(pricing.effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())));
+            orderItem.setStatus("PENDING");
+            orderItems.add(orderItem);
+        }
+        return orderItemRepository.saveAll(orderItems);
+    }
+
+    private void createAllocations(
+            List<QuoteLine> lines,
+            List<OrderItem> orderItems,
+            User user,
+            boolean online) {
+        Map<Long, OrderItem> byVariant = orderItems.stream()
+                .collect(Collectors.toMap(OrderItem::getVariantId, Function.identity()));
+        List<SaleAllocation> allocations = lines.stream()
+                .filter(line -> line.pricing().isFlash())
+                .map(line -> {
+                    SaleAllocation allocation = new SaleAllocation();
+                    allocation.setCampaignItem(line.pricing().campaignItem());
+                    allocation.setOrderItem(byVariant.get(line.variant().getId()));
+                    allocation.setUser(user);
+                    allocation.setQuantity(line.item().getQuantity());
+                    allocation.setStatus(SaleAllocationStatus.RESERVED);
+                    return allocation;
+                })
+                .toList();
+        allocationRepository.saveAll(allocations);
+        allocationRepository.flush();
+    }
+
+    private Coupon findAndValidateCoupon(String code, BigDecimal eligibleSubtotal, Instant now) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        Coupon coupon = couponRepository.findByCode(code.trim())
+                .orElseThrow(() -> new CouponNotValidException("Coupon not found"));
+        if (coupon.getStatus() != CouponStatus.ACTIVE
+                || coupon.getStartDate().isAfter(now)
+                || coupon.getEndDate().isBefore(now)
+                || (coupon.getUsageLimit() != null && coupon.getUsedCount() >= coupon.getUsageLimit())) {
+            throw new CouponNotValidException("Coupon is not active");
+        }
+        if (coupon.getMinOrderAmount() != null
+                && eligibleSubtotal.compareTo(coupon.getMinOrderAmount()) < 0) {
+            throw new CouponNotValidException("Coupon-eligible subtotal does not meet minimum amount");
+        }
+        if (eligibleSubtotal.signum() == 0) {
+            throw new CouponNotValidException("Coupon cannot be applied to Flash Sale items");
+        }
+        return coupon;
+    }
+
+    private BigDecimal calculateDiscount(Coupon coupon, BigDecimal eligibleSubtotal) {
+        BigDecimal discount;
+        if (coupon.getType() == CouponType.PERCENTAGE) {
+            discount = eligibleSubtotal.multiply(coupon.getValue())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            if (coupon.getMaxDiscount() != null) {
+                discount = discount.min(coupon.getMaxDiscount());
+            }
+        } else {
+            discount = coupon.getValue();
+        }
+        return discount.min(eligibleSubtotal);
+    }
+
+    private CheckoutResponse existingResponse(Order order) {
+        Instant now = Instant.now();
+        if (order.getReservationExpiresAt() != null
+                && !order.getReservationExpiresAt().isAfter(now)
+                && order.getResourcesReleasedAt() == null
+                && "PENDING".equals(order.getStatus())
+                && "UNPAID".equals(order.getPaymentStatus())) {
+            lifecycleService.releaseLockedOrder(order, "FAILED", "PAYMENT_TIMEOUT");
+            paymentRepository.findWithLockByOrderId(order.getId()).ifPresent(expiredPayment -> {
+                if (expiredPayment.getStatus() == PaymentStatus.PENDING) {
+                    expiredPayment.setStatus(PaymentStatus.FAILED);
+                    paymentRepository.save(expiredPayment);
+                }
+            });
+        }
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+        Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
+        Long paymentId = payment == null ? null : payment.getId();
+        PaymentInitiationResponse paymentInitiation = null;
+        if (payment != null
+                && payment.getStatus() == PaymentStatus.PENDING
+                && "PENDING".equals(order.getStatus())
+                && "UNPAID".equals(order.getPaymentStatus())
+                && (order.getPaymentDueAt() == null || order.getPaymentDueAt().isAfter(now))
+                && (order.getReservationExpiresAt() == null || order.getReservationExpiresAt().isAfter(now))) {
+            SePayCheckoutForm checkoutForm = sePayService.createCheckoutForm(order);
+            paymentInitiation = new PaymentInitiationResponse(
+                    PaymentProvider.SEPAY.name(), "POST", checkoutForm.actionUrl(), checkoutForm.fields());
+        }
+        return CheckoutResponse.fromEntity(
+                order, items.stream().map(CheckoutItemResponse::fromEntity).toList(), paymentId, paymentInitiation);
+    }
+
+    private String pricingFingerprint(
+            List<QuoteLine> lines,
+            Coupon coupon,
+            BigDecimal eligibleSubtotal,
+            BigDecimal shippingFee,
+            BigDecimal discountAmount,
+            BigDecimal finalAmount) {
+        String canonical = lines.stream()
+                .sorted(Comparator.comparing(line -> line.variant().getId()))
+                .map(line -> String.join(":",
+                        line.variant().getId().toString(),
+                        Integer.toString(line.item().getQuantity()),
+                        line.pricing().listPrice().toPlainString(),
+                        line.pricing().effectivePrice().toPlainString(),
+                        line.pricing().priceSource().name(),
+                        line.pricing().campaignItem() == null ? "-" : line.pricing().campaignItem().getId().toString()))
+                .collect(Collectors.joining("|"));
+        String couponSnapshot = coupon == null
+                ? "-"
+                : String.join(":",
+                        coupon.getId().toString(),
+                        coupon.getCode(),
+                        coupon.getType().name(),
+                        coupon.getValue().toPlainString(),
+                        coupon.getMaxDiscount() == null ? "-" : coupon.getMaxDiscount().toPlainString(),
+                        coupon.getMinOrderAmount() == null ? "-" : coupon.getMinOrderAmount().toPlainString());
+        return sha256(canonical
+                + "|coupon=" + couponSnapshot
+                + "|eligible=" + eligibleSubtotal.toPlainString()
+                + "|shipping=" + shippingFee.toPlainString()
+                + "|discount=" + discountAmount.toPlainString()
+                + "|final=" + finalAmount.toPlainString());
+    }
+
+    private String requestHash(CheckoutRequest request) {
+        return sha256(String.join("|",
+                nullSafe(request.receiverName()),
+                nullSafe(request.receiverPhone()),
+                nullSafe(request.receiverAddress()),
+                nullSafe(request.paymentMethod()).toUpperCase(),
+                nullSafe(request.couponCode()),
+                nullSafe(request.pricingFingerprint())));
+    }
+
+    private String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private User findUser(String email) {
+        return userRepository.findByEmailAndDeletedAtIsNull(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+    }
+
+    private void validatePaymentMethod(String paymentMethod) {
+        if (!"COD".equalsIgnoreCase(paymentMethod) && !"SEPAY".equalsIgnoreCase(paymentMethod)) {
+            throw new InvalidRequestException("Only COD and SEPAY payment methods are supported");
+        }
+    }
+
+    private String normalizeIdempotencyKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new CodedBusinessException(
+                    "IDEMPOTENCY_KEY_INVALID",
+                    "Idempotency-Key header must not be blank",
+                    HttpStatus.BAD_REQUEST);
+        }
+        String normalized = key.trim();
+        if (normalized.length() > 100) {
+            throw new CodedBusinessException(
+                    "IDEMPOTENCY_KEY_INVALID",
+                    "Idempotency-Key must be at most 100 characters",
+                    HttpStatus.BAD_REQUEST);
+        }
+        return normalized;
+    }
+
+    private String newOrderCode() {
+        return "VELA-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 
     private String buildVariantName(ProductVariant variant) {
-        String colorName = variant.getColor() != null ? variant.getColor().getName() : "";
-        String sizeName = variant.getSize() != null ? variant.getSize().getName() : "";
-        
+        String colorName = variant.getColor() == null ? "" : variant.getColor().getName();
+        String sizeName = variant.getSize() == null ? "" : variant.getSize().getName();
         if (!colorName.isEmpty() && !sizeName.isEmpty()) {
             return colorName + " / " + sizeName;
-        } else if (!colorName.isEmpty()) {
-            return colorName;
-        } else if (!sizeName.isEmpty()) {
-            return sizeName;
         }
-        return "";
+        return colorName.isEmpty() ? sizeName : colorName;
     }
 
     private String resolveItemImage(ProductVariant variant, Product product) {
         Optional<String> variantImage = selectImage(productImageRepository.findByVariantId(variant.getId()));
-        if (variantImage.isPresent()) {
-            return variantImage.get();
-        }
-        return selectImage(productImageRepository.findByProductId(product.getId())).orElse(null);
+        return variantImage.orElseGet(() -> selectImage(productImageRepository.findByProductId(product.getId())).orElse(null));
     }
 
     private Optional<String> selectImage(List<ProductImage> images) {
@@ -370,23 +596,72 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .findFirst();
     }
 
-    private boolean isTerminalStatus(String status) {
-        return "CANCELLED".equals(status) || "COMPLETED".equals(status) || "REFUNDED".equals(status);
+    private void writeInventoryLog(
+            ProductVariant variant,
+            int changeQuantity,
+            String type,
+            String referenceType,
+            Long referenceId,
+            String reason) {
+        InventoryLog logRecord = new InventoryLog();
+        logRecord.setVariant(variant);
+        logRecord.setChangeQuantity(changeQuantity);
+        logRecord.setType(type);
+        logRecord.setReferenceType(referenceType);
+        logRecord.setReferenceId(referenceId);
+        logRecord.setReason(reason);
+        inventoryLogRepository.save(logRecord);
     }
 
-    private void restoreOrderResources(Order order) {
-        List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
-        for (OrderItem item : orderItems) {
-            productVariantRepository.restoreStock(item.getVariantId(), item.getQuantity());
-            
-            productVariantRepository.findByIdAndDeletedAtIsNull(item.getVariantId()).ifPresent(variant -> {
-                writeInventoryLog(variant, item.getQuantity(), "CANCEL", "ORDER_ITEM", item.getId());
-            });
-        }
+    private CodedBusinessException conflict(String code, String message, Map<String, Object> details) {
+        return new CodedBusinessException(code, message, HttpStatus.CONFLICT, details);
+    }
 
-        couponUsageRepository.findByOrderId(order.getId()).ifPresent(couponUsage -> {
-            couponRepository.releaseUsage(couponUsage.getCoupon().getId());
-            couponUsageRepository.delete(couponUsage);
-        });
+    private String nullSafe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private record QuoteLine(CartItem item, ProductVariant variant, VariantPricing pricing) {}
+
+    private record Quote(
+            Instant serverTime,
+            String pricingFingerprint,
+            List<QuoteLine> lines,
+            Map<Long, ProductVariant> variantMap,
+            Coupon coupon,
+            BigDecimal subtotal,
+            BigDecimal eligibleSubtotal,
+            BigDecimal shippingFee,
+            BigDecimal discountAmount,
+            BigDecimal finalAmount) {
+
+        private CheckoutPreviewResponse toResponse() {
+            return new CheckoutPreviewResponse(
+                    serverTime,
+                    pricingFingerprint,
+                    subtotal,
+                    eligibleSubtotal,
+                    shippingFee,
+                    discountAmount,
+                    finalAmount,
+                    lines.stream().map(line -> new CheckoutPreviewItemResponse(
+                            line.variant().getId(),
+                            line.variant().getProduct().getId(),
+                            line.variant().getProduct().getName(),
+                            line.variant().getSku(),
+                            line.item().getQuantity(),
+                            line.pricing().listPrice(),
+                            line.pricing().effectivePrice(),
+                            line.pricing().effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())),
+                            line.pricing().priceSource(),
+                            line.pricing().campaignItem() == null ? null : line.pricing().campaignItem().getId(),
+                            line.pricing().campaignItem() == null
+                                    ? null : line.pricing().campaignItem().getCampaign().getCode(),
+                            line.pricing().campaignItem() == null
+                                    ? null : line.pricing().campaignItem().getCampaign().getName(),
+                            line.pricing().toResponse(),
+                            line.pricing().priceSource() != PriceSource.FLASH_SALE))
+                            .toList());
+        }
     }
 }

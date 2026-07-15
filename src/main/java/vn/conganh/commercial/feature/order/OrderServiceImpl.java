@@ -19,6 +19,9 @@ import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.FilterSpecifications;
+import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
+import vn.conganh.commercial.feature.payment.PaymentRepository;
+import vn.conganh.commercial.util.constant.PaymentStatus;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +31,8 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderResourceLifecycleService resourceLifecycleService;
+    private final PaymentRepository paymentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -109,10 +114,28 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponse updateOrder(Long id, UpdateOrderRequest request) {
-        Order order = orderRepository.findById(id)
+        Order order = orderRepository.findWithLockById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
 
         String previousStatus = order.getStatus();
+        assertCheckoutManagedFieldsAreImmutable(order, request);
+        if ("CANCELLED".equals(request.status()) && !"CANCELLED".equals(previousStatus)) {
+            if (!java.util.Set.of("PENDING", "CONFIRMED").contains(previousStatus)) {
+                throw new InvalidRequestException(
+                        "Only PENDING or CONFIRMED orders can be cancelled; use return/refund after shipping");
+            }
+            if ("PAID".equals(order.getPaymentStatus())) {
+                throw new InvalidRequestException("A paid order must use the refund workflow, not cancellation");
+            }
+            resourceLifecycleService.releaseLockedOrder(order, "FAILED", "ADMIN_CANCELLED");
+            paymentRepository.findWithLockByOrderId(id).ifPresent(payment -> {
+                if (payment.getStatus() == PaymentStatus.PENDING) {
+                    payment.setStatus(PaymentStatus.CANCELLED);
+                    paymentRepository.save(payment);
+                }
+            });
+            return toDetailedResponse(order);
+        }
         if (request.status() != null) {
             order.setStatus(request.status());
         }
@@ -146,11 +169,44 @@ public class OrderServiceImpl implements OrderService {
         return toDetailedResponse(savedOrder);
     }
 
+    private void assertCheckoutManagedFieldsAreImmutable(Order order, UpdateOrderRequest request) {
+        if (order.getCheckoutIdempotencyKey() == null) {
+            return;
+        }
+        boolean validCodCollection = "COD".equals(order.getPaymentMethod())
+                && "UNPAID".equals(order.getPaymentStatus())
+                && "PAID".equals(request.paymentStatus());
+        if (request.shippingFee() != null
+                || request.discountAmount() != null
+                || request.finalAmount() != null
+                || request.paymentMethod() != null
+                || (request.paymentStatus() != null && !validCodCollection)) {
+            throw new InvalidRequestException(
+                    "Checkout totals and payment fields are managed by checkout/payment lifecycle services");
+        }
+        if (request.status() != null
+                && order.getResourcesReleasedAt() != null
+                && !request.status().equals(order.getStatus())) {
+            throw new InvalidRequestException("A released checkout order cannot be reopened");
+        }
+        if (request.status() != null
+                && order.getReservationExpiresAt() != null
+                && "UNPAID".equals(order.getPaymentStatus())
+                && !"PENDING".equals(request.status())
+                && !"CANCELLED".equals(request.status())) {
+            throw new InvalidRequestException(
+                    "An unpaid online checkout must remain PENDING or be cancelled through its lifecycle");
+        }
+    }
+
     @Override
     @Transactional
     public void deleteOrder(Long id) {
-        Order order = orderRepository.findById(id)
+        Order order = orderRepository.findWithLockById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
+        if (!orderItemRepository.findByOrderId(id).isEmpty()) {
+            throw new InvalidRequestException("An order with items cannot be deleted; cancel or refund it instead");
+        }
         orderRepository.delete(order);
     }
 

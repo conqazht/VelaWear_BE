@@ -25,5 +25,8 @@ public record CheckoutRequest(
         @DecimalMin(value = "0.00")
         BigDecimal shippingFee,
 
-        String couponCode
+        String couponCode,
+
+        @NotBlank(message = "Pricing fingerprint from checkout preview is required")
+        String pricingFingerprint
 ) {}
