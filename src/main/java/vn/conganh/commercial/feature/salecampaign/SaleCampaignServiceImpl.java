@@ -19,6 +19,9 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.CodedBusinessException;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
+import vn.conganh.commercial.feature.product.ProductTranslation;
+import vn.conganh.commercial.feature.product.ProductTranslationRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.product.ProductImage;
@@ -45,21 +48,42 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
     private final ProductVariantRepository variantRepository;
     private final ProductImageRepository productImageRepository;
     private final ProductRepository productRepository;
+    private final ProductTranslationRepository productTranslationRepository;
+    private final SaleCampaignTranslationRepository campaignTranslationRepository;
     private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
     public ResultPaginationDTO getAll(SaleCampaignFilterRequest filter, Pageable pageable) {
+        return getAll(filter, pageable, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ResultPaginationDTO getAll(
+            SaleCampaignFilterRequest filter,
+            Pageable pageable,
+            String localeCode) {
         Instant now = Instant.now();
-        return ResultPaginationDTO.fromPage(campaignRepository
-                .findAll(Specification.where(SaleCampaignSpecification.build(filter, now)), pageable)
-                .map(campaign -> response(campaign, now)));
+        var campaigns = campaignRepository
+                .findAll(Specification.where(SaleCampaignSpecification.build(filter, now)), pageable);
+        Map<Long, SaleCampaignResponse> responses = responses(
+                campaigns.getContent(),
+                now,
+                localeCode);
+        return ResultPaginationDTO.fromPage(campaigns.map(campaign -> responses.get(campaign.getId())));
     }
 
     @Override
     @Transactional(readOnly = true)
     public SaleCampaignResponse getById(Long id) {
-        return response(findDetailed(id), Instant.now());
+        return getById(id, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SaleCampaignResponse getById(Long id, String localeCode) {
+        return response(findDetailed(id), Instant.now(), localeCode);
     }
 
     @Override
@@ -72,7 +96,9 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
         applyCampaign(campaign, request.code(), request.name(), request.description(), request.bannerUrl(),
                 request.type(), request.startsAt(), request.endsAt());
         campaign.replaceItems(buildItems(request.type(), request.items()));
-        return response(campaignRepository.saveAndFlush(campaign), Instant.now());
+        campaign = campaignRepository.saveAndFlush(campaign);
+        upsertDefaultTranslation(campaign);
+        return response(campaign, Instant.now());
     }
 
     @Override
@@ -94,7 +120,9 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
         if (campaign.getStatus() == SaleCampaignStatus.PUBLISHED) {
             validateForPublish(campaign);
         }
-        return response(campaignRepository.saveAndFlush(campaign), now);
+        campaign = campaignRepository.saveAndFlush(campaign);
+        upsertDefaultTranslation(campaign);
+        return response(campaign, now);
     }
 
     @Override
@@ -146,7 +174,9 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
         campaign.setName(request.name().trim());
         campaign.setDescription(request.description());
         campaign.setBannerUrl(request.bannerUrl());
-        return response(campaignRepository.saveAndFlush(campaign), Instant.now());
+        campaign = campaignRepository.saveAndFlush(campaign);
+        upsertDefaultTranslation(campaign);
+        return response(campaign, Instant.now());
     }
 
     @Override
@@ -207,28 +237,42 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
             return item;
         }).toList();
         clone.replaceItems(clonedItems);
-        return response(campaignRepository.saveAndFlush(clone), Instant.now());
+        clone = campaignRepository.saveAndFlush(clone);
+        copyTranslations(original.getId(), clone);
+        return response(clone, Instant.now());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PublicSalesResponse getPublic(SaleCampaignType type, List<SaleCampaignPhase> phases) {
+    public PublicSalesResponse getPublic(
+            SaleCampaignType type,
+            List<SaleCampaignPhase> phases,
+            String localeCode) {
         Instant now = Instant.now();
-        List<SaleCampaignResponse> campaigns = campaignRepository.findPublicCampaigns(type, now).stream()
-                .map(campaign -> response(campaign, now))
-                .filter(campaign -> phases == null || phases.isEmpty() || phases.contains(campaign.phase()))
+        List<SaleCampaign> campaignEntities = campaignRepository.findPublicCampaigns(type, now).stream()
+                .filter(campaign -> phases == null
+                        || phases.isEmpty()
+                        || phases.contains(SaleCampaignPhase.from(
+                                campaign.getStatus(),
+                                campaign.getStartsAt(),
+                                campaign.getEndsAt(),
+                                now)))
+                .toList();
+        Map<Long, SaleCampaignResponse> mapped = responses(campaignEntities, now, localeCode);
+        List<SaleCampaignResponse> campaigns = campaignEntities.stream()
+                .map(campaign -> mapped.get(campaign.getId()))
                 .toList();
         return new PublicSalesResponse(now, campaigns);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public SaleCampaignResponse getPublicByCode(String code) {
+    public SaleCampaignResponse getPublicByCode(String code, String localeCode) {
         Instant now = Instant.now();
         SaleCampaign campaign = campaignRepository.findDetailedByCode(code)
                 .filter(candidate -> candidate.getStatus() == SaleCampaignStatus.PUBLISHED)
                 .orElseThrow(() -> new ResourceNotFoundException("SaleCampaign", "code", code));
-        return response(campaign, now);
+        return response(campaign, now, localeCode);
     }
 
     private List<SaleCampaignItem> buildItems(SaleCampaignType type, List<SaleCampaignItemRequest> requests) {
@@ -385,7 +429,23 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
     }
 
     private SaleCampaignResponse response(SaleCampaign campaign, Instant now) {
-        List<Long> productIds = campaign.getItems().stream()
+        return response(campaign, now, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    private SaleCampaignResponse response(SaleCampaign campaign, Instant now, String localeCode) {
+        return responses(List.of(campaign), now, localeCode).get(campaign.getId());
+    }
+
+    private Map<Long, SaleCampaignResponse> responses(
+            List<SaleCampaign> campaigns,
+            Instant now,
+            String localeCode) {
+        if (campaigns.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> campaignIds = campaigns.stream().map(SaleCampaign::getId).distinct().toList();
+        List<Long> productIds = campaigns.stream()
+                .flatMap(campaign -> campaign.getItems().stream())
                 .map(item -> item.getVariant().getProduct().getId())
                 .distinct()
                 .toList();
@@ -393,6 +453,35 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
                 ? Map.of()
                 : productImageRepository.findByProductIdIn(productIds).stream()
                         .collect(Collectors.groupingBy(image -> image.getProduct().getId()));
+        Map<Long, Map<String, SaleCampaignTranslation>> campaignTranslations = campaignTranslationRepository
+                .findByCampaignIdIn(campaignIds).stream()
+                .collect(Collectors.groupingBy(
+                        SaleCampaignTranslation::getCampaignId,
+                        Collectors.toMap(SaleCampaignTranslation::getLocaleCode, Function.identity())));
+        Map<Long, Map<String, ProductTranslation>> productTranslations = productIds.isEmpty()
+                ? Map.of()
+                : productTranslationRepository.findByProductIdIn(productIds).stream()
+                        .collect(Collectors.groupingBy(
+                                ProductTranslation::getProductId,
+                                Collectors.toMap(ProductTranslation::getLocaleCode, Function.identity())));
+        return campaigns.stream().collect(Collectors.toMap(
+                SaleCampaign::getId,
+                campaign -> mapResponse(
+                        campaign,
+                        now,
+                        localeCode,
+                        imagesByProduct,
+                        campaignTranslations.getOrDefault(campaign.getId(), Map.of()),
+                        productTranslations)));
+    }
+
+    private SaleCampaignResponse mapResponse(
+            SaleCampaign campaign,
+            Instant now,
+            String localeCode,
+            Map<Long, List<ProductImage>> imagesByProduct,
+            Map<String, SaleCampaignTranslation> campaignTranslationsByLocale,
+            Map<Long, Map<String, ProductTranslation>> productTranslations) {
         Map<Long, String> imagesByVariant = new java.util.HashMap<>();
         campaign.getItems().forEach(item -> {
             String image = resolveImage(item.getVariant(), imagesByProduct);
@@ -400,7 +489,106 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
                 imagesByVariant.put(item.getVariant().getId(), image);
             }
         });
-        return SaleCampaignResponse.fromEntity(campaign, now, imagesByVariant);
+        SaleCampaignTranslation requestedCampaign = campaignTranslationsByLocale.get(localeCode);
+        SaleCampaignTranslation defaultCampaign = campaignTranslationsByLocale.get(
+                CatalogLocaleResolver.DEFAULT_LOCALE);
+        Map<Long, String> productNames = new java.util.HashMap<>();
+        Map<Long, String> productSlugs = new java.util.HashMap<>();
+        campaign.getItems().stream()
+                .map(item -> item.getVariant().getProduct())
+                .distinct()
+                .forEach(product -> {
+                    Map<String, ProductTranslation> translations = productTranslations.getOrDefault(
+                            product.getId(),
+                            Map.of());
+                    ProductTranslation requested = translations.get(localeCode);
+                    ProductTranslation defaultTranslation = translations.get(CatalogLocaleResolver.DEFAULT_LOCALE);
+                    productNames.put(
+                            product.getId(),
+                            firstValue(
+                                    requested == null ? null : requested.getName(),
+                                    defaultTranslation == null ? null : defaultTranslation.getName(),
+                                    product.getName()));
+                    productSlugs.put(
+                            product.getId(),
+                            firstValue(
+                                    requested == null ? null : requested.getSlug(),
+                                    defaultTranslation == null ? null : defaultTranslation.getSlug(),
+                                    product.getSlug()));
+                });
+
+        List<String> translationLocales = campaignTranslationsByLocale.keySet().stream()
+                .sorted(this::compareLocales)
+                .toList();
+        return SaleCampaignResponse.fromEntity(
+                campaign,
+                now,
+                imagesByVariant,
+                productNames,
+                productSlugs,
+                firstValue(
+                        requestedCampaign == null ? null : requestedCampaign.getName(),
+                        defaultCampaign == null ? null : defaultCampaign.getName(),
+                        campaign.getName()),
+                firstValue(
+                        requestedCampaign == null ? null : requestedCampaign.getDescription(),
+                        defaultCampaign == null ? null : defaultCampaign.getDescription(),
+                        campaign.getDescription()),
+                translationLocales);
+    }
+
+    private void upsertDefaultTranslation(SaleCampaign campaign) {
+        SaleCampaignTranslation translation = campaignTranslationRepository
+                .findByCampaignIdAndLocaleCode(campaign.getId(), CatalogLocaleResolver.DEFAULT_LOCALE)
+                .orElseGet(SaleCampaignTranslation::new);
+        translation.setCampaignId(campaign.getId());
+        translation.setLocaleCode(CatalogLocaleResolver.DEFAULT_LOCALE);
+        translation.setName(campaign.getName());
+        translation.setDescription(campaign.getDescription());
+        campaignTranslationRepository.save(translation);
+    }
+
+    private void copyTranslations(Long sourceCampaignId, SaleCampaign target) {
+        List<SaleCampaignTranslation> sourceTranslations = campaignTranslationRepository
+                .findByCampaignId(sourceCampaignId);
+        boolean hasDefault = false;
+        for (SaleCampaignTranslation source : sourceTranslations) {
+            SaleCampaignTranslation copy = new SaleCampaignTranslation();
+            copy.setCampaignId(target.getId());
+            copy.setLocaleCode(source.getLocaleCode());
+            if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(source.getLocaleCode())) {
+                hasDefault = true;
+                copy.setName(target.getName());
+                copy.setDescription(target.getDescription());
+            } else {
+                copy.setName(source.getName());
+                copy.setDescription(source.getDescription());
+            }
+            campaignTranslationRepository.save(copy);
+        }
+        if (!hasDefault) {
+            upsertDefaultTranslation(target);
+        }
+        campaignTranslationRepository.flush();
+    }
+
+    private int compareLocales(String left, String right) {
+        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(left)) {
+            return CatalogLocaleResolver.DEFAULT_LOCALE.equals(right) ? 0 : -1;
+        }
+        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(right)) {
+            return 1;
+        }
+        return left.compareTo(right);
+    }
+
+    private String firstValue(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private String resolveImage(ProductVariant variant, Map<Long, List<ProductImage>> imagesByProduct) {

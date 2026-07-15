@@ -116,7 +116,7 @@ class CategoryServiceImplTest {
             Pageable pageable = PageRequest.of(0, 10);
             when(categoryRepository.findAll(ArgumentMatchers.<Specification<Category>>any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(category(1L, "Shoes", "shoes")), pageable, 1));
-            when(categoryTranslationRepository.findByCategoryIdInAndLocaleCode(anyCollection(), eq("vi")))
+            when(categoryTranslationRepository.findByCategoryIdIn(anyCollection()))
                     .thenReturn(List.of());
 
             // Act
@@ -150,7 +150,7 @@ class CategoryServiceImplTest {
             // Arrange
             Category category = category(1L, "Old", "old");
             UpdateCategoryRequest request = new UpdateCategoryRequest(null, "New", 2, "INACTIVE");
-            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryRepository.findWithLockByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
             when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi")).thenReturn(Optional.empty());
             when(categoryTranslationRepository.save(any(CategoryTranslation.class)))
@@ -174,16 +174,18 @@ class CategoryServiceImplTest {
             // Arrange
             Category category = category(1L, "Old", "old");
             CategoryTranslation translation = categoryTranslation(1L, "vi", "Tên cũ", "old");
+            CategoryTranslation english = categoryTranslation(1L, "en", "Old English", "old-english");
             translation.setDescription("Mô tả được giữ");
             translation.setSeoTitle("SEO title được giữ");
             translation.setSeoDescription("SEO description được giữ");
             UpdateCategoryRequest request = new UpdateCategoryRequest(2L, "New", 3, "INACTIVE");
-            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryRepository.findWithLockByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
             when(categoryRepository.save(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi"))
                     .thenReturn(Optional.of(translation));
             when(categoryTranslationRepository.save(any(CategoryTranslation.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
+            when(categoryTranslationRepository.findByCategoryId(1L)).thenReturn(List.of(english, translation));
 
             // Act
             CategoryResponse response = categoryService.updateCategory(1L, request);
@@ -200,6 +202,7 @@ class CategoryServiceImplTest {
             assertThat(response.description()).isEqualTo("Mô tả được giữ");
             assertThat(response.seoTitle()).isEqualTo("SEO title được giữ");
             assertThat(response.seoDescription()).isEqualTo("SEO description được giữ");
+            assertThat(response.translationLocales()).containsExactly("vi", "en");
         }
     }
 
@@ -214,8 +217,7 @@ class CategoryServiceImplTest {
             Category category = category(1L, "Core name", "core-slug");
             CategoryTranslation vi = categoryTranslation(1L, "vi", "Tên danh mục", "ten-danh-muc");
             when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
-            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "en")).thenReturn(Optional.empty());
-            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+            when(categoryTranslationRepository.findByCategoryIdIn(List.of(1L))).thenReturn(List.of(vi));
 
             // Act
             CategoryResponse response = categoryService.getCategoryById(1L, "en");
@@ -234,7 +236,7 @@ class CategoryServiceImplTest {
             when(categoryTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-danh-muc"))
                     .thenReturn(Optional.of(vi));
             when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
-            when(categoryTranslationRepository.findByCategoryIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+            when(categoryTranslationRepository.findByCategoryIdIn(List.of(1L))).thenReturn(List.of(vi));
 
             // Act
             CategoryResponse response = categoryService.getCategoryBySlug("ten-danh-muc", "vi");
@@ -242,6 +244,44 @@ class CategoryServiceImplTest {
             // Assert
             assertThat(response.name()).isEqualTo("Tên danh mục");
             assertThat(response.slug()).isEqualTo("ten-danh-muc");
+        }
+
+        @Test
+        @DisplayName("getCategoryBySlug - giữ được English slug khi chuyển locale sang vi")
+        void getCategoryBySlug_englishSlugWithVietnameseLocale_resolvesOwnerThenLocalizes() {
+            Category category = category(1L, "Core name", "core-slug");
+            CategoryTranslation vi = categoryTranslation(1L, "vi", "Tên danh mục", "ten-danh-muc");
+            CategoryTranslation en = categoryTranslation(1L, "en", "English category", "english-category");
+            when(categoryTranslationRepository.findByLocaleCodeAndSlug("vi", "english-category"))
+                    .thenReturn(Optional.empty());
+            when(categoryTranslationRepository.findFirstBySlug("english-category"))
+                    .thenReturn(Optional.of(en));
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryTranslationRepository.findByCategoryIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            CategoryResponse response = categoryService.getCategoryBySlug("english-category", "vi");
+
+            assertThat(response.name()).isEqualTo("Tên danh mục");
+            assertThat(response.slug()).isEqualTo("ten-danh-muc");
+        }
+
+        @Test
+        @DisplayName("getCategoryBySlug - dùng Vietnamese slug khi chuyển locale sang en")
+        void getCategoryBySlug_vietnameseSlugWithEnglishLocale_resolvesOwnerThenLocalizes() {
+            Category category = category(1L, "Core name", "core-slug");
+            CategoryTranslation vi = categoryTranslation(1L, "vi", "Tên danh mục", "ten-danh-muc");
+            CategoryTranslation en = categoryTranslation(1L, "en", "English category", "english-category");
+            when(categoryTranslationRepository.findByLocaleCodeAndSlug("en", "ten-danh-muc"))
+                    .thenReturn(Optional.empty());
+            when(categoryTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-danh-muc"))
+                    .thenReturn(Optional.of(vi));
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryTranslationRepository.findByCategoryIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            CategoryResponse response = categoryService.getCategoryBySlug("ten-danh-muc", "en");
+
+            assertThat(response.name()).isEqualTo("English category");
+            assertThat(response.slug()).isEqualTo("english-category");
         }
     }
 

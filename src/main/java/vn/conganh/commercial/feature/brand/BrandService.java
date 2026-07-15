@@ -2,6 +2,7 @@ package vn.conganh.commercial.feature.brand;
 
 import org.springframework.data.domain.Pageable;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.feature.brand.dto.BrandFilterRequest;
 import vn.conganh.commercial.feature.brand.dto.BrandResponse;
 import vn.conganh.commercial.feature.brand.dto.CreateBrandRequest;
@@ -16,6 +17,8 @@ public interface BrandService {
     BrandResponse create(CreateBrandRequest request);
 
     BrandResponse update(Long id, UpdateBrandRequest request);
+
+    BrandResponse updateStatus(Long id, UpdateStatusRequest request);
 
     void delete(Long id);
 }

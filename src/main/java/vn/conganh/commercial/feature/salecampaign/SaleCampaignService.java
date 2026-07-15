@@ -13,7 +13,9 @@ import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleDisplayRequest;
 
 public interface SaleCampaignService {
     ResultPaginationDTO getAll(SaleCampaignFilterRequest filter, Pageable pageable);
+    ResultPaginationDTO getAll(SaleCampaignFilterRequest filter, Pageable pageable, String localeCode);
     SaleCampaignResponse getById(Long id);
+    SaleCampaignResponse getById(Long id, String localeCode);
     SaleCampaignResponse create(CreateSaleCampaignRequest request, String actorEmail);
     SaleCampaignResponse update(Long id, UpdateSaleCampaignRequest request);
     void delete(Long id);
@@ -23,6 +25,9 @@ public interface SaleCampaignService {
     SaleCampaignResponse increaseQuota(Long id, Long itemId, IncreaseQuotaRequest request);
     SaleCampaignResponse end(Long id, long version);
     SaleCampaignResponse endAndClone(Long id, EndAndCloneSaleCampaignRequest request, String actorEmail);
-    PublicSalesResponse getPublic(SaleCampaignType type, java.util.List<SaleCampaignPhase> phases);
-    SaleCampaignResponse getPublicByCode(String code);
+    PublicSalesResponse getPublic(
+            SaleCampaignType type,
+            java.util.List<SaleCampaignPhase> phases,
+            String localeCode);
+    SaleCampaignResponse getPublicByCode(String code, String localeCode);
 }

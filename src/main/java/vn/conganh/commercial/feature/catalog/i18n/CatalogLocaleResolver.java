@@ -1,9 +1,13 @@
 package vn.conganh.commercial.feature.catalog.i18n;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import vn.conganh.commercial.exception.InvalidRequestException;
 
 @Service
 @RequiredArgsConstructor
@@ -25,19 +29,71 @@ public class CatalogLocaleResolver {
         return headerLocale.orElseGet(this::defaultLocale);
     }
 
+    public String requireEnabledLocale(String requestedLocale) {
+        String normalized = normalize(requestedLocale);
+        if (normalized == null) {
+            throw new InvalidRequestException("Locale code is invalid");
+        }
+        return findEnabledCode(normalized)
+                .orElseThrow(() -> new InvalidRequestException("Locale is not enabled: " + normalized));
+    }
+
     private Optional<String> resolveAcceptLanguage(String acceptLanguage) {
         if (acceptLanguage == null || acceptLanguage.isBlank()) {
             return Optional.empty();
         }
 
-        for (String languageRange : acceptLanguage.split(",")) {
-            String candidate = languageRange.split(";", 2)[0];
-            Optional<String> resolved = resolveCandidate(candidate);
+        List<WeightedLanguageRange> ranges = parseLanguageRanges(acceptLanguage);
+        for (WeightedLanguageRange range : ranges) {
+            Optional<String> resolved = resolveCandidate(range.candidate());
             if (resolved.isPresent()) {
                 return resolved;
             }
         }
         return Optional.empty();
+    }
+
+    private List<WeightedLanguageRange> parseLanguageRanges(String acceptLanguage) {
+        List<WeightedLanguageRange> ranges = new ArrayList<>();
+        String[] rawRanges = acceptLanguage.split(",");
+        for (int index = 0; index < rawRanges.length; index++) {
+            String[] parts = rawRanges[index].trim().split(";");
+            if (parts.length == 0 || normalize(parts[0]) == null) {
+                continue;
+            }
+            double quality = 1.0d;
+            boolean valid = true;
+            boolean qualitySeen = false;
+            for (int parameterIndex = 1; parameterIndex < parts.length; parameterIndex++) {
+                String parameter = parts[parameterIndex].trim();
+                if (!parameter.regionMatches(true, 0, "q=", 0, 2)) {
+                    continue;
+                }
+                if (qualitySeen) {
+                    valid = false;
+                    break;
+                }
+                qualitySeen = true;
+                try {
+                    quality = Double.parseDouble(parameter.substring(2).trim());
+                } catch (NumberFormatException exception) {
+                    valid = false;
+                    break;
+                }
+                if (!Double.isFinite(quality) || quality < 0.0d || quality > 1.0d) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (valid && quality > 0.0d) {
+                ranges.add(new WeightedLanguageRange(parts[0], quality, index));
+            }
+        }
+        return ranges.stream()
+                .sorted(Comparator.comparingDouble(WeightedLanguageRange::quality)
+                        .reversed()
+                        .thenComparingInt(WeightedLanguageRange::order))
+                .toList();
     }
 
     private Optional<String> resolveCandidate(String candidate) {
@@ -79,4 +135,6 @@ public class CatalogLocaleResolver {
         }
         return normalized;
     }
+
+    private record WeightedLanguageRange(String candidate, double quality, int order) {}
 }

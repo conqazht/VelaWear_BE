@@ -30,6 +30,9 @@ V1__init_commercial_schema.sql
 V2__seed_rbac.sql
 V3__add_product_variant_status.sql
 V4__create_coupon_tables.sql
+V16__add_full_content_translations.sql
+V17__seed_content_management_permissions.sql
+V18__add_order_item_product_slug_snapshot.sql
 ```
 
 Rules:
@@ -165,6 +168,41 @@ Seed only stable base data:
 - permissions
 - role-permission mappings
 - static master data when agreed
+
+### Repeatable development seed VI/EN và Sale
+
+Development seed được tách khỏi migration versioned để không đưa dữ liệu demo
+vào production:
+
+- `R__5_dev_catalog_i18n_data.sql` chạy sau catalog seed, bật `vi`/`en` và
+  reconcile đủ hai bản dịch cho mọi Product/Category bằng base slug.
+- `R__6_dev_sale_campaign_data.sql` chạy sau variant/order seed, tạo campaign
+  demo theo `code`, item theo `sku` và sửa snapshot giá sale cũ trong order.
+- Block order trong `R__3_dev_large_mock_data.sql` chỉ thao tác `VW-MOCK-*`,
+  chọn variant theo thứ tự ổn định, lấy giá thật và tính lại header/payment.
+
+Quy tắc bắt buộc:
+
+- Không dùng database ID được sinh tự động làm khóa fixture.
+- Translation upsert bằng `(entity_id, locale_code)` và phải `DO UPDATE` toàn bộ
+  field nội dung; `DO NOTHING` sẽ giữ dữ liệu cũ khi câu chữ seed được sửa.
+- Lookup fixture phải chịu được core slug đã đồng bộ sang VI: dùng base slug
+  hoặc localized alias hiện có, không chỉ join một core slug duy nhất.
+- Trước khi đặt `vi` default, phải clear default ở locale khác để partial unique
+  index không lỗi giữa chừng.
+- Localized Product/Category slug phải duy nhất trong từng locale.
+- Campaign demo đang LIVE dùng mốc kết thúc cố định đủ xa. Không dùng thời gian
+  tương đối vì repeatable migration không chạy lại chỉ do thời gian trôi qua.
+- Seed order có giá sale phải lưu đủ `list_price`, `price`, `price_source`,
+  campaign item/code/name snapshot.
+- Script phải chạy lại được mà không tăng số translation, campaign hoặc item.
+- Campaign upsert chỉ update/bump optimistic version khi business fields thật sự
+  khác; không ghi đè `created_at` khi rerun.
+- Mock order item không được chọn từ toàn bộ bảng orders; header subtotal phải
+  luôn bằng tổng item và payment amount phải bằng final amount.
+
+Inventory và cách kiểm tra chi tiết nằm trong
+[`I18N_CATALOG_SALE_VI.md`](./I18N_CATALOG_SALE_VI.md).
 
 ---
 

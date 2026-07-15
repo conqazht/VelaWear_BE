@@ -51,4 +51,11 @@ public interface SaleCampaignRepository
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update SaleCampaign c set c.version = c.version + 1 where c.id = :id and c.version = :version")
     int bumpVersion(@Param("id") Long id, @Param("version") long version);
+
+    @Modifying(flushAutomatically = true)
+    @Query("update SaleCampaign c set c.name = :name, c.description = :description where c.id = :id")
+    int updateTranslationMirror(
+            @Param("id") Long id,
+            @Param("name") String name,
+            @Param("description") String description);
 }

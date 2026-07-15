@@ -84,7 +84,7 @@ class CheckoutControllerTest {
                 Instant.now()
         );
 
-        when(checkoutService.checkout(any(), eq("test@example.com"), eq("checkout-test-key")))
+        when(checkoutService.checkout(any(), eq("test@example.com"), eq("checkout-test-key"), eq("vi")))
                 .thenReturn(mockResponse);
 
         String requestBody = """

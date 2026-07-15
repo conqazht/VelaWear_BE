@@ -22,6 +22,8 @@ import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CartItemResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 import vn.conganh.commercial.feature.cart.dto.ReplaceCartItemsRequest;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogContentLocalizationService;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
@@ -41,6 +43,7 @@ public class CartServiceImpl implements CartService {
     private final ProductVariantRepository productVariantRepository;
     private final ProductImageRepository productImageRepository;
     private final VariantPricingService variantPricingService;
+    private final CatalogContentLocalizationService localizationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -52,17 +55,29 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional(readOnly = true)
     public CartResponse getCartById(Long id) {
+        return getCartById(id, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CartResponse getCartById(Long id, String localeCode) {
         Cart cart = cartRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart", "id", id));
-        return toDetailedResponse(cart);
+        return toDetailedResponse(cart, localeCode);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CartResponse getCartByUserId(Long userId) {
+        return getCartByUserId(userId, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CartResponse getCartByUserId(Long userId, String localeCode) {
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart", "userId", userId));
-        return toDetailedResponse(cart);
+        return toDetailedResponse(cart, localeCode);
     }
 
     @Override
@@ -84,14 +99,29 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public CartResponse getMyCart(String email) {
+        return getMyCart(email, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional
+    public CartResponse getMyCart(String email, String localeCode) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
-        return toDetailedResponse(getOrCreateCart(user));
+        return toDetailedResponse(getOrCreateCart(user), localeCode);
     }
 
     @Override
     @Transactional
     public CartResponse replaceMyCartItems(String email, ReplaceCartItemsRequest request) {
+        return replaceMyCartItems(email, request, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional
+    public CartResponse replaceMyCartItems(
+            String email,
+            ReplaceCartItemsRequest request,
+            String localeCode) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
         getOrCreateCart(user);
@@ -131,7 +161,7 @@ public class CartServiceImpl implements CartService {
                 .toList();
         cartItemRepository.saveAll(itemsToSave);
         cartItemRepository.flush();
-        return toDetailedResponse(cart);
+        return toDetailedResponse(cart, localeCode);
     }
 
     @Override
@@ -150,7 +180,7 @@ public class CartServiceImpl implements CartService {
         });
     }
 
-    private CartResponse toDetailedResponse(Cart cart) {
+    private CartResponse toDetailedResponse(Cart cart, String localeCode) {
         List<CartItem> cartItems = cartItemRepository.findByCartId(cart.getId());
         Map<Long, ProductVariant> variants = productVariantRepository
                 .findAllByIdInAndDeletedAtIsNull(cartItems.stream().map(CartItem::getVariantId).toList())
@@ -158,6 +188,16 @@ public class CartServiceImpl implements CartService {
                 .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
         Map<Long, vn.conganh.commercial.feature.salecampaign.VariantPricing> pricingByVariant =
                 variantPricingService.resolve(variants.values(), java.time.Instant.now(), cart.getUser().getId());
+        Map<Long, CatalogContentLocalizationService.LocalizedProduct> localizedProducts =
+                localizationService.localizeProducts(
+                        variants.values().stream().map(ProductVariant::getProduct).toList(),
+                        localeCode);
+        Map<Long, String> localizedCampaignNames = localizationService.localizeCampaignNames(
+                pricingByVariant.values().stream()
+                        .filter(pricing -> pricing != null && pricing.campaignItem() != null)
+                        .map(pricing -> pricing.campaignItem().getCampaign())
+                        .toList(),
+                localeCode);
         List<Long> productIds = variants.values().stream()
                 .map(ProductVariant::getProduct)
                 .filter(java.util.Objects::nonNull)
@@ -186,24 +226,40 @@ public class CartServiceImpl implements CartService {
                                 BigDecimal.ZERO, BigDecimal.ZERO, null, item.getQuantity());
                     }
                     Product product = variant.getProduct();
+                    CatalogContentLocalizationService.LocalizedProduct localizedProduct = product == null
+                            ? null
+                            : localizedProducts.get(product.getId());
                     var pricing = pricingByVariant.get(variant.getId());
                     BigDecimal price = pricing == null ? variant.getPrice() : pricing.effectivePrice();
                     return new CartItemResponse(
                             item.getId(),
                             variant.getId(),
                             product != null ? product.getId() : null,
-                            product != null ? product.getSlug() : null,
-                            product != null ? product.getName() : "Unavailable product",
+                            localizedProduct != null ? localizedProduct.slug() : null,
+                            localizedProduct != null ? localizedProduct.name() : "Unavailable product",
                             product != null ? imagesByProductId.get(product.getId()) : null,
                             variant.getSku(),
                             variant.getColor() != null ? variant.getColor().getName() : null,
                             variant.getSize() != null ? variant.getSize().getName() : null,
                             variant.getPrice(),
                             price,
-                            pricing == null ? null : pricing.toResponse(),
+                            localizedPricing(pricing, localizedCampaignNames),
                             item.getQuantity());
                 })
                 .toList();
         return CartResponse.fromEntity(cart, itemResponses);
+    }
+
+    private vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse localizedPricing(
+            vn.conganh.commercial.feature.salecampaign.VariantPricing pricing,
+            Map<Long, String> campaignNames) {
+        if (pricing == null) {
+            return null;
+        }
+        if (pricing.campaignItem() == null) {
+            return pricing.toResponse();
+        }
+        var campaign = pricing.campaignItem().getCampaign();
+        return pricing.toResponse(campaignNames.getOrDefault(campaign.getId(), campaign.getName()));
     }
 }

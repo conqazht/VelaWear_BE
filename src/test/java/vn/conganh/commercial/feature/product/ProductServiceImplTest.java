@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.feature.category.CategoryRepository;
 import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
@@ -28,6 +29,7 @@ import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignTranslationRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Product - ProductServiceImpl")
@@ -55,6 +57,8 @@ class ProductServiceImplTest {
     private VariantPricingService variantPricingService;
     @Mock
     private SaleCampaignItemRepository saleCampaignItemRepository;
+    @Mock
+    private SaleCampaignTranslationRepository saleCampaignTranslationRepository;
 
     private ProductServiceImpl productService;
 
@@ -68,7 +72,8 @@ class ProductServiceImplTest {
                 categoryTranslationRepository,
                 productVariantRepository,
                 variantPricingService,
-                saleCampaignItemRepository);
+                saleCampaignItemRepository,
+                saleCampaignTranslationRepository);
         lenient().when(productVariantRepository.findByProductIdInAndDeletedAtIsNull(any())).thenReturn(List.of());
     }
 
@@ -166,6 +171,7 @@ class ProductServiceImplTest {
             Product product = product(1L, "Old", "old");
             product.setDescription("Old core description");
             ProductTranslation translation = productTranslation(1L, "vi", "Tên cũ", "old");
+            ProductTranslation english = productTranslation(1L, "en", "Old English", "old-english");
             translation.setMaterial("Len merino");
             translation.setCareInstruction("Giặt tay");
             translation.setSeoTitle("SEO title được giữ");
@@ -182,6 +188,7 @@ class ProductServiceImplTest {
                     .thenReturn(Optional.of(translation));
             when(productTranslationRepository.save(any(ProductTranslation.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
+            when(productTranslationRepository.findByProductId(1L)).thenReturn(List.of(english, translation));
 
             // Act
             ProductResponse response = productService.updateProduct(1L, request);
@@ -201,6 +208,7 @@ class ProductServiceImplTest {
             assertThat(response.careInstruction()).isEqualTo("Giặt tay");
             assertThat(response.seoTitle()).isEqualTo("SEO title được giữ");
             assertThat(response.seoDescription()).isEqualTo("SEO description được giữ");
+            assertThat(response.translationLocales()).containsExactly("vi", "en");
         }
     }
 
@@ -215,8 +223,7 @@ class ProductServiceImplTest {
             Product product = product(1L, "Core name", "core-slug");
             ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
             when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
-            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "en")).thenReturn(Optional.empty());
-            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+            when(productTranslationRepository.findByProductIdIn(List.of(1L))).thenReturn(List.of(vi));
 
             // Act
             ProductResponse response = productService.getProductById(1L, "en");
@@ -235,7 +242,7 @@ class ProductServiceImplTest {
             when(productTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-tieng-viet"))
                     .thenReturn(Optional.of(vi));
             when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
-            when(productTranslationRepository.findByProductIdAndLocaleCode(1L, "vi")).thenReturn(Optional.of(vi));
+            when(productTranslationRepository.findByProductIdIn(List.of(1L))).thenReturn(List.of(vi));
 
             // Act
             ProductResponse response = productService.getProductBySlug("ten-tieng-viet", "vi");
@@ -243,6 +250,115 @@ class ProductServiceImplTest {
             // Assert
             assertThat(response.name()).isEqualTo("Tên tiếng Việt");
             assertThat(response.slug()).isEqualTo("ten-tieng-viet");
+        }
+
+        @Test
+        @DisplayName("getProductBySlug - giữ được English slug khi chuyển locale sang vi")
+        void getProductBySlug_englishSlugWithVietnameseLocale_resolvesOwnerThenLocalizes() {
+            Product product = product(1L, "Core name", "core-slug");
+            ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
+            ProductTranslation en = productTranslation(1L, "en", "English name", "english-name");
+            when(productTranslationRepository.findByLocaleCodeAndSlug("vi", "english-name"))
+                    .thenReturn(Optional.empty());
+            when(productTranslationRepository.findFirstBySlug("english-name"))
+                    .thenReturn(Optional.of(en));
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productTranslationRepository.findByProductIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            ProductResponse response = productService.getProductBySlug("english-name", "vi");
+
+            assertThat(response.name()).isEqualTo("Tên tiếng Việt");
+            assertThat(response.slug()).isEqualTo("ten-tieng-viet");
+        }
+
+        @Test
+        @DisplayName("getProductBySlug - dùng Vietnamese slug khi chuyển locale sang en")
+        void getProductBySlug_vietnameseSlugWithEnglishLocale_resolvesOwnerThenLocalizes() {
+            Product product = product(1L, "Core name", "core-slug");
+            ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
+            ProductTranslation en = productTranslation(1L, "en", "English name", "english-name");
+            when(productTranslationRepository.findByLocaleCodeAndSlug("en", "ten-tieng-viet"))
+                    .thenReturn(Optional.empty());
+            when(productTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-tieng-viet"))
+                    .thenReturn(Optional.of(vi));
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productTranslationRepository.findByProductIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            ProductResponse response = productService.getProductBySlug("ten-tieng-viet", "en");
+
+            assertThat(response.name()).isEqualTo("English name");
+            assertThat(response.slug()).isEqualTo("english-name");
+        }
+
+        @Test
+        @DisplayName("getProductById - fallback riêng từng field về vi")
+        void getProductById_partialEnglishTranslation_fallsBackPerField() {
+            Product product = product(1L, "Core name", "core-slug");
+            ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
+            vi.setDescription("Mô tả tiếng Việt");
+            ProductTranslation en = productTranslation(1L, "en", "English name", "english-name");
+            en.setDescription(null);
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productTranslationRepository.findByProductIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            ProductResponse response = productService.getProductById(1L, "en");
+
+            assertThat(response.name()).isEqualTo("English name");
+            assertThat(response.description()).isEqualTo("Mô tả tiếng Việt");
+            assertThat(response.translationLocales()).containsExactly("vi", "en");
+        }
+    }
+
+    @Nested
+    @DisplayName("Update product status")
+    class UpdateProductStatus {
+
+        @Test
+        void updateStatus_activeToInactive_checksCampaignGuard() {
+            Product product = product(1L, "Product", "product");
+            when(productRepository.findWithLockByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(saleCampaignItemRepository.existsProtectedProduct(any(), any())).thenReturn(true);
+
+            assertThatThrownBy(() -> productService.updateStatus(
+                    1L,
+                    new UpdateStatusRequest("INACTIVE")))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("sale campaign");
+            verify(productRepository, never()).save(product);
+        }
+
+        @Test
+        void updateStatus_invalidStatusIsRejected() {
+            assertThatThrownBy(() -> productService.updateStatus(
+                    1L,
+                    new UpdateStatusRequest("ARCHIVED")))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("invalid");
+            verify(productRepository, never()).findWithLockByIdAndDeletedAtIsNull(any());
+        }
+
+        @Test
+        void updateStatus_outOfStockSourceCannotBeOverwritten() {
+            Product product = product(1L, "Product", "product");
+            product.setStatus("OUT_OF_STOCK");
+            when(productRepository.findWithLockByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+
+            assertThatThrownBy(() -> productService.updateStatus(
+                    1L,
+                    new UpdateStatusRequest("ACTIVE")))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("not allowed");
+            verify(productRepository, never()).save(any());
+        }
+
+        @Test
+        void updateStatus_cannotTargetOutOfStock() {
+            assertThatThrownBy(() -> productService.updateStatus(
+                    1L,
+                    new UpdateStatusRequest("OUT_OF_STOCK")))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("invalid");
+            verify(productRepository, never()).findWithLockByIdAndDeletedAtIsNull(any());
         }
     }
 

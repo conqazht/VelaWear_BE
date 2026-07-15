@@ -13,5 +13,11 @@ public interface CategoryTranslationRepository extends JpaRepository<CategoryTra
 
     Optional<CategoryTranslation> findByLocaleCodeAndSlug(String localeCode, String slug);
 
+    Optional<CategoryTranslation> findFirstBySlug(String slug);
+
     List<CategoryTranslation> findByCategoryIdInAndLocaleCode(Collection<Long> categoryIds, String localeCode);
+
+    List<CategoryTranslation> findByCategoryId(Long categoryId);
+
+    List<CategoryTranslation> findByCategoryIdIn(Collection<Long> categoryIds);
 }

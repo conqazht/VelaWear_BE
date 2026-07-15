@@ -68,6 +68,25 @@ Lý do không lưu `UPCOMING/LIVE/ENDED`: nếu lưu, hệ thống phải chạy
 - Thứ tự chọn giá: `FLASH` còn quota → `STANDARD` → giá niêm yết.
 - Flash hết quota không làm variant biến mất: trang Flash hiển thị `SOLD_OUT`; catalog thông thường có thể quay về giá Standard hoặc giá niêm yết.
 
+### 1.4 Nội dung song ngữ
+
+`sale_campaigns` giữ lifecycle, thời gian, code, type, banner và text core để
+tương thích. Tên/mô tả hiển thị theo ngôn ngữ nằm trong
+`sale_campaign_translations`:
+
+```text
+sale_campaigns 1 --- N sale_campaign_translations N --- 1 locales
+```
+
+- `vi` là bản mặc định bắt buộc; `en` được bật.
+- Public API resolve `?locale` trước, sau đó `Accept-Language`, cuối cùng `vi`.
+- Nếu thiếu bản dịch yêu cầu, fallback `vi` rồi mới fallback text core.
+- `banner_url` và campaign `code` dùng chung, không nhân đôi theo locale.
+- Product name/slug trong Sale item phải resolve cùng locale với campaign để
+  một response không trộn tiếng Việt và tiếng Anh.
+- Admin dùng subresource `/api/v1/sale-campaigns/{id}/translations`; thao tác
+  ghi/xóa mang optimistic `version` và không được xóa `vi`.
+
 ---
 
 ## 2. Mô hình dữ liệu
@@ -422,6 +441,9 @@ Các test cạnh tranh phải chạy bằng Testcontainers PostgreSQL. H2 hoặc
 | Race timeout | IPN và scheduler chạy đồng thời | Chỉ một state transition thắng |
 | COD | Hủy COD đã confirm | Allocation `REVERSED`, counter/stock đảo đúng một lần |
 | Deadlock | Cart nhiều variant theo thứ tự khác nhau | Service khóa theo ID cố định, không deadlock |
+| i18n | Sale public `locale=en` | Campaign và Product item cùng trả EN; thiếu EN fallback VI |
+| Admin i18n | Hai Admin cập nhật translation cùng version | Chỉ request đầu thành công, request sau conflict |
+| Seed | Chạy lại `R__5`/`R__6` | Không tăng translation, campaign hoặc item |
 
 ### 6.1 Checklist khi điều tra lỗi
 

@@ -39,6 +39,11 @@ class CategoryControllerTest extends AuthenticatedIntegrationTest {
     void setUp() {
         testDataFactory.seedPermissions("CATEGORY", BASE_PATH, "GET", "POST");
         testDataFactory.seedPermissions("CATEGORY", BASE_PATH + "/{id}", "DELETE", "GET", "PUT");
+        testDataFactory.seedPermissions("CATEGORY", BASE_PATH + "/{id}/translations", "GET", "PUT");
+        testDataFactory.seedPermissions(
+                "CATEGORY",
+                BASE_PATH + "/{id}/translations/{locale}",
+                "DELETE");
 
         adminToken = testDataFactory.jwtWithPermission();
         forbiddenToken = testDataFactory.jwtWithoutPermission();
@@ -137,6 +142,33 @@ class CategoryControllerTest extends AuthenticatedIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.statusCode").value(404));
+    }
+
+    @Test
+    @DisplayName("translation API - raw category translations yêu cầu RBAC và trả đúng payload")
+    void translations_rbacAndRawPayload() throws Exception {
+        SeededEntity entity = seedEntity();
+        String slug = "english-category-" + UUID.randomUUID();
+
+        mockMvc.perform(get(BASE_PATH + "/" + entity.id() + "/translations"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(put(BASE_PATH + "/" + entity.id() + "/translations")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"translations":[{
+                                  "localeCode":"en",
+                                  "name":"English category",
+                                  "slug":"%s",
+                                  "description":"Description",
+                                  "seoTitle":"SEO",
+                                  "seoDescription":"SEO description"
+                                }]}
+                                """.formatted(slug)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.translations[0].localeCode").value("en"))
+                .andExpect(jsonPath("$.data.translations[0].slug").value(slug));
     }
 
     @Test

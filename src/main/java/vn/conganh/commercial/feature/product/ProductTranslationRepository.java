@@ -13,5 +13,11 @@ public interface ProductTranslationRepository extends JpaRepository<ProductTrans
 
     Optional<ProductTranslation> findByLocaleCodeAndSlug(String localeCode, String slug);
 
+    Optional<ProductTranslation> findFirstBySlug(String slug);
+
     List<ProductTranslation> findByProductIdInAndLocaleCode(Collection<Long> productIds, String localeCode);
+
+    List<ProductTranslation> findByProductId(Long productId);
+
+    List<ProductTranslation> findByProductIdIn(Collection<Long> productIds);
 }

@@ -30,12 +30,26 @@ public record SaleCampaignItemResponse(
     public static SaleCampaignItemResponse fromEntity(SaleCampaignItem item, String image) {
         var variant = item.getVariant();
         var product = variant == null ? null : variant.getProduct();
+        return fromEntity(
+                item,
+                image,
+                product == null ? null : product.getName(),
+                product == null ? null : product.getSlug());
+    }
+
+    public static SaleCampaignItemResponse fromEntity(
+            SaleCampaignItem item,
+            String image,
+            String productName,
+            String productSlug) {
+        var variant = item.getVariant();
+        var product = variant == null ? null : variant.getProduct();
         return new SaleCampaignItemResponse(
                 item.getId(),
                 variant == null ? null : variant.getId(),
                 product == null ? null : product.getId(),
-                product == null ? null : product.getName(),
-                product == null ? null : product.getSlug(),
+                product == null ? null : productName,
+                product == null ? null : productSlug,
                 image,
                 variant == null ? null : variant.getSku(),
                 variant == null || variant.getColor() == null ? null : variant.getColor().getName(),

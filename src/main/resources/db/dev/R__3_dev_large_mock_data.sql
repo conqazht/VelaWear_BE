@@ -31,75 +31,10 @@ WHERE p.id = pv.product_id
   AND p.slug IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
   AND pv.sku NOT IN ('VW-TEE-BLK-M', 'VW-TEE-RED-L', 'UT-DRESS-YLW-S', 'NS-JACKET-PUR-M', 'SV-TOTE-ORG-OS');
 
--- Clean up existing mock products/variants/categories/brands to ensure repeatable migrations
-DELETE FROM review_images WHERE review_id IN (
-    SELECT id FROM reviews WHERE order_item_id IN (
-        SELECT id FROM order_items WHERE variant_id IN (
-            SELECT id FROM product_variants WHERE product_id IN (
-                SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-            )
-        )
-    )
-);
-
-DELETE FROM reviews WHERE order_item_id IN (
-    SELECT id FROM order_items WHERE variant_id IN (
-        SELECT id FROM product_variants WHERE product_id IN (
-            SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-        )
-    )
-);
-
-DELETE FROM order_items WHERE variant_id IN (
-    SELECT id FROM product_variants WHERE product_id IN (
-        SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-    )
-);
-
-DELETE FROM cart_items WHERE variant_id IN (
-    SELECT id FROM product_variants WHERE product_id IN (
-        SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-    )
-);
-
-DELETE FROM inventory_logs WHERE variant_id IN (
-    SELECT id FROM product_variants WHERE product_id IN (
-        SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-    )
-);
-
-DELETE FROM product_images WHERE product_id IN (
-    SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-);
-
-DELETE FROM product_translations WHERE product_id IN (
-    SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-);
-
-DELETE FROM product_attributes WHERE product_id IN (
-    SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-);
-
-DELETE FROM wishlists WHERE product_id IN (
-    SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-);
-
-DELETE FROM product_variants WHERE product_id IN (
-    SELECT id FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-);
-
-DELETE FROM products WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote');
-
--- Clean categories
-DELETE FROM category_translations WHERE category_id IN (
-    SELECT id FROM categories WHERE slug NOT IN ('men', 'women', 't-shirts', 'dresses', 'accessories', 'outerwear', 'jackets')
-);
-
-DELETE FROM categories WHERE slug NOT IN ('men', 'women', 't-shirts', 'dresses', 'accessories', 'outerwear', 'jackets') AND parent_id IS NOT NULL;
-DELETE FROM categories WHERE slug NOT IN ('men', 'women', 't-shirts', 'dresses', 'accessories', 'outerwear', 'jackets');
-
--- Clean brands (keeping the 4 static ones: velawear, urban-thread, north-stitch, studio-v)
-DELETE FROM brands WHERE slug NOT IN ('velawear', 'urban-thread', 'north-stitch', 'studio-v');
+-- Do not broadly delete rows that are not part of this fixture. Repeatable dev
+-- migrations may run after an Admin has created content or after Sale/order
+-- history references a variant. Stable fixture rows below are reconciled by
+-- natural keys; unrelated development data is intentionally preserved.
 
 -- 1. Brands (Add 6 more premium brands to make exactly 10 brands total)
 INSERT INTO brands (name, slug, description, status)
@@ -194,15 +129,7 @@ SELECT p.id, 'vi', 'Quần tây đen may đo', p.slug,
        'Quần tây đen may đo', 'Quần tây đen dùng hệ size chữ S đến XL.'
 FROM products p
 WHERE p.slug = 'tailored-black-trousers'
-ON CONFLICT (product_id, locale_code) DO UPDATE
-SET name = EXCLUDED.name,
-    slug = EXCLUDED.slug,
-    short_description = EXCLUDED.short_description,
-    description = EXCLUDED.description,
-    material = EXCLUDED.material,
-    care_instruction = EXCLUDED.care_instruction,
-    seo_title = EXCLUDED.seo_title,
-    seo_description = EXCLUDED.seo_description;
+ON CONFLICT (product_id, locale_code) DO NOTHING;
 
 INSERT INTO product_translations (
     product_id, locale_code, name, slug, short_description, description,
@@ -215,15 +142,7 @@ SELECT p.id, 'vi', 'Giày sneaker da trắng tối giản', p.slug,
        'Giày sneaker da trắng tối giản', 'Giày sneaker chỉ dùng hệ size số 39 đến 42.'
 FROM products p
 WHERE p.slug = 'minimal-white-leather-sneakers'
-ON CONFLICT (product_id, locale_code) DO UPDATE
-SET name = EXCLUDED.name,
-    slug = EXCLUDED.slug,
-    short_description = EXCLUDED.short_description,
-    description = EXCLUDED.description,
-    material = EXCLUDED.material,
-    care_instruction = EXCLUDED.care_instruction,
-    seo_title = EXCLUDED.seo_title,
-    seo_description = EXCLUDED.seo_description;
+ON CONFLICT (product_id, locale_code) DO NOTHING;
 
 INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
 SELECT p.id,
@@ -865,78 +784,196 @@ BEGIN
 END $$;
 
 -- 12. Orders (100 records)
-DO $$
-DECLARE
-    i INT;
-    u_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO u_id FROM users ORDER BY RANDOM() LIMIT 1;
-        IF u_id IS NOT NULL THEN
-            INSERT INTO orders (
-                user_id, order_code, status, subtotal, shipping_fee, discount_amount, final_amount,
-                receiver_name, receiver_phone, receiver_address, payment_method, payment_status
-            )
-            VALUES (
-                u_id, 'VW-MOCK-' || (1000 + i), 'COMPLETED', 200000.00, 30000.00, 0.00, 230000.00,
-                'Customer ' || i, '09' || LPAD(i::text, 8, '0'), 'Mock Address ' || i, 'COD', 'PAID'
-            )
-            ON CONFLICT (order_code) DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+WITH mock_customer AS (
+    SELECT id
+    FROM users
+    WHERE email = 'user@velawear.local'
+), mock_order_fixture AS (
+    SELECT generate_series(1, 100) AS fixture_number
+)
+INSERT INTO orders (
+    user_id,
+    order_code,
+    status,
+    subtotal,
+    shipping_fee,
+    discount_amount,
+    final_amount,
+    receiver_name,
+    receiver_phone,
+    receiver_address,
+    payment_method,
+    payment_status
+)
+SELECT
+    mock_customer.id,
+    'VW-MOCK-' || (1000 + fixture.fixture_number),
+    'COMPLETED',
+    0.00,
+    30000.00,
+    0.00,
+    30000.00,
+    'Mock Customer ' || fixture.fixture_number,
+    '09' || LPAD(fixture.fixture_number::TEXT, 8, '0'),
+    'Mock Address ' || fixture.fixture_number,
+    'COD',
+    'PAID'
+FROM mock_order_fixture fixture
+CROSS JOIN mock_customer
+ON CONFLICT (order_code) DO UPDATE
+SET
+    user_id = EXCLUDED.user_id,
+    status = EXCLUDED.status,
+    shipping_fee = EXCLUDED.shipping_fee,
+    discount_amount = EXCLUDED.discount_amount,
+    receiver_name = EXCLUDED.receiver_name,
+    receiver_phone = EXCLUDED.receiver_phone,
+    receiver_address = EXCLUDED.receiver_address,
+    payment_method = EXCLUDED.payment_method,
+    payment_status = EXCLUDED.payment_status;
 
--- 13. Order Items (120 records)
-DO $$
-DECLARE
-    i INT;
-    ord_id BIGINT;
-    v_id BIGINT;
-    v_sku VARCHAR(100);
-    p_name VARCHAR(150);
-BEGIN
-    FOR i IN 1..120 LOOP
-        SELECT id INTO ord_id FROM orders ORDER BY RANDOM() LIMIT 1;
-        SELECT id, sku, (SELECT name FROM products WHERE id = product_id) INTO v_id, v_sku, p_name FROM product_variants ORDER BY RANDOM() LIMIT 1;
-        IF ord_id IS NOT NULL AND v_id IS NOT NULL THEN
-            INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, image, list_price, price, quantity, subtotal, status)
-            VALUES (ord_id, v_id, p_name, 'Variant ' || i, v_sku, '/images/dev/product.jpg', 200000.00, 200000.00, 1, 200000.00, 'CONFIRMED')
-            ON CONFLICT DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+-- 13. Order Items (exactly one deterministic BASE item per VW-MOCK order)
+WITH mock_orders AS (
+    SELECT
+        customer_order.id,
+        customer_order.order_code,
+        ROW_NUMBER() OVER (ORDER BY customer_order.order_code) - 1 AS fixture_index
+    FROM orders customer_order
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+), available_variants AS (
+    SELECT
+        variant.id,
+        variant.sku,
+        variant.price,
+        product.name AS product_name,
+        NULLIF(CONCAT_WS(' / ', color.name, size.name), '') AS variant_name,
+        ROW_NUMBER() OVER (ORDER BY variant.sku) - 1 AS fixture_index,
+        COUNT(*) OVER () AS fixture_count
+    FROM product_variants variant
+    JOIN products product ON product.id = variant.product_id
+    LEFT JOIN colors color ON color.id = variant.color_id
+    LEFT JOIN sizes size ON size.id = variant.size_id
+    WHERE variant.deleted_at IS NULL
+), selected_items AS (
+    SELECT
+        mock_order.id AS order_id,
+        variant.id AS variant_id,
+        variant.product_name,
+        variant.variant_name,
+        variant.sku,
+        variant.price
+    FROM mock_orders mock_order
+    JOIN available_variants variant
+      ON variant.fixture_index = MOD(mock_order.fixture_index, variant.fixture_count)
+)
+INSERT INTO order_items (
+    order_id,
+    variant_id,
+    product_name,
+    variant_name,
+    sku,
+    image,
+    list_price,
+    price,
+    quantity,
+    subtotal,
+    status,
+    price_source
+)
+SELECT
+    selected.order_id,
+    selected.variant_id,
+    selected.product_name,
+    selected.variant_name,
+    selected.sku,
+    '/images/dev/product.jpg',
+    selected.price,
+    selected.price,
+    1,
+    selected.price,
+    'CONFIRMED',
+    'BASE'
+FROM selected_items selected
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM order_items existing
+    WHERE existing.order_id = selected.order_id
+);
 
--- 14. Payments (100 records)
-DO $$
-DECLARE
-    i INT;
-    ord_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO ord_id FROM orders o WHERE NOT EXISTS (SELECT 1 FROM payments p WHERE p.order_id = o.id) ORDER BY RANDOM() LIMIT 1;
-        IF ord_id IS NOT NULL THEN
-            INSERT INTO payments (order_id, provider, transaction_code, amount, status, paid_at)
-            VALUES (ord_id, 'COD', 'TX-COD-' || i, 230000.00, 'SUCCESS', CURRENT_TIMESTAMP)
-            ON CONFLICT (transaction_code) DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+-- Order header totals are always derived from their item snapshots.
+WITH mock_totals AS (
+    SELECT item.order_id, SUM(item.subtotal) AS subtotal
+    FROM order_items item
+    JOIN orders customer_order ON customer_order.id = item.order_id
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+    GROUP BY item.order_id
+)
+UPDATE orders customer_order
+SET
+    subtotal = mock_totals.subtotal,
+    final_amount = mock_totals.subtotal
+        + customer_order.shipping_fee
+        - customer_order.discount_amount
+FROM mock_totals
+WHERE customer_order.id = mock_totals.order_id;
 
--- 15. Payment Transactions (100 records)
-DO $$
-DECLARE
-    i INT;
-    pay_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO pay_id FROM payments ORDER BY RANDOM() LIMIT 1;
-        IF pay_id IS NOT NULL THEN
-            INSERT INTO payment_transactions (payment_id, transaction_code, status, gateway_response)
-            VALUES (pay_id, 'TX-GATEWAY-' || i, 'SUCCESS', '{"status":"success"}')
-            ON CONFLICT (transaction_code) WHERE transaction_code IS NOT NULL DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+-- 14. Payments (one stable payment per VW-MOCK order)
+UPDATE payments payment
+SET
+    provider = 'COD',
+    amount = customer_order.final_amount,
+    status = 'SUCCESS',
+    paid_at = COALESCE(payment.paid_at, CURRENT_TIMESTAMP)
+FROM orders customer_order
+WHERE payment.order_id = customer_order.id
+  AND customer_order.order_code ~ '^VW-MOCK-[0-9]+$';
+
+INSERT INTO payments (order_id, provider, transaction_code, amount, status, paid_at)
+SELECT
+    customer_order.id,
+    'COD',
+    'MOCK-COD-' || customer_order.order_code,
+    customer_order.final_amount,
+    'SUCCESS',
+    CURRENT_TIMESTAMP
+FROM orders customer_order
+WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM payments existing
+      WHERE existing.order_id = customer_order.id
+  )
+ON CONFLICT (transaction_code) DO UPDATE
+SET
+    order_id = EXCLUDED.order_id,
+    provider = EXCLUDED.provider,
+    amount = EXCLUDED.amount,
+    status = EXCLUDED.status,
+    paid_at = EXCLUDED.paid_at;
+
+-- 15. Payment Transactions (one stable gateway snapshot per mock payment)
+WITH mock_payments AS (
+    SELECT DISTINCT ON (customer_order.id)
+        customer_order.id AS order_id,
+        customer_order.order_code,
+        payment.id AS payment_id
+    FROM orders customer_order
+    JOIN payments payment ON payment.order_id = customer_order.id
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+    ORDER BY customer_order.id, payment.id
+)
+INSERT INTO payment_transactions (payment_id, transaction_code, status, gateway_response)
+SELECT
+    mock_payment.payment_id,
+    'MOCK-GATEWAY-' || mock_payment.order_code,
+    'SUCCESS',
+    '{"status":"success","fixture":"VW-MOCK"}'::JSONB
+FROM mock_payments mock_payment
+ON CONFLICT (transaction_code) WHERE transaction_code IS NOT NULL DO UPDATE
+SET
+    payment_id = EXCLUDED.payment_id,
+    status = EXCLUDED.status,
+    gateway_response = EXCLUDED.gateway_response;
 
 -- 16. Coupon Usages (100 records)
 DO $$

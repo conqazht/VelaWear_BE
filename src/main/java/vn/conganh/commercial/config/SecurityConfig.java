@@ -85,9 +85,11 @@ public class SecurityConfig {
                         .requestMatchers(WHITELIST).permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/products",
-                                "/api/v1/products/**",
+                                "/api/v1/products/*",
+                                "/api/v1/products/slug/*",
                                 "/api/v1/categories",
-                                "/api/v1/categories/**",
+                                "/api/v1/categories/*",
+                                "/api/v1/categories/slug/*",
                                 "/api/v1/brands",
                                 "/api/v1/brands/**",
                                 "/api/v1/product-variants",

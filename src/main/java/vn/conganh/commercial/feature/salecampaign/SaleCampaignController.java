@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -16,18 +17,22 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.salecampaign.dto.CreateSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.EndAndCloneSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.IncreaseQuotaRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.SaleCampaignFilterRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.SaleCampaignResponse;
+import vn.conganh.commercial.feature.salecampaign.dto.SaleCampaignTranslationsResponse;
 import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleDisplayRequest;
+import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleCampaignTranslationsRequest;
 
 @RestController
 @RequestMapping("/api/v1/sale-campaigns")
@@ -36,17 +41,47 @@ import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleDisplayRequest;
 public class SaleCampaignController {
 
     private final SaleCampaignService service;
+    private final SaleCampaignTranslationService translationService;
+    private final CatalogLocaleResolver localeResolver;
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(
             @ParameterObject SaleCampaignFilterRequest filter,
-            @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(service.getAll(filter, pageable)));
+            @ParameterObject Pageable pageable,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.getAll(filter, pageable, localeResolver.resolve(locale, acceptLanguage))));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<SaleCampaignResponse>> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(service.getById(id)));
+    public ResponseEntity<ApiResponse<SaleCampaignResponse>> getById(
+            @PathVariable Long id,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.getById(id, localeResolver.resolve(locale, acceptLanguage))));
+    }
+
+    @GetMapping("/{id}/translations")
+    public ResponseEntity<ApiResponse<SaleCampaignTranslationsResponse>> getTranslations(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(translationService.getTranslations(id)));
+    }
+
+    @PutMapping("/{id}/translations")
+    public ResponseEntity<ApiResponse<SaleCampaignTranslationsResponse>> updateTranslations(
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateSaleCampaignTranslationsRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(translationService.updateTranslations(id, request)));
+    }
+
+    @DeleteMapping("/{id}/translations/{localeCode}")
+    public ResponseEntity<ApiResponse<SaleCampaignTranslationsResponse>> deleteTranslation(
+            @PathVariable Long id,
+            @PathVariable String localeCode,
+            @RequestParam long version) {
+        return ResponseEntity.ok(ApiResponse.success(
+                translationService.deleteTranslation(id, localeCode, version)));
     }
 
     @PostMapping
