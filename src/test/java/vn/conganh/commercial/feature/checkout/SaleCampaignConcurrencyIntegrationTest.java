@@ -26,14 +26,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import vn.conganh.commercial.AbstractIntegrationTest;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import vn.conganh.commercial.exception.CodedBusinessException;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.feature.cart.Cart;
@@ -90,6 +95,9 @@ import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
 import vn.conganh.commercial.util.constant.UserGender;
 
+@SpringBootTest
+@ActiveProfiles("test")
+@Testcontainers
 @Sql(
         statements = "TRUNCATE TABLE sale_allocations, sale_customer_usages, sale_campaign_items, sale_campaigns, "
                 + "inventory_logs, coupon_usages, payment_transactions, payments, order_status_histories, "
@@ -97,7 +105,11 @@ import vn.conganh.commercial.util.constant.UserGender;
                 + "products, users RESTART IDENTITY CASCADE",
         executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 @Import(SaleCampaignConcurrencyIntegrationTest.ContentionTestConfiguration.class)
-class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
+class SaleCampaignConcurrencyIntegrationTest {
+
+    @Container
+    @ServiceConnection
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     private static final long RACE_TIMEOUT_SECONDS = 15;
 
