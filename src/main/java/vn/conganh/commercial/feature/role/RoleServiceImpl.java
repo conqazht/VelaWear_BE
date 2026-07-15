@@ -80,10 +80,10 @@ public class RoleServiceImpl implements RoleService {
     }
 
     private void clearRolePermissionsCache(String roleName) {
-        // Lần kiểm tra phân quyền tiếp theo sẽ nạp lại permission của role này từ PostgreSQL.
+        // Chờ Redis xóa xong để request kế tiếp không thể đọc quyền cũ.
         var cache = cacheManager.getCache("role_permissions");
         if (cache != null && roleName != null) {
-            cache.evict(roleName);
+            cache.evictIfPresent(roleName);
         }
     }
 

@@ -71,10 +71,10 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     private void clearAllRolePermissionsCache() {
-        // Permission thay đổi có thể ảnh hưởng mọi role, nên evict toàn bộ cache role và để lần đọc sau nạp lại Redis.
+        // Permission thay đổi có thể ảnh hưởng mọi role; chờ từng key được xóa trước khi trả response.
         var cache = cacheManager.getCache("role_permissions");
         if (cache != null) {
-            roleRepository.findAll().forEach(role -> cache.evict(role.getName()));
+            roleRepository.findAll().forEach(role -> cache.evictIfPresent(role.getName()));
         }
     }
 

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +42,9 @@ class RoleServiceImplTest {
 
     @Mock
     private org.springframework.cache.CacheManager cacheManager;
+
+    @Mock
+    private Cache rolePermissionsCache;
 
     private RoleServiceImpl roleService;
 
@@ -156,6 +160,7 @@ class RoleServiceImplTest {
             UpdateRoleRequest request = new UpdateRoleRequest("NEW", "new desc");
             when(roleRepository.findById(1L)).thenReturn(Optional.of(role));
             when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(cacheManager.getCache("role_permissions")).thenReturn(rolePermissionsCache);
 
             // Act
             RoleResponse response = roleService.updateRole(1L, request);
@@ -163,6 +168,8 @@ class RoleServiceImplTest {
             // Assert
             assertThat(response.name()).isEqualTo("NEW");
             assertThat(response.description()).isEqualTo("new desc");
+            verify(rolePermissionsCache).evictIfPresent("OLD");
+            verify(rolePermissionsCache).evictIfPresent("NEW");
         }
     }
 
