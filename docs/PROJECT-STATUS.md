@@ -1,8 +1,15 @@
+### Nội dung VI/EN và Sale seed hoàn chỉnh
+
+- **Date/Time**: 2026-07-15
+- **Summary of Changes**: Bật locale `en`; bổ sung quản trị bản dịch Product, Category và Sale Campaign; tạo repeatable seed bảo đảm toàn bộ 6 Product/14 Category có đủ VI/EN; thêm bốn campaign demo STANDARD/FLASH/DRAFT/ENDED; chuyển 7 order item có giá sale cũ sang snapshot campaign-backed đúng semantics.
+- **Documentation**: Thêm `I18N_CATALOG_SALE_VI.md` và đồng bộ DATABASE, API_SPEC, FLYWAY, SALE_CAMPAIGN_BACKEND bằng tiếng Việt.
+- **Verification Performed**: `DevSeedDataIntegrationTest` có 11 test kiểm tra coverage locale, localized slug, Sale fixture, historical order, mock order accounting, phục hồi core slug/default locale, optimistic version và chạy lại repeatable seed không sinh bản ghi trùng. Toàn bộ backend có 597 test pass trên PostgreSQL Testcontainers; Flyway chạy qua V18 và Hibernate schema validation thành công.
+
 ### Sale Campaign end-to-end
 
 - **Date/Time**: 2026-07-15
 - **Summary of Changes**: Added scheduled `STANDARD` and quota-limited `FLASH` campaigns, admin/public APIs, campaign-backed pricing, checkout preview/idempotency, atomic Flash quota/customer limits, payment reservation lifecycle, timeout/late-IPN handling, RBAC, tests and Vietnamese technical documentation. Legacy `product_variants.sale_price` is removed by V15; prices now come from base price or a published campaign.
-- **Verification Performed**: Flyway V1–V15 plus repeatable development seeds and Hibernate schema validation passed on PostgreSQL Testcontainers; full regression suite is tracked in the feature handoff.
+- **Verification Performed**: Flyway V1–V18 cùng repeatable development seeds và Hibernate schema validation đã pass trên PostgreSQL Testcontainers. V16–V17 bổ sung nội dung VI/EN và quyền quản trị; V18 thêm snapshot localized product slug cho order item.
 
 ### Fix Product Price Mismatch between Catalog and Detail Page
 
@@ -27,7 +34,7 @@
 
 ### Completed
 
-- **Database Seed Data Redesign**: Rebuilt the repeatable Flyway mock data migration (`src/main/resources/db/dev/R__3_dev_large_mock_data.sql`) to clean up old data, seed exactly 10 premium brands, 7 fashion categories with translations, 100 realistic category-aligned products with translations, and seed **exactly 4 detail images** per product. Grouped mock seed images by category to ensure correct item previews, and added precise overrides for white sneakers and brass key hook.
+- **Database Seed Data Redesign (historical)**: `R__3_dev_large_mock_data.sql` từng chứa bộ sinh ngẫu nhiên 100 Product nhưng phần đó hiện đã bị vô hiệu hóa. Active development catalog hiện có 10 Brand, 14 Category, 6 Product và 13 Variant ổn định; `R__5` chịu trách nhiệm reconcile đủ VI/EN, còn `R__6` tạo Sale fixture. Không dùng con số 100 Product cũ làm contract hiện tại.
 - **UTF-8 Encoding for Flyway**: Added `encoding: UTF-8` to `spring.flyway` in `application.yaml` to prevent Vietnamese character corruption on Windows systems during db migration/seeding.
 - **Enhanced Product DTO Mappings**: Updated `ProductResponse` and `ProductServiceImpl` to batch-load and include `image`, `thumbnail`, `images` list, `categoryName`, and `categorySlug` in product detail/list API responses.
 - Verified backend compilability via `./mvnw compile`.

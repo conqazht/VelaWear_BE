@@ -1051,6 +1051,31 @@ Client uses the returned `fileName` to update the related entity, for example `a
 
 ---
 
+## 7.1 Locale và nội dung động
+
+Các API hiển thị Product, Category, Product Variant, Sale, Cart và Checkout resolve
+đúng một locale theo thứ tự:
+
+1. Query parameter `locale`, ví dụ `?locale=en`.
+2. Header `Accept-Language`.
+3. Locale mặc định `vi`.
+
+Nếu locale không được bật hoặc entity thiếu bản dịch được yêu cầu, API fallback
+về `vi`, rồi mới dùng text ở bảng core. Response storefront trả trực tiếp các
+field đã resolve, không trả toàn bộ translation map. Client phải đưa locale vào
+query/cache key để dữ liệu VI và EN không dùng chung cache.
+
+`Accept-Language` tuân theo q-weight, bỏ qua lựa chọn `q=0` và fallback locale
+vùng về ngôn ngữ gốc, ví dụ `en-US` về `en`. Cart, checkout preview và checkout
+thật dùng cùng locale cho tên/slug Product và tên Sale Campaign. Checkout lưu
+những giá trị này thành snapshot trong order item; đổi ngôn ngữ sau đó không làm
+thay đổi lịch sử đơn hàng đã tạo.
+
+`color`, `size`, SKU, campaign code và enum trạng thái là giá trị kỹ thuật;
+frontend chịu trách nhiệm dịch nhãn giao diện tương ứng.
+
+---
+
 ## 8. Business Modules Implemented
 
 The following business modules already expose controllers. All list endpoints
@@ -1075,6 +1100,65 @@ should align to the paginated response contract defined in `Response Format`.
 | POST | `/colors` | Create color |
 | PUT | `/colors/{id}` | Update color |
 | DELETE | `/colors/{id}` | Delete color |
+
+### Admin quản trị bản dịch Catalog
+
+`ADMIN` và `MANAGER` quản lý nội dung Product/Category qua subresource riêng;
+endpoint create/update core hiện có vẫn giữ tương thích.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/products/{id}/translations` | Lấy mọi bản dịch của Product |
+| PUT | `/api/v1/products/{id}/translations` | Upsert danh sách bản dịch Product |
+| DELETE | `/api/v1/products/{id}/translations/{locale}` | Xóa một locale không mặc định |
+| GET | `/api/v1/categories/{id}/translations` | Lấy mọi bản dịch của Category |
+| PUT | `/api/v1/categories/{id}/translations` | Upsert danh sách bản dịch Category |
+| DELETE | `/api/v1/categories/{id}/translations/{locale}` | Xóa một locale không mặc định |
+
+Product `PUT` dùng shape:
+
+```json
+{
+  "translations": [
+    {
+      "localeCode": "en",
+      "name": "Essential Cotton Tee",
+      "slug": "essential-cotton-tee",
+      "shortDescription": "A soft everyday cotton tee.",
+      "description": "English product description.",
+      "material": "100% cotton",
+      "careInstruction": "Machine wash cold.",
+      "seoTitle": "Essential Cotton Tee",
+      "seoDescription": "English SEO description."
+    }
+  ]
+}
+```
+
+Category translation gồm `localeCode`, `name`, `slug`, `description`,
+`seoTitle`, `seoDescription`. GET/PUT trả `{ "translations": [...] }`.
+`vi` là locale mặc định bắt buộc và không được xóa. Slug phải duy nhất trong
+từng locale; locale không tồn tại hoặc chưa bật bị từ chối.
+
+Response Product, Category và Sale có `translationLocales` để Admin biết entity
+đã có bản dịch nào; storefront vẫn chỉ nhận nội dung của locale đã resolve.
+
+### Admin bật/tắt nhanh trạng thái
+
+Các endpoint toggle nhận body `{ "status": "ACTIVE" }` hoặc
+`{ "status": "INACTIVE" }`:
+
+| Method | Endpoint | Chuyển trạng thái hợp lệ |
+|--------|----------|--------------------------|
+| PATCH | `/api/v1/products/{id}/status` | `DRAFT/INACTIVE -> ACTIVE`, `ACTIVE -> INACTIVE` |
+| PATCH | `/api/v1/categories/{id}/status` | `ACTIVE <-> INACTIVE` |
+| PATCH | `/api/v1/brands/{id}/status` | `ACTIVE <-> INACTIVE` |
+| PATCH | `/api/v1/product-variants/{id}/status` | `ACTIVE <-> INACTIVE` |
+
+Product/variant ở trạng thái đặc biệt như `OUT_OF_STOCK` hoặc `DISCONTINUED`
+không bị toggle ghi đè; Admin phải dùng form cập nhật đầy đủ nếu nghiệp vụ cho
+phép đổi các trạng thái này. Các guard Sale Campaign đang áp dụng cho Product và
+variant vẫn được kiểm tra trước khi bật/tắt.
 
 ### Product Variants
 
@@ -1220,10 +1304,38 @@ campaign `CANCELLED` luôn có phase `ENDED`; campaign khác là `UPCOMING` khi
 | POST | `/api/v1/sale-campaigns/{id}/items/{itemId}/increase-quota` | Increase live Flash quota |
 | POST | `/api/v1/sale-campaigns/{id}/end` | End a live campaign early |
 | POST | `/api/v1/sale-campaigns/{id}/end-and-clone` | End live campaign and create successor DRAFT |
+| GET | `/api/v1/sale-campaigns/{id}/translations` | Lấy bản dịch VI/EN của campaign |
+| PUT | `/api/v1/sale-campaigns/{id}/translations` | Upsert bản dịch với optimistic version |
+| DELETE | `/api/v1/sale-campaigns/{id}/translations/{locale}?version={version}` | Xóa locale không mặc định |
 
 `publish`, `cancel` and `end` receive optimistic version as query parameter,
 for example `POST /api/v1/sale-campaigns/12/publish?version=3`. Other write
 actions carry `version` in their JSON body.
+
+Nội dung song ngữ được quản lý qua subresource translations. `PUT` nhận:
+
+```json
+{
+  "version": 3,
+  "translations": [
+    {
+      "localeCode": "vi",
+      "name": "Flash Sale nổi bật",
+      "description": "Ưu đãi số lượng giới hạn."
+    },
+    {
+      "localeCode": "en",
+      "name": "Featured Flash Sale",
+      "description": "Limited-quantity deals."
+    }
+  ]
+}
+```
+
+GET/PUT/DELETE trả `{ "version": 4, "translations": [...] }`. `vi` không được
+xóa. Version cũ trả conflict để hai Admin không ghi đè nội dung của nhau.
+Translation được sửa khi campaign còn `DRAFT` hoặc `PUBLISHED` nhưng chưa kết
+thúc; campaign `CANCELLED`/`ENDED` là lịch sử chỉ đọc.
 
 **Create Request:**
 
@@ -1358,9 +1470,15 @@ after campaign starts returns `CAMPAIGN_ALREADY_STARTED`.
 
 The original is ended at server time. The new campaign copies type, display
 content, variants, promotional prices, quota and customer limits into a new
-`DRAFT`; counters are reset to zero.
+`DRAFT`; counters are reset to zero. Toàn bộ translation VI/EN được sao chép;
+tên VI mới trong request được áp vào bản VI của campaign kế tiếp.
 
 ### Public Sale and Pricing
+
+Public Sale hỗ trợ `?locale=vi|en` và `Accept-Language` theo contract locale ở
+trên. `campaign.name`, `campaign.description`, `item.productName` và
+`item.productSlug` phải thuộc cùng locale đã resolve; nếu thiếu EN thì fallback
+về VI. Banner URL, code, SKU, color và size dùng chung.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|

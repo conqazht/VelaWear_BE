@@ -111,6 +111,7 @@ Catalog
 Catalog i18n
 locales 1:N product_translations N:1 products
 locales 1:N category_translations N:1 categories
+locales 1:N sale_campaign_translations N:1 sale_campaigns
 
 Sale Campaign
 ┌──────────────────┐       1:N       ┌─────────────────────┐       N:1       ┌──────────────────┐
@@ -627,6 +628,24 @@ Constraints:
 Notes:
 - `UPCOMING`, `LIVE`, `ENDED` không lưu thành cột. `CANCELLED` luôn được ánh xạ thành `ENDED`; các status khác tính phase từ `starts_at`, `ends_at` và thời gian hiện tại. Campaign chỉ có hiệu lực khi `status = PUBLISHED`.
 - Campaign đã publish không hard-delete; chỉ DRAFT mới được xóa.
+- `name` và `description` ở bảng core được giữ để tương thích/fallback. Public API ưu tiên nội dung trong `sale_campaign_translations` theo locale đã resolve.
+- `banner_url` là tài nguyên dùng chung cho mọi locale.
+
+### sale_campaign_translations
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| campaign_id | BIGINT | PK/FK -> sale_campaigns(id), ON DELETE CASCADE | Campaign được dịch |
+| locale_code | VARCHAR(10) | PK/FK -> locales(code), ON DELETE RESTRICT | Ngôn ngữ |
+| name | VARCHAR(255) | NOT NULL | Tên campaign theo locale |
+| description | TEXT | NULLABLE | Mô tả campaign theo locale |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP, updated by trigger | |
+
+Indexes and constraints:
+- Composite PK `(campaign_id, locale_code)`.
+- `INDEX idx_sale_campaign_translations_locale_code ON sale_campaign_translations(locale_code)`.
+- Không cần localized slug: public Sale dùng `sale_campaigns.code` ổn định.
 
 ### sale_campaign_items
 
@@ -843,6 +862,7 @@ Notes:
 | order_id | BIGINT | FK -> orders(id), NOT NULL | Parent order |
 | variant_id | BIGINT | FK -> product_variants(id), NULLABLE | Variant reference, nullable for historical safety |
 | product_name | VARCHAR(255) | NOT NULL | Snapshot product name |
+| product_slug | VARCHAR(255) | NULLABLE | Snapshot localized product slug tại thời điểm checkout |
 | variant_name | VARCHAR(255) | NULLABLE | Snapshot variant label |
 | sku | VARCHAR(100) | NOT NULL | Snapshot SKU |
 | image | VARCHAR(500) | NULLABLE | Snapshot image |
@@ -866,7 +886,7 @@ Indexes:
 Notes:
 - `order_id` uses `ON DELETE RESTRICT` because order items are commercial history and should not be cascade-deleted with an order.
 - `variant_id` is nullable so old order items still remain valid if a variant is removed.
-- Snapshot fields (`product_name`, `variant_name`, `sku`, `image`, `list_price`, `price`, campaign code/name) must be filled at checkout and never recomputed from catalog tables.
+- Snapshot fields (`product_name`, `product_slug`, `variant_name`, `sku`, `image`, `list_price`, `price`, campaign code/name) phải được ghi tại checkout và không tính lại từ catalog. `product_name`, `product_slug` và `sale_campaign_name` dùng locale đã resolve của request; lịch sử đơn hàng giữ nguyên ngôn ngữ đó về sau.
 - `price_source = BASE` yêu cầu `sale_campaign_item_id IS NULL`; hai nguồn SALE yêu cầu foreign key khác null.
 - Add check constraint: `subtotal = price * quantity` if subtotal is always strictly derived.
 
@@ -1057,6 +1077,7 @@ Notes:
 | locales | `uidx_locales_single_default` | `is_default` | Partial unique index bảo đảm chỉ một locale mặc định |
 | product_translations | `idx_product_translations_locale_code` | `locale_code` | Load/filter product translation theo locale |
 | category_translations | `idx_category_translations_locale_code` | `locale_code` | Load/filter category translation theo locale |
+| sale_campaign_translations | `idx_sale_campaign_translations_locale_code` | `locale_code` | Load bản dịch campaign theo locale |
 | user_addresses | `idx_user_addresses_user_id` | `user_id` | Lookup addresses by user |
 | user_addresses | `idx_user_addresses_is_default` | `is_default` | Filter default shipping addresses |
 | brands | `idx_brands_deleted_at` | `deleted_at` | Soft-delete cleanup job |
@@ -1169,6 +1190,8 @@ Soft-delete cleanup indexes:
 | Product -> ProductTranslation | OneToMany | ProductTranslation | Composite key includes `product_id` |
 | Locale -> CategoryTranslation | OneToMany | CategoryTranslation | Composite key includes `locale_code` |
 | Category -> CategoryTranslation | OneToMany | CategoryTranslation | Composite key includes `category_id` |
+| Locale -> SaleCampaignTranslation | OneToMany | SaleCampaignTranslation | Composite key includes `locale_code` |
+| SaleCampaign -> SaleCampaignTranslation | OneToMany | SaleCampaignTranslation | Composite key includes `campaign_id` |
 | Product -> ProductVariant | OneToMany | ProductVariant | `@JoinColumn(name = "product_id")` |
 | Product -> ProductImage | OneToMany | ProductImage | `@JoinColumn(name = "product_id")` |
 | ProductVariant -> ProductImage | OneToMany optional | ProductImage | `@JoinColumn(name = "variant_id")` |
@@ -1481,7 +1504,7 @@ private List<ReviewImage> images = new ArrayList<>();
 
 ## Migration Notes
 
-- **Total tables: 36** — users, roles, user_role, permissions, permission_role, refresh_tokens, social_accounts, user_addresses, locales, brands, categories, category_translations, colors, sizes, products, product_translations, product_variants, product_images, product_attributes, carts, cart_items, coupons, sale_campaigns, sale_campaign_items, sale_customer_usages, sale_allocations, orders, order_items, payments, payment_transactions, coupon_usages, reviews, review_images, inventory_logs, wishlists, order_status_histories.
+- **Total tables: 37** — users, roles, user_role, permissions, permission_role, refresh_tokens, social_accounts, user_addresses, locales, brands, categories, category_translations, colors, sizes, products, product_translations, product_variants, product_images, product_attributes, carts, cart_items, coupons, sale_campaigns, sale_campaign_translations, sale_campaign_items, sale_customer_usages, sale_allocations, orders, order_items, payments, payment_transactions, coupon_usages, reviews, review_images, inventory_logs, wishlists, order_status_histories.
 - PostgreSQL is the only supported database for dev, test, and prod profiles.
 - Schema should be managed by Flyway migrations:
   - `dev` profile: Flyway runs migrations; Hibernate should use `validate` or controlled `update` only while prototyping.
@@ -1490,6 +1513,9 @@ private List<ReviewImage> images = new ArrayList<>();
 - `V7__add_catalog_i18n.sql` tạo `locales`, `product_translations`, `category_translations`; `V8__add_social_accounts.sql` tạo `social_accounts`.
 - `V14__create_sale_campaigns.sql` tạo bốn bảng Sale, order/order item snapshots, payment constraints, indexes, trigger và RBAC permissions.
 - `V15__remove_legacy_variant_sale_price.sql` là contract migration: drop index, hai check constraint và cột `product_variants.sale_price` sau khi code đã chuyển sang campaign-backed pricing.
+- `V16__add_full_content_translations.sql` bật locale `en`, tạo `sale_campaign_translations` và backfill nội dung VI của campaign hiện hữu.
+- `V17__seed_content_management_permissions.sql` cấp quyền cho các subresource quản trị bản dịch Product, Category và Sale Campaign.
+- `V18__add_order_item_product_slug_snapshot.sql` thêm `order_items.product_slug` và backfill slug hiện có để link lịch sử không phụ thuộc catalog về sau.
 - Use `TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP` for audit timestamps.
 - For `updated_at`, create a reusable PostgreSQL trigger function:
 
@@ -1503,7 +1529,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-- Add `BEFORE UPDATE` triggers for tables with `updated_at`: users, roles, permissions, social_accounts, locales, product_translations, category_translations, brands, categories, products, product_variants, sale_campaigns, sale_campaign_items, sale_customer_usages, orders, payments.
+- Add `BEFORE UPDATE` triggers for tables with `updated_at`: users, roles, permissions, social_accounts, locales, product_translations, category_translations, sale_campaign_translations, brands, categories, products, product_variants, sale_campaigns, sale_campaign_items, sale_customer_usages, orders, payments.
 - Soft-delete cleanup jobs must index and purge based on business importance:
   - Low importance: wishlists can be purged sooner.
   - Medium importance: carts, refresh tokens can be cleaned regularly.
