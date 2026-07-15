@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +30,7 @@ import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
 import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
+import vn.conganh.commercial.feature.role.Role;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Permission - PermissionServiceImpl")
@@ -39,6 +41,9 @@ class PermissionServiceImplTest {
 
     @Mock
     private org.springframework.cache.CacheManager cacheManager;
+
+    @Mock
+    private Cache rolePermissionsCache;
 
     @Mock
     private vn.conganh.commercial.feature.role.RoleRepository roleRepository;
@@ -134,6 +139,8 @@ class PermissionServiceImplTest {
             UpdatePermissionRequest request = new UpdatePermissionRequest("CREATE_TEST", "/api/v1/tests", "POST", "TEST");
             when(permissionRepository.findById(1L)).thenReturn(Optional.of(permission));
             when(permissionRepository.save(any(Permission.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(cacheManager.getCache("role_permissions")).thenReturn(rolePermissionsCache);
+            when(roleRepository.findAll()).thenReturn(List.of(role("ADMIN"), role("USER")));
 
             // Act
             PermissionResponse response = permissionService.updatePermission(1L, request);
@@ -141,6 +148,8 @@ class PermissionServiceImplTest {
             // Assert
             assertThat(response.name()).isEqualTo("CREATE_TEST");
             assertThat(response.method()).isEqualTo("POST");
+            verify(rolePermissionsCache).evictIfPresent("ADMIN");
+            verify(rolePermissionsCache).evictIfPresent("USER");
         }
     }
 
@@ -152,5 +161,11 @@ class PermissionServiceImplTest {
         permission.setMethod("GET");
         permission.setModule("TEST");
         return permission;
+    }
+
+    private Role role(String name) {
+        Role role = new Role();
+        role.setName(name);
+        return role;
     }
 }

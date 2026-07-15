@@ -73,7 +73,7 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
 
         var cache = cacheManager.getCache("role_permissions");
         if (cache != null) {
-            cache.evict("ADMIN");
+            cache.evictIfPresent("ADMIN");
         }
     }
 
