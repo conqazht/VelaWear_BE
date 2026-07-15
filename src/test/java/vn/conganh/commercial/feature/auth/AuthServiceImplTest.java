@@ -290,6 +290,8 @@ class AuthServiceImplTest {
             when(refreshTokenSessionService.find(jti)).thenReturn(Optional.of(session));
             when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
             when(userRepository.findRolesByUserId(1L)).thenReturn(List.of(role(1L, "ADMIN")));
+            when(refreshTokenSessionService.rotateIfCurrent(eq(session), any(RefreshTokenSession.class)))
+                    .thenReturn(true);
 
             // Act
             TokenResponse response = authService.refreshToken(new RefreshTokenRequest(rawRefreshToken));
@@ -299,7 +301,39 @@ class AuthServiceImplTest {
             assertThat(response.refreshToken()).isNotEqualTo(rawRefreshToken);
             verify(refreshTokenService).markRefreshTokenRevoked(rawRefreshToken);
             verify(refreshTokenService).createRefreshToken(any(CreateRefreshTokenRequest.class));
-            verify(refreshTokenSessionService).rotate(eq(jti), any(RefreshTokenSession.class));
+            verify(refreshTokenSessionService).rotateIfCurrent(eq(session), any(RefreshTokenSession.class));
+        }
+
+        @Test
+        @DisplayName("refreshToken - CAS thua thì trả về 401 và không phát token cho request cũ")
+        void refreshToken_rotationAlreadyWon_throwsUnauthorized() throws ParseException {
+            // Arrange
+            User user = user(1L);
+            String rawRefreshToken = validRefreshJwt(user);
+            String jti = jwtId(rawRefreshToken);
+            RefreshTokenSession session = new RefreshTokenSession(
+                    jti,
+                    user.getId(),
+                    "hash-old-token",
+                    "Chrome",
+                    "127.0.0.1",
+                    Instant.now().minusSeconds(60),
+                    Instant.now().plusSeconds(259200));
+            when(refreshTokenService.hashToken(any(String.class)))
+                    .thenAnswer(invocation -> "hash-" + invocation.getArgument(0, String.class).hashCode());
+            when(refreshTokenService.hashToken(rawRefreshToken)).thenReturn("hash-old-token");
+            when(refreshTokenSessionService.find(jti)).thenReturn(Optional.of(session));
+            when(userRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(user));
+            when(userRepository.findRolesByUserId(1L)).thenReturn(List.of(role(1L, "USER")));
+            when(refreshTokenSessionService.rotateIfCurrent(eq(session), any(RefreshTokenSession.class)))
+                    .thenReturn(false);
+
+            // Act & Assert
+            assertThatThrownBy(() -> authService.refreshToken(new RefreshTokenRequest(rawRefreshToken)))
+                    .isInstanceOf(RefreshTokenSessionNotFoundException.class)
+                    .hasMessage("Refresh session is expired or revoked");
+            verify(refreshTokenService).markRefreshTokenRevoked(rawRefreshToken);
+            verify(refreshTokenService).createRefreshToken(any(CreateRefreshTokenRequest.class));
         }
 
         @Test

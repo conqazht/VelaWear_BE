@@ -5,6 +5,12 @@
 - **Documentation**: Thêm `I18N_CATALOG_SALE_VI.md` và đồng bộ DATABASE, API_SPEC, FLYWAY, SALE_CAMPAIGN_BACKEND bằng tiếng Việt.
 - **Verification Performed**: `DevSeedDataIntegrationTest` có 11 test kiểm tra coverage locale, localized slug, Sale fixture, historical order, mock order accounting, phục hồi core slug/default locale, optimistic version và chạy lại repeatable seed không sinh bản ghi trùng. Toàn bộ backend có 601 test pass trên PostgreSQL Testcontainers, gồm kiểm tra slug VI/EN hoạt động hai chiều khi đổi locale; Flyway chạy qua V18 và Hibernate schema validation thành công.
 
+### Atomic refresh-token và bổ sung coverage race condition
+
+- **Date/Time**: 2026-07-15 (Asia/Saigon)
+- **Summary of Changes**: Thay rotation refresh-token kiểu xóa rồi tạo bằng Redis Lua compare-and-swap nguyên tử, vẫn giữ response unauthorized hiện có cho token cũ/replay. Bổ sung integration test cho hai request refresh đồng thời, hai checkout SePay cùng user/idempotency key và hai IPN giống hệt. Checkout/IPN test dùng barrier chỉ tồn tại trong test, đặt ngay trước repository pessimistic-lock query để hai worker cùng tới đúng cửa tranh chấp; executor luôn có timeout, cancel và `shutdownNow` để không treo CI. Thêm tài liệu tiếng Việt về ma trận invariant, cơ chế bảo vệ, cách chạy và giới hạn quan sát.
+- **Verification Performed**: Targeted concurrency suite `AuthRefreshConcurrencyIntegrationTest,SaleCampaignConcurrencyIntegrationTest` pass 22/22 trên PostgreSQL và Redis Testcontainers thật. Sau khi rebase lên `main` có Flyway V18/i18n mới, chạy lại đúng môi trường `backend-ci.yml`: `mvnw.cmd clean verify` pass 607/607, 0 failure, 0 error, 0 skipped. `git diff --check` pass; `backend-ci.yml` không cần thay đổi vì Maven tự phát hiện các test mới.
+
 ### Sale Campaign end-to-end
 
 - **Date/Time**: 2026-07-15

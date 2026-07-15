@@ -4,10 +4,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import vn.conganh.commercial.exception.ServiceUnavailableException;
 
@@ -17,6 +19,21 @@ public class RefreshTokenSessionService {
 
     private static final String KEY_PREFIX = "auth:refresh:active:";
     private static final String FIELD_SEPARATOR = "\n";
+    private static final long ROTATION_DESTINATION_EXISTS = -1L;
+    private static final long ROTATION_STALE = 0L;
+    private static final long ROTATION_SUCCESS = 1L;
+    private static final DefaultRedisScript<Long> ROTATE_IF_CURRENT_SCRIPT = new DefaultRedisScript<>("""
+            local current = redis.call('GET', KEYS[1])
+            if not current or current ~= ARGV[1] then
+                return 0
+            end
+            local created = redis.call('SET', KEYS[2], ARGV[2], 'PX', ARGV[3], 'NX')
+            if not created then
+                return -1
+            end
+            redis.call('DEL', KEYS[1])
+            return 1
+            """, Long.class);
 
     private final StringRedisTemplate redisTemplate;
 
@@ -45,16 +62,33 @@ public class RefreshTokenSessionService {
         });
     }
 
-    public void rotate(String oldJti, RefreshTokenSession newSession) {
-        withRedisErrorMapping(() -> {
-            redisTemplate.delete(key(oldJti));
-            Duration ttl = Duration.between(Instant.now(), newSession.expiresAt());
-            if (ttl.isNegative() || ttl.isZero()) {
-                throw new IllegalArgumentException("Refresh token session expiry must be in the future");
-            }
-            redisTemplate.opsForValue().set(key(newSession.jti()), serialize(newSession), ttl);
-            return null;
-        });
+    public boolean rotateIfCurrent(
+            RefreshTokenSession expectedSession,
+            RefreshTokenSession replacementSession) {
+        Duration ttl = Duration.between(Instant.now(), replacementSession.expiresAt());
+        if (ttl.isNegative() || ttl.isZero() || ttl.toMillis() == 0) {
+            throw new IllegalArgumentException("Refresh token session expiry must be in the future");
+        }
+
+        Long result = withRedisErrorMapping(() -> redisTemplate.execute(
+                ROTATE_IF_CURRENT_SCRIPT,
+                List.of(key(expectedSession.jti()), key(replacementSession.jti())),
+                serialize(expectedSession),
+                serialize(replacementSession),
+                String.valueOf(ttl.toMillis())));
+        if (result == null) {
+            throw new ServiceUnavailableException("Refresh session store is temporarily unavailable");
+        }
+        if (result == ROTATION_DESTINATION_EXISTS) {
+            throw new IllegalStateException("Replacement refresh session already exists");
+        }
+        if (result == ROTATION_STALE) {
+            return false;
+        }
+        if (result != ROTATION_SUCCESS) {
+            throw new ServiceUnavailableException("Refresh session store returned an invalid rotation result");
+        }
+        return true;
     }
 
     private String key(String jti) {
@@ -100,8 +134,7 @@ public class RefreshTokenSessionService {
             return call.execute();
         } catch (ServiceUnavailableException exception) {
             throw exception;
-        } catch (RedisSystemException | org.springframework.data.redis.RedisConnectionFailureException
-                 | org.springframework.dao.QueryTimeoutException exception) {
+        } catch (DataAccessException exception) {
             throw new ServiceUnavailableException("Refresh session store is temporarily unavailable");
         }
     }
