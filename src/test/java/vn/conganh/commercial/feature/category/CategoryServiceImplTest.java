@@ -245,6 +245,44 @@ class CategoryServiceImplTest {
             assertThat(response.name()).isEqualTo("Tên danh mục");
             assertThat(response.slug()).isEqualTo("ten-danh-muc");
         }
+
+        @Test
+        @DisplayName("getCategoryBySlug - giữ được English slug khi chuyển locale sang vi")
+        void getCategoryBySlug_englishSlugWithVietnameseLocale_resolvesOwnerThenLocalizes() {
+            Category category = category(1L, "Core name", "core-slug");
+            CategoryTranslation vi = categoryTranslation(1L, "vi", "Tên danh mục", "ten-danh-muc");
+            CategoryTranslation en = categoryTranslation(1L, "en", "English category", "english-category");
+            when(categoryTranslationRepository.findByLocaleCodeAndSlug("vi", "english-category"))
+                    .thenReturn(Optional.empty());
+            when(categoryTranslationRepository.findFirstBySlug("english-category"))
+                    .thenReturn(Optional.of(en));
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryTranslationRepository.findByCategoryIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            CategoryResponse response = categoryService.getCategoryBySlug("english-category", "vi");
+
+            assertThat(response.name()).isEqualTo("Tên danh mục");
+            assertThat(response.slug()).isEqualTo("ten-danh-muc");
+        }
+
+        @Test
+        @DisplayName("getCategoryBySlug - dùng Vietnamese slug khi chuyển locale sang en")
+        void getCategoryBySlug_vietnameseSlugWithEnglishLocale_resolvesOwnerThenLocalizes() {
+            Category category = category(1L, "Core name", "core-slug");
+            CategoryTranslation vi = categoryTranslation(1L, "vi", "Tên danh mục", "ten-danh-muc");
+            CategoryTranslation en = categoryTranslation(1L, "en", "English category", "english-category");
+            when(categoryTranslationRepository.findByLocaleCodeAndSlug("en", "ten-danh-muc"))
+                    .thenReturn(Optional.empty());
+            when(categoryTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-danh-muc"))
+                    .thenReturn(Optional.of(vi));
+            when(categoryRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(category));
+            when(categoryTranslationRepository.findByCategoryIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            CategoryResponse response = categoryService.getCategoryBySlug("ten-danh-muc", "en");
+
+            assertThat(response.name()).isEqualTo("English category");
+            assertThat(response.slug()).isEqualTo("english-category");
+        }
     }
 
     private Category category(Long id, String name, String slug) {

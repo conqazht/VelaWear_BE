@@ -81,6 +81,11 @@ public class CategoryServiceImpl implements CategoryService {
         if (translation.isEmpty() && !CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
             translation = categoryTranslationRepository.findByLocaleCodeAndSlug(CatalogLocaleResolver.DEFAULT_LOCALE, slug);
         }
+        if (translation.isEmpty()) {
+            // Category URLs stay unchanged while the UI locale changes. Resolve the owner
+            // from any localized slug before rendering it in the newly requested locale.
+            translation = categoryTranslationRepository.findFirstBySlug(slug);
+        }
         if (translation.isPresent()) {
             Category category = findCategory(translation.get().getCategoryId());
             return getCategoryById(category.getId(), resolvedLocale);

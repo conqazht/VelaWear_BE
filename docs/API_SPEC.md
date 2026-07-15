@@ -1071,6 +1071,12 @@ thật dùng cùng locale cho tên/slug Product và tên Sale Campaign. Checkout
 những giá trị này thành snapshot trong order item; đổi ngôn ngữ sau đó không làm
 thay đổi lịch sử đơn hàng đã tạo.
 
+Vì URL hiện tại không có prefix locale, endpoint detail Product/Category nhận
+slug thuộc bất kỳ translation nào để xác định entity, sau đó mới localize response
+theo locale request. Do đó link dùng English slug vẫn hoạt động khi chuyển sang
+VI và ngược lại; response trả slug đúng của ngôn ngữ mới để client có thể chuẩn
+hóa URL nếu cần.
+
 `color`, `size`, SKU, campaign code và enum trạng thái là giá trị kỹ thuật;
 frontend chịu trách nhiệm dịch nhãn giao diện tương ứng.
 

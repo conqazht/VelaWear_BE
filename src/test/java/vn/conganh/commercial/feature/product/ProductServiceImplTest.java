@@ -253,6 +253,44 @@ class ProductServiceImplTest {
         }
 
         @Test
+        @DisplayName("getProductBySlug - giữ được English slug khi chuyển locale sang vi")
+        void getProductBySlug_englishSlugWithVietnameseLocale_resolvesOwnerThenLocalizes() {
+            Product product = product(1L, "Core name", "core-slug");
+            ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
+            ProductTranslation en = productTranslation(1L, "en", "English name", "english-name");
+            when(productTranslationRepository.findByLocaleCodeAndSlug("vi", "english-name"))
+                    .thenReturn(Optional.empty());
+            when(productTranslationRepository.findFirstBySlug("english-name"))
+                    .thenReturn(Optional.of(en));
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productTranslationRepository.findByProductIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            ProductResponse response = productService.getProductBySlug("english-name", "vi");
+
+            assertThat(response.name()).isEqualTo("Tên tiếng Việt");
+            assertThat(response.slug()).isEqualTo("ten-tieng-viet");
+        }
+
+        @Test
+        @DisplayName("getProductBySlug - dùng Vietnamese slug khi chuyển locale sang en")
+        void getProductBySlug_vietnameseSlugWithEnglishLocale_resolvesOwnerThenLocalizes() {
+            Product product = product(1L, "Core name", "core-slug");
+            ProductTranslation vi = productTranslation(1L, "vi", "Tên tiếng Việt", "ten-tieng-viet");
+            ProductTranslation en = productTranslation(1L, "en", "English name", "english-name");
+            when(productTranslationRepository.findByLocaleCodeAndSlug("en", "ten-tieng-viet"))
+                    .thenReturn(Optional.empty());
+            when(productTranslationRepository.findByLocaleCodeAndSlug("vi", "ten-tieng-viet"))
+                    .thenReturn(Optional.of(vi));
+            when(productRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(product));
+            when(productTranslationRepository.findByProductIdIn(List.of(1L))).thenReturn(List.of(en, vi));
+
+            ProductResponse response = productService.getProductBySlug("ten-tieng-viet", "en");
+
+            assertThat(response.name()).isEqualTo("English name");
+            assertThat(response.slug()).isEqualTo("english-name");
+        }
+
+        @Test
         @DisplayName("getProductById - fallback riêng từng field về vi")
         void getProductById_partialEnglishTranslation_fallsBackPerField() {
             Product product = product(1L, "Core name", "core-slug");

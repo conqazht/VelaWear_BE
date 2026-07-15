@@ -55,6 +55,11 @@ fallback về dữ liệu core để tránh trang trắng trong giai đoạn chu
 Header `Accept-Language` được chọn theo q-weight, bỏ qua range `q=0` và fallback
 từ locale vùng như `en-US` về `en`.
 
+URL storefront hiện không có `/vi` hoặc `/en`. Khi mở Product/Category bằng slug
+của một locale rồi đổi ngôn ngữ, backend vẫn tìm entity qua slug của bất kỳ bản
+dịch nào và chỉ sau đó mới render nội dung theo locale mới. Cách này tránh 404
+cho link English đang mở khi chuyển sang VI (và chiều ngược lại).
+
 Cart và Checkout dùng cùng quy tắc locale. Khi checkout thành công,
 `product_name`, `product_slug` và `sale_campaign_name` được lưu thành snapshot
 theo ngôn ngữ của request; lịch sử đơn hàng không tự đổi khi người dùng chuyển

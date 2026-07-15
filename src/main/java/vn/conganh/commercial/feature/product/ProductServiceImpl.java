@@ -160,6 +160,11 @@ public class ProductServiceImpl implements ProductService {
         if (translation.isEmpty() && !CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
             translation = productTranslationRepository.findByLocaleCodeAndSlug(CatalogLocaleResolver.DEFAULT_LOCALE, slug);
         }
+        if (translation.isEmpty()) {
+            // URLs do not contain a locale prefix. Keep an existing localized slug resolvable
+            // after the visitor switches language, then localize the response independently.
+            translation = productTranslationRepository.findFirstBySlug(slug);
+        }
         if (translation.isPresent()) {
             Product product = findProduct(translation.get().getProductId());
             return getProductById(product.getId(), resolvedLocale);
