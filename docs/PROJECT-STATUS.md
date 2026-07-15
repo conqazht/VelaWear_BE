@@ -3,7 +3,7 @@
 - **Date/Time**: 2026-07-15
 - **Summary of Changes**: Bật locale `en`; bổ sung quản trị bản dịch Product, Category và Sale Campaign; tạo repeatable seed bảo đảm toàn bộ 6 Product/14 Category có đủ VI/EN; thêm bốn campaign demo STANDARD/FLASH/DRAFT/ENDED; chuyển 7 order item có giá sale cũ sang snapshot campaign-backed đúng semantics.
 - **Documentation**: Thêm `I18N_CATALOG_SALE_VI.md` và đồng bộ DATABASE, API_SPEC, FLYWAY, SALE_CAMPAIGN_BACKEND bằng tiếng Việt.
-- **Verification Performed**: `DevSeedDataIntegrationTest` có 11 test kiểm tra coverage locale, localized slug, Sale fixture, historical order, mock order accounting, phục hồi core slug/default locale, optimistic version và chạy lại repeatable seed không sinh bản ghi trùng. Toàn bộ backend có 597 test pass trên PostgreSQL Testcontainers; Flyway chạy qua V18 và Hibernate schema validation thành công.
+- **Verification Performed**: `DevSeedDataIntegrationTest` có 11 test kiểm tra coverage locale, localized slug, Sale fixture, historical order, mock order accounting, phục hồi core slug/default locale, optimistic version và chạy lại repeatable seed không sinh bản ghi trùng. Toàn bộ backend có 601 test pass trên PostgreSQL Testcontainers, gồm kiểm tra slug VI/EN hoạt động hai chiều khi đổi locale; Flyway chạy qua V18 và Hibernate schema validation thành công.
 
 ### Sale Campaign end-to-end
 
