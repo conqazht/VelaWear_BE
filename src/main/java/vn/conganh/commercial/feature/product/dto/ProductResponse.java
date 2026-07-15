@@ -35,7 +35,8 @@ public record ProductResponse(
         String categoryName,
         String categorySlug,
         BigDecimal price,
-        VariantPricingResponse pricing
+        VariantPricingResponse pricing,
+        List<String> translationLocales
 ) {
 
     public static ProductResponse fromEntity(Product product) {
@@ -50,6 +51,13 @@ public record ProductResponse(
         return fromEntity(product, translation, images, null, null, null, null);
     }
 
+    public static ProductResponse fromEntityWithTranslationLocales(
+            Product product,
+            ProductTranslation translation,
+            List<String> translationLocales) {
+        return fromEntity(product, translation, null, null, null, null, null, translationLocales);
+    }
+
     public static ProductResponse fromEntity(
             Product product,
             ProductTranslation translation,
@@ -58,6 +66,27 @@ public record ProductResponse(
             String categorySlug,
             BigDecimal price,
             VariantPricingResponse pricing
+    ) {
+        return fromEntity(
+                product,
+                translation,
+                images,
+                categoryName,
+                categorySlug,
+                price,
+                pricing,
+                List.of());
+    }
+
+    public static ProductResponse fromEntity(
+            Product product,
+            ProductTranslation translation,
+            List<ProductImage> images,
+            String categoryName,
+            String categorySlug,
+            BigDecimal price,
+            VariantPricingResponse pricing,
+            List<String> translationLocales
     ) {
         String thumbnail = null;
         String mainImage = null;
@@ -111,7 +140,8 @@ public record ProductResponse(
                 categoryName,
                 categorySlug,
                 price,
-                pricing);
+                pricing,
+                translationLocales);
     }
 
     private static List<ColorImages> groupImagesByColor(List<ProductImage> images) {

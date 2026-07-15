@@ -14,6 +14,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
@@ -42,12 +43,15 @@ public class CategoryServiceImpl implements CategoryService {
         Page<Category> categories = categoryRepository.findAll(
                 Specification.where(CategorySpecification.build(filter, resolvedLocale)),
                 pageable);
-        Map<Long, CategoryTranslation> translations = loadTranslations(
-                categories.getContent().stream().map(Category::getId).toList(),
-                resolvedLocale);
+        Map<Long, Map<String, CategoryTranslation>> translations = loadTranslationRows(
+                categories.getContent().stream().map(Category::getId).toList());
         return ResultPaginationDTO.fromPage(categories.map(category -> CategoryResponse.fromEntity(
                 category,
-                translations.get(category.getId()))));
+                mergeTranslation(
+                        category,
+                        resolvedLocale,
+                        translations.getOrDefault(category.getId(), Map.of())),
+                translationLocales(translations.getOrDefault(category.getId(), Map.of())))));
     }
 
     @Override
@@ -60,7 +64,13 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional(readOnly = true)
     public CategoryResponse getCategoryById(Long id, String localeCode) {
         Category category = findCategory(id);
-        return CategoryResponse.fromEntity(category, resolveTranslation(category.getId(), localeCode).orElse(null));
+        String resolvedLocale = normalizeLocale(localeCode);
+        Map<String, CategoryTranslation> translations = loadTranslationRows(List.of(category.getId()))
+                .getOrDefault(category.getId(), Map.of());
+        return CategoryResponse.fromEntity(
+                category,
+                mergeTranslation(category, resolvedLocale, translations),
+                translationLocales(translations));
     }
 
     @Override
@@ -73,11 +83,12 @@ public class CategoryServiceImpl implements CategoryService {
         }
         if (translation.isPresent()) {
             Category category = findCategory(translation.get().getCategoryId());
-            return CategoryResponse.fromEntity(category, resolveTranslation(category.getId(), resolvedLocale).orElse(null));
+            return getCategoryById(category.getId(), resolvedLocale);
         }
 
-        return CategoryResponse.fromEntity(categoryRepository.findBySlugAndDeletedAtIsNull(slug)
-                .orElseThrow(() -> new ResourceNotFoundException("Category", "slug", slug)));
+        Category category = categoryRepository.findBySlugAndDeletedAtIsNull(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", "slug", slug));
+        return getCategoryById(category.getId(), resolvedLocale);
     }
 
     @Override
@@ -99,13 +110,16 @@ public class CategoryServiceImpl implements CategoryService {
                 null,
                 request.name(),
                 null);
-        return CategoryResponse.fromEntity(saved, translation);
+        return CategoryResponse.fromEntity(
+                saved,
+                translation,
+                storedTranslationLocales(saved.getId()));
     }
 
     @Override
     @Transactional
     public CategoryResponse updateCategory(Long id, UpdateCategoryRequest request) {
-        Category category = findCategory(id);
+        Category category = findCategoryWithLock(id);
         apply(category, request.parentId(), request.name(), category.getSlug(), request.sortOrder(), request.status());
         Category saved = categoryRepository.save(category);
         Optional<CategoryTranslation> existingTranslation = categoryTranslationRepository
@@ -119,7 +133,23 @@ public class CategoryServiceImpl implements CategoryService {
             translation.setSeoTitle(request.name());
         }
         translation = categoryTranslationRepository.save(translation);
-        return CategoryResponse.fromEntity(saved, translation);
+        return CategoryResponse.fromEntity(
+                saved,
+                translation,
+                storedTranslationLocales(saved.getId()));
+    }
+
+    @Override
+    @Transactional
+    public CategoryResponse updateStatus(Long id, UpdateStatusRequest request) {
+        String status = request.status().trim();
+        if (!java.util.Set.of("ACTIVE", "INACTIVE").contains(status)) {
+            throw new InvalidRequestException("Category status is invalid: " + request.status());
+        }
+        Category category = findCategoryWithLock(id);
+        category.setStatus(status);
+        categoryRepository.save(category);
+        return getCategoryById(id, CatalogLocaleResolver.DEFAULT_LOCALE);
     }
 
     @Override
@@ -143,32 +173,80 @@ public class CategoryServiceImpl implements CategoryService {
         category.setStatus(status);
     }
 
-    private Optional<CategoryTranslation> resolveTranslation(Long categoryId, String localeCode) {
-        String resolvedLocale = normalizeLocale(localeCode);
-        Optional<CategoryTranslation> translation =
-                categoryTranslationRepository.findByCategoryIdAndLocaleCode(categoryId, resolvedLocale);
-        if (translation.isPresent() || CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
-            return translation;
-        }
-        return categoryTranslationRepository.findByCategoryIdAndLocaleCode(categoryId, CatalogLocaleResolver.DEFAULT_LOCALE);
-    }
-
-    private Map<Long, CategoryTranslation> loadTranslations(List<Long> categoryIds, String localeCode) {
+    private Map<Long, Map<String, CategoryTranslation>> loadTranslationRows(List<Long> categoryIds) {
         if (categoryIds.isEmpty()) {
             return Map.of();
         }
+        return categoryTranslationRepository.findByCategoryIdIn(categoryIds).stream()
+                .collect(Collectors.groupingBy(
+                        CategoryTranslation::getCategoryId,
+                        Collectors.toMap(CategoryTranslation::getLocaleCode, Function.identity())));
+    }
 
-        Map<Long, CategoryTranslation> translations = new HashMap<>(categoryTranslationRepository
-                .findByCategoryIdInAndLocaleCode(categoryIds, CatalogLocaleResolver.DEFAULT_LOCALE)
-                .stream()
-                .collect(Collectors.toMap(CategoryTranslation::getCategoryId, Function.identity())));
+    private Category findCategoryWithLock(Long id) {
+        return categoryRepository.findWithLockByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", "id", id));
+    }
 
-        String resolvedLocale = normalizeLocale(localeCode);
-        if (!CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
-            categoryTranslationRepository.findByCategoryIdInAndLocaleCode(categoryIds, resolvedLocale)
-                    .forEach(translation -> translations.put(translation.getCategoryId(), translation));
+    private CategoryTranslation mergeTranslation(
+            Category category,
+            String localeCode,
+            Map<String, CategoryTranslation> translations) {
+        CategoryTranslation requested = translations.get(localeCode);
+        CategoryTranslation defaultTranslation = translations.get(CatalogLocaleResolver.DEFAULT_LOCALE);
+        CategoryTranslation merged = new CategoryTranslation();
+        merged.setCategoryId(category.getId());
+        merged.setLocaleCode(localeCode);
+        merged.setName(firstValue(
+                requested == null ? null : requested.getName(),
+                defaultTranslation == null ? null : defaultTranslation.getName(),
+                category.getName()));
+        merged.setSlug(firstValue(
+                requested == null ? null : requested.getSlug(),
+                defaultTranslation == null ? null : defaultTranslation.getSlug(),
+                category.getSlug()));
+        merged.setDescription(firstValue(
+                requested == null ? null : requested.getDescription(),
+                defaultTranslation == null ? null : defaultTranslation.getDescription()));
+        merged.setSeoTitle(firstValue(
+                requested == null ? null : requested.getSeoTitle(),
+                defaultTranslation == null ? null : defaultTranslation.getSeoTitle(),
+                category.getName()));
+        merged.setSeoDescription(firstValue(
+                requested == null ? null : requested.getSeoDescription(),
+                defaultTranslation == null ? null : defaultTranslation.getSeoDescription()));
+        return merged;
+    }
+
+    private List<String> translationLocales(Map<String, ?> translations) {
+        return translations.keySet().stream().sorted(this::compareLocales).toList();
+    }
+
+    private List<String> storedTranslationLocales(Long categoryId) {
+        return categoryTranslationRepository.findByCategoryId(categoryId).stream()
+                .map(CategoryTranslation::getLocaleCode)
+                .distinct()
+                .sorted(this::compareLocales)
+                .toList();
+    }
+
+    private int compareLocales(String left, String right) {
+        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(left)) {
+            return CatalogLocaleResolver.DEFAULT_LOCALE.equals(right) ? 0 : -1;
         }
-        return translations;
+        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(right)) {
+            return 1;
+        }
+        return left.compareTo(right);
+    }
+
+    private String firstValue(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private CategoryTranslation saveDefaultTranslation(

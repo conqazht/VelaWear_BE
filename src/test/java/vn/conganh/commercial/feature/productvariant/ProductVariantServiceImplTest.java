@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.feature.color.Color;
 import vn.conganh.commercial.feature.color.ColorRepository;
 import vn.conganh.commercial.feature.product.Product;
@@ -29,6 +30,12 @@ import vn.conganh.commercial.feature.size.Size;
 import vn.conganh.commercial.feature.size.SizeRepository;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignTranslationRepository;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignTranslation;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaign;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
+import vn.conganh.commercial.feature.salecampaign.PriceSource;
+import vn.conganh.commercial.feature.salecampaign.VariantPricing;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module ProductVariant - ProductVariantServiceImpl")
@@ -52,13 +59,16 @@ class ProductVariantServiceImplTest {
     @Mock
     private SaleCampaignItemRepository saleCampaignItemRepository;
 
+    @Mock
+    private SaleCampaignTranslationRepository saleCampaignTranslationRepository;
+
     private ProductVariantServiceImpl productVariantService;
 
     @BeforeEach
     void setUp() {
         productVariantService = new ProductVariantServiceImpl(
                 productVariantRepository, productRepository, colorRepository, sizeRepository,
-                variantPricingService, saleCampaignItemRepository);
+                variantPricingService, saleCampaignItemRepository, saleCampaignTranslationRepository);
         org.mockito.Mockito.lenient().when(variantPricingService.resolve(any()))
                 .thenReturn(java.util.Map.of());
     }
@@ -144,11 +154,100 @@ class ProductVariantServiceImplTest {
         }
     }
 
+    @Nested
+    @DisplayName("Update product variant status")
+    class UpdateProductVariantStatus {
+
+        @Test
+        void updateStatus_activeToInactive_checksCampaignGuard() {
+            ProductVariant variant = variant(1L, "ACTIVE");
+            when(productVariantRepository.findWithLockByIdAndDeletedAtIsNull(1L))
+                    .thenReturn(Optional.of(variant));
+            when(saleCampaignItemRepository.existsProtectedVariant(any(), any())).thenReturn(true);
+
+            assertThatThrownBy(() -> productVariantService.updateStatus(
+                    1L,
+                    new UpdateStatusRequest("INACTIVE")))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("sale campaign");
+            verify(productVariantRepository, never()).save(variant);
+        }
+
+        @Test
+        void updateStatus_discontinuedSourceIsRejected() {
+            ProductVariant variant = variant(1L, "DISCONTINUED");
+            when(productVariantRepository.findWithLockByIdAndDeletedAtIsNull(1L))
+                    .thenReturn(Optional.of(variant));
+
+            assertThatThrownBy(() -> productVariantService.updateStatus(
+                    1L,
+                    new UpdateStatusRequest("ACTIVE")))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("not allowed");
+            verify(productVariantRepository, never()).save(any());
+            verify(saleCampaignItemRepository, never()).existsProtectedVariant(any(), any());
+        }
+
+        @Test
+        void updateStatus_cannotTargetDiscontinued() {
+            assertThatThrownBy(() -> productVariantService.updateStatus(
+                    1L,
+                    new UpdateStatusRequest("DISCONTINUED")))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("invalid");
+            verify(productVariantRepository, never()).findWithLockByIdAndDeletedAtIsNull(any());
+        }
+    }
+
+    @Test
+    void getById_englishLocale_localizesPricingCampaignName() {
+        ProductVariant variant = variant(1L, "ACTIVE");
+        SaleCampaign campaign = new SaleCampaign();
+        ReflectionTestUtils.setField(campaign, "id", 2L);
+        campaign.setCode("SALE");
+        campaign.setName("Khuyến mãi");
+        SaleCampaignItem item = new SaleCampaignItem();
+        item.setCampaign(campaign);
+        item.setVariant(variant);
+        VariantPricing pricing = new VariantPricing(
+                1L,
+                BigDecimal.valueOf(100),
+                BigDecimal.valueOf(80),
+                PriceSource.STANDARD_SALE,
+                item,
+                null,
+                null,
+                1);
+        SaleCampaignTranslation en = new SaleCampaignTranslation();
+        en.setCampaignId(2L);
+        en.setLocaleCode("en");
+        en.setName("English sale");
+        when(productVariantRepository.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(variant));
+        when(variantPricingService.resolve(java.util.List.of(variant))).thenReturn(java.util.Map.of(1L, pricing));
+        when(saleCampaignTranslationRepository.findByCampaignIdIn(java.util.List.of(2L)))
+                .thenReturn(java.util.List.of(en));
+
+        ProductVariantResponse response = productVariantService.getById(1L, "en");
+
+        assertThat(response.pricing().campaignName()).isEqualTo("English sale");
+    }
+
     private Product product(Long id) {
         Product product = new Product();
         ReflectionTestUtils.setField(product, "id", id);
         product.setName("Product");
         return product;
+    }
+
+    private ProductVariant variant(Long id, String status) {
+        ProductVariant variant = new ProductVariant();
+        ReflectionTestUtils.setField(variant, "id", id);
+        variant.setProduct(product(1L));
+        variant.setSku("SKU");
+        variant.setPrice(BigDecimal.TEN);
+        variant.setStockQuantity(1);
+        variant.setStatus(status);
+        return variant;
     }
 
     private Color color(Long id, String name) {

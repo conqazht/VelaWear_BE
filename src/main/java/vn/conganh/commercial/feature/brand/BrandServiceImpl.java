@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.brand.dto.BrandFilterRequest;
@@ -60,6 +61,18 @@ public class BrandServiceImpl implements BrandService {
 
     @Override
     @Transactional
+    public BrandResponse updateStatus(Long id, UpdateStatusRequest request) {
+        String status = request.status().trim();
+        if (!java.util.Set.of("ACTIVE", "INACTIVE").contains(status)) {
+            throw new InvalidRequestException("Brand status is invalid: " + request.status());
+        }
+        Brand brand = findActiveWithLock(id);
+        brand.setStatus(status);
+        return BrandResponse.fromEntity(brandRepository.save(brand));
+    }
+
+    @Override
+    @Transactional
     public void delete(Long id) {
         Brand brand = findActive(id);
         brand.setDeletedAt(Instant.now());
@@ -68,6 +81,11 @@ public class BrandServiceImpl implements BrandService {
 
     private Brand findActive(Long id) {
         return brandRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Brand", "id", id));
+    }
+
+    private Brand findActiveWithLock(Long id) {
+        return brandRepository.findWithLockByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Brand", "id", id));
     }
 }

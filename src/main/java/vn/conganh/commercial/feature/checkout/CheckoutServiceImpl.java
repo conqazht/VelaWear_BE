@@ -32,6 +32,8 @@ import vn.conganh.commercial.feature.cart.Cart;
 import vn.conganh.commercial.feature.cart.CartItem;
 import vn.conganh.commercial.feature.cart.CartItemRepository;
 import vn.conganh.commercial.feature.cart.CartRepository;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogContentLocalizationService;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutItemResponse;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewItemResponse;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewRequest;
@@ -102,6 +104,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final SaleCustomerUsageRepository customerUsageRepository;
     private final SaleAllocationRepository allocationRepository;
     private final OrderResourceLifecycleService lifecycleService;
+    private final CatalogContentLocalizationService localizationService;
 
     @Value("${app.checkout.shipping-fee:30000}")
     private BigDecimal configuredShippingFee;
@@ -109,22 +112,45 @@ public class CheckoutServiceImpl implements CheckoutService {
     @Override
     @Transactional(readOnly = true)
     public CheckoutPreviewResponse preview(CheckoutPreviewRequest request, String userEmail) {
+        return preview(request, userEmail, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CheckoutPreviewResponse preview(
+            CheckoutPreviewRequest request,
+            String userEmail,
+            String localeCode) {
         User user = findUser(userEmail);
         validatePaymentMethod(request.paymentMethod());
         Cart cart = cartRepository.findByUserId(user.getId()).orElseThrow(EmptyCartException::new);
         Quote quote = buildQuote(user, cart, request.couponCode(), Instant.now());
-        return quote.toResponse();
+        return toPreviewResponse(quote, localizeQuote(quote, localeCode));
     }
 
     @Override
     @Transactional
     public CheckoutResponse checkout(CheckoutRequest request, String userEmail) {
-        return checkout(request, userEmail, UUID.randomUUID().toString());
+        return checkout(
+                request,
+                userEmail,
+                UUID.randomUUID().toString(),
+                CatalogLocaleResolver.DEFAULT_LOCALE);
     }
 
     @Override
     @Transactional
     public CheckoutResponse checkout(CheckoutRequest request, String userEmail, String idempotencyKey) {
+        return checkout(request, userEmail, idempotencyKey, CatalogLocaleResolver.DEFAULT_LOCALE);
+    }
+
+    @Override
+    @Transactional
+    public CheckoutResponse checkout(
+            CheckoutRequest request,
+            String userEmail,
+            String idempotencyKey,
+            String localeCode) {
         User user = findUser(userEmail);
         validatePaymentMethod(request.paymentMethod());
         String normalizedKey = normalizeIdempotencyKey(idempotencyKey);
@@ -143,9 +169,12 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         Instant now = Instant.now();
         Quote quote = buildQuote(user, cart, request.couponCode(), now);
+        QuoteLocalization localization = localizeQuote(quote, localeCode);
         if (!java.util.Objects.equals(request.pricingFingerprint(), quote.pricingFingerprint())) {
             throw conflict("PRICE_CHANGED", "Cart price changed after preview",
-                    Map.of("pricingFingerprint", quote.pricingFingerprint(), "preview", quote.toResponse()));
+                    Map.of(
+                            "pricingFingerprint", quote.pricingFingerprint(),
+                            "preview", toPreviewResponse(quote, localization)));
         }
 
         lockAndRecheckStandardCampaigns(quote.lines());
@@ -175,7 +204,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         reserveFlashAndStock(quote.lines(), user, now);
         consumeCoupon(quote, user, order, now);
 
-        List<OrderItem> orderItems = createOrderItems(quote.lines(), order);
+        List<OrderItem> orderItems = createOrderItems(quote.lines(), order, localization);
         createAllocations(quote.lines(), orderItems, user, online);
 
         for (OrderItem orderItem : orderItems) {
@@ -363,16 +392,23 @@ public class CheckoutServiceImpl implements CheckoutService {
         couponUsageRepository.save(usage);
     }
 
-    private List<OrderItem> createOrderItems(List<QuoteLine> lines, Order order) {
+    private List<OrderItem> createOrderItems(
+            List<QuoteLine> lines,
+            Order order,
+            QuoteLocalization localization) {
         List<OrderItem> orderItems = new ArrayList<>();
         for (QuoteLine line : lines) {
             ProductVariant variant = line.variant();
             Product product = variant.getProduct();
             VariantPricing pricing = line.pricing();
+            CatalogContentLocalizationService.LocalizedProduct localizedProduct = localizedProduct(
+                    line,
+                    localization);
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setVariantId(variant.getId());
-            orderItem.setProductName(product.getName());
+            orderItem.setProductName(localizedProduct.name());
+            orderItem.setProductSlug(localizedProduct.slug());
             orderItem.setVariantName(buildVariantName(variant));
             orderItem.setSku(variant.getSku());
             orderItem.setImage(resolveItemImage(variant, product));
@@ -382,7 +418,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             orderItem.setSaleCampaignItem(pricing.campaignItem());
             if (pricing.campaignItem() != null) {
                 orderItem.setSaleCampaignCode(pricing.campaignItem().getCampaign().getCode());
-                orderItem.setSaleCampaignName(pricing.campaignItem().getCampaign().getName());
+                orderItem.setSaleCampaignName(localizedCampaignName(pricing, localization));
             }
             orderItem.setQuantity(line.item().getQuantity());
             orderItem.setSubtotal(pricing.effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())));
@@ -621,7 +657,81 @@ public class CheckoutServiceImpl implements CheckoutService {
         return value == null ? "" : value.trim();
     }
 
+    private QuoteLocalization localizeQuote(Quote quote, String localeCode) {
+        Map<Long, CatalogContentLocalizationService.LocalizedProduct> products =
+                localizationService.localizeProducts(
+                        quote.lines().stream().map(line -> line.variant().getProduct()).toList(),
+                        localeCode);
+        Map<Long, String> campaigns = localizationService.localizeCampaignNames(
+                quote.lines().stream()
+                        .map(QuoteLine::pricing)
+                        .filter(pricing -> pricing.campaignItem() != null)
+                        .map(pricing -> pricing.campaignItem().getCampaign())
+                        .toList(),
+                localeCode);
+        return new QuoteLocalization(
+                products == null ? Map.of() : products,
+                campaigns == null ? Map.of() : campaigns);
+    }
+
+    private CatalogContentLocalizationService.LocalizedProduct localizedProduct(
+            QuoteLine line,
+            QuoteLocalization localization) {
+        Product product = line.variant().getProduct();
+        return localization.products().getOrDefault(
+                product.getId(),
+                new CatalogContentLocalizationService.LocalizedProduct(product.getName(), product.getSlug()));
+    }
+
+    private String localizedCampaignName(VariantPricing pricing, QuoteLocalization localization) {
+        if (pricing.campaignItem() == null) {
+            return null;
+        }
+        var campaign = pricing.campaignItem().getCampaign();
+        return localization.campaignNames().getOrDefault(campaign.getId(), campaign.getName());
+    }
+
+    private CheckoutPreviewResponse toPreviewResponse(Quote quote, QuoteLocalization localization) {
+        return new CheckoutPreviewResponse(
+                quote.serverTime(),
+                quote.pricingFingerprint(),
+                quote.subtotal(),
+                quote.eligibleSubtotal(),
+                quote.shippingFee(),
+                quote.discountAmount(),
+                quote.finalAmount(),
+                quote.lines().stream().map(line -> {
+                    CatalogContentLocalizationService.LocalizedProduct product = localizedProduct(
+                            line,
+                            localization);
+                    String campaignName = localizedCampaignName(line.pricing(), localization);
+                    return new CheckoutPreviewItemResponse(
+                            line.variant().getId(),
+                            line.variant().getProduct().getId(),
+                            product.name(),
+                            product.slug(),
+                            line.variant().getSku(),
+                            line.item().getQuantity(),
+                            line.pricing().listPrice(),
+                            line.pricing().effectivePrice(),
+                            line.pricing().effectivePrice().multiply(
+                                    BigDecimal.valueOf(line.item().getQuantity())),
+                            line.pricing().priceSource(),
+                            line.pricing().campaignItem() == null
+                                    ? null : line.pricing().campaignItem().getId(),
+                            line.pricing().campaignItem() == null
+                                    ? null : line.pricing().campaignItem().getCampaign().getCode(),
+                            campaignName,
+                            line.pricing().toResponse(campaignName),
+                            line.pricing().priceSource() != PriceSource.FLASH_SALE);
+                }).toList());
+    }
+
     private record QuoteLine(CartItem item, ProductVariant variant, VariantPricing pricing) {}
+
+    private record QuoteLocalization(
+            Map<Long, CatalogContentLocalizationService.LocalizedProduct> products,
+            Map<Long, String> campaignNames) {}
 
     private record Quote(
             Instant serverTime,
@@ -633,35 +743,5 @@ public class CheckoutServiceImpl implements CheckoutService {
             BigDecimal eligibleSubtotal,
             BigDecimal shippingFee,
             BigDecimal discountAmount,
-            BigDecimal finalAmount) {
-
-        private CheckoutPreviewResponse toResponse() {
-            return new CheckoutPreviewResponse(
-                    serverTime,
-                    pricingFingerprint,
-                    subtotal,
-                    eligibleSubtotal,
-                    shippingFee,
-                    discountAmount,
-                    finalAmount,
-                    lines.stream().map(line -> new CheckoutPreviewItemResponse(
-                            line.variant().getId(),
-                            line.variant().getProduct().getId(),
-                            line.variant().getProduct().getName(),
-                            line.variant().getSku(),
-                            line.item().getQuantity(),
-                            line.pricing().listPrice(),
-                            line.pricing().effectivePrice(),
-                            line.pricing().effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())),
-                            line.pricing().priceSource(),
-                            line.pricing().campaignItem() == null ? null : line.pricing().campaignItem().getId(),
-                            line.pricing().campaignItem() == null
-                                    ? null : line.pricing().campaignItem().getCampaign().getCode(),
-                            line.pricing().campaignItem() == null
-                                    ? null : line.pricing().campaignItem().getCampaign().getName(),
-                            line.pricing().toResponse(),
-                            line.pricing().priceSource() != PriceSource.FLASH_SALE))
-                            .toList());
-        }
-    }
+            BigDecimal finalAmount) {}
 }

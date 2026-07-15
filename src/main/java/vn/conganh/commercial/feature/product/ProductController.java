@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,10 +21,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
+import vn.conganh.commercial.feature.product.dto.ProductTranslationsResponse;
+import vn.conganh.commercial.feature.product.dto.UpdateProductTranslationsRequest;
 import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 
 @RestController
@@ -33,6 +37,7 @@ import vn.conganh.commercial.feature.product.dto.UpdateProductRequest;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductTranslationService productTranslationService;
     private final CatalogLocaleResolver catalogLocaleResolver;
 
     @GetMapping
@@ -74,6 +79,33 @@ public class ProductController {
             @PathVariable Long id,
             @RequestBody @Valid UpdateProductRequest request) {
         return ResponseEntity.ok(ApiResponse.success(productService.updateProduct(id, request)));
+    }
+
+    @PatchMapping(path = "/{id}/status")
+    public ResponseEntity<ApiResponse<ProductResponse>> updateStatus(
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateStatusRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(productService.updateStatus(id, request)));
+    }
+
+    @GetMapping(path = "/{id}/translations")
+    public ResponseEntity<ApiResponse<ProductTranslationsResponse>> getTranslations(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(productTranslationService.getTranslations(id)));
+    }
+
+    @PutMapping(path = "/{id}/translations")
+    public ResponseEntity<ApiResponse<ProductTranslationsResponse>> updateTranslations(
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateProductTranslationsRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(productTranslationService.updateTranslations(id, request)));
+    }
+
+    @DeleteMapping(path = "/{id}/translations/{locale}")
+    public ResponseEntity<ApiResponse<Void>> deleteTranslation(
+            @PathVariable Long id,
+            @PathVariable String locale) {
+        productTranslationService.deleteTranslation(id, locale);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @DeleteMapping(path = "/{id}")

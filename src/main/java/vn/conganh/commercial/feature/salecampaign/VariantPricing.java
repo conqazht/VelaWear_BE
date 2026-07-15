@@ -18,6 +18,11 @@ public record VariantPricing(
     }
 
     public VariantPricingResponse toResponse() {
+        String campaignName = campaignItem == null ? null : campaignItem.getCampaign().getName();
+        return toResponse(campaignName);
+    }
+
+    public VariantPricingResponse toResponse(String campaignName) {
         if (campaignItem == null) {
             return new VariantPricingResponse(
                     listPrice, effectivePrice, priceSource,
@@ -33,7 +38,7 @@ public record VariantPricing(
                 campaign.getId(),
                 campaignItem.getId(),
                 campaign.getCode(),
-                campaign.getName(),
+                campaignName,
                 campaign.getStartsAt(),
                 campaign.getEndsAt(),
                 remainingQuota,

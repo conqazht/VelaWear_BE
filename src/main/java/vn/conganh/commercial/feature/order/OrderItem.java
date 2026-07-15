@@ -41,6 +41,9 @@ public class OrderItem {
     @Column(name = "product_name", nullable = false, length = 255)
     private String productName;
 
+    @Column(name = "product_slug", length = 280)
+    private String productSlug;
+
     @Column(name = "variant_name", length = 255)
     private String variantName;
 

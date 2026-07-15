@@ -8,6 +8,7 @@ public record CheckoutPreviewItemResponse(
         Long variantId,
         Long productId,
         String productName,
+        String productSlug,
         String sku,
         int quantity,
         BigDecimal listPrice,

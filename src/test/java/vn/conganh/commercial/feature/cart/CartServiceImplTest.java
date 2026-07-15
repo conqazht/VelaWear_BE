@@ -10,7 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,11 +34,18 @@ import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 import vn.conganh.commercial.feature.cart.dto.ReplaceCartItemsRequest;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
+import vn.conganh.commercial.feature.product.Product;
+import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.salecampaign.VariantPricing;
+import vn.conganh.commercial.feature.salecampaign.PriceSource;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaign;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogContentLocalizationService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Cart - CartServiceImpl")
@@ -60,6 +69,9 @@ class CartServiceImplTest {
     @Mock
     private VariantPricingService variantPricingService;
 
+    @Mock
+    private CatalogContentLocalizationService localizationService;
+
     private CartServiceImpl cartService;
 
     @BeforeEach
@@ -70,7 +82,8 @@ class CartServiceImplTest {
                 userRepository,
                 productVariantRepository,
                 productImageRepository,
-                variantPricingService);
+                variantPricingService,
+                localizationService);
     }
 
     @Test
@@ -191,6 +204,56 @@ class CartServiceImplTest {
             // Assert
             assertThat(response.id()).isEqualTo(10L);
             assertThat(response.userId()).isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("getCartById - localize product và pricing campaign theo locale")
+        void getCartById_englishLocale_returnsLocalizedContent() {
+            User user = user(1L);
+            Cart cart = cart(10L, user);
+            CartItem item = new CartItem();
+            ReflectionTestUtils.setField(item, "id", 20L);
+            item.setCart(cart);
+            item.setVariantId(30L);
+            item.setQuantity(1);
+            Product product = new Product();
+            ReflectionTestUtils.setField(product, "id", 40L);
+            product.setName("Tên Việt");
+            product.setSlug("ten-viet");
+            ProductVariant variant = new ProductVariant();
+            ReflectionTestUtils.setField(variant, "id", 30L);
+            variant.setProduct(product);
+            variant.setSku("SKU");
+            variant.setPrice(BigDecimal.valueOf(100));
+            variant.setStockQuantity(2);
+            SaleCampaign campaign = new SaleCampaign();
+            ReflectionTestUtils.setField(campaign, "id", 50L);
+            campaign.setName("Khuyến mãi");
+            SaleCampaignItem campaignItem = new SaleCampaignItem();
+            campaignItem.setCampaign(campaign);
+            campaignItem.setVariant(variant);
+            VariantPricing pricing = new VariantPricing(
+                    30L, BigDecimal.valueOf(100), BigDecimal.valueOf(80),
+                    PriceSource.STANDARD_SALE, campaignItem, null, null, 2);
+            when(cartRepository.findById(10L)).thenReturn(Optional.of(cart));
+            when(cartItemRepository.findByCartId(10L)).thenReturn(List.of(item));
+            when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(List.of(30L)))
+                    .thenReturn(List.of(variant));
+            when(variantPricingService.resolve(any(), any(), eq(1L))).thenReturn(Map.of(30L, pricing));
+            when(localizationService.localizeProducts(any(), eq("en"))).thenReturn(Map.of(
+                    40L,
+                    new CatalogContentLocalizationService.LocalizedProduct("English product", "english-product")));
+            when(localizationService.localizeCampaignNames(any(), eq("en")))
+                    .thenReturn(Map.of(50L, "English sale"));
+            when(productImageRepository.findByProductIdIn(List.of(40L))).thenReturn(List.of());
+
+            CartResponse response = cartService.getCartById(10L, "en");
+
+            assertThat(response.items()).singleElement().satisfies(responseItem -> {
+                assertThat(responseItem.productName()).isEqualTo("English product");
+                assertThat(responseItem.productSlug()).isEqualTo("english-product");
+                assertThat(responseItem.pricing().campaignName()).isEqualTo("English sale");
+            });
         }
     }
 

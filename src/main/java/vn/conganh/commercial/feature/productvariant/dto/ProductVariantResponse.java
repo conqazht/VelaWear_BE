@@ -24,6 +24,16 @@ public record ProductVariantResponse(
     }
 
     public static ProductVariantResponse fromEntity(ProductVariant variant, VariantPricing pricing) {
+        String campaignName = pricing == null || pricing.campaignItem() == null
+                ? null
+                : pricing.campaignItem().getCampaign().getName();
+        return fromEntity(variant, pricing, campaignName);
+    }
+
+    public static ProductVariantResponse fromEntity(
+            ProductVariant variant,
+            VariantPricing pricing,
+            String campaignName) {
         ProductInfo productInfo = null;
         if (variant.getProduct() != null) {
             productInfo = new ProductInfo(variant.getProduct().getId(), variant.getProduct().getName());
@@ -41,7 +51,7 @@ public record ProductVariantResponse(
                 productInfo,
                 variant.getSku(),
                 variant.getPrice(),
-                pricing == null ? null : pricing.toResponse(),
+                pricing == null ? null : pricing.toResponse(campaignName),
                 variant.getStockQuantity(),
                 colorInfo,
                 sizeInfo,

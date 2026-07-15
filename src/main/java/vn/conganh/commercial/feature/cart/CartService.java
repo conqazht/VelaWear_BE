@@ -13,13 +13,21 @@ public interface CartService {
 
     CartResponse getCartById(Long id);
 
+    CartResponse getCartById(Long id, String localeCode);
+
     CartResponse getCartByUserId(Long userId);
+
+    CartResponse getCartByUserId(Long userId, String localeCode);
 
     CartResponse createCart(CreateCartRequest request);
 
     CartResponse getMyCart(String email);
 
+    CartResponse getMyCart(String email, String localeCode);
+
     CartResponse replaceMyCartItems(String email, ReplaceCartItemsRequest request);
+
+    CartResponse replaceMyCartItems(String email, ReplaceCartItemsRequest request, String localeCode);
 
     void deleteCart(Long id);
 }

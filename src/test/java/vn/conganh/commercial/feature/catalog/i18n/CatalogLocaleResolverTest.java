@@ -47,6 +47,37 @@ class CatalogLocaleResolverTest {
     }
 
     @Test
+    @DisplayName("resolve - tôn trọng q-weight và bỏ qua q=0")
+    void resolve_acceptLanguageQuality_prefersHighestPositiveWeight() {
+        when(localeRepository.findByCodeAndEnabledTrue("vi")).thenReturn(Optional.of(locale("vi", true)));
+
+        String resolved = resolver.resolve(null, "en;q=0, vi;q=1");
+
+        assertThat(resolved).isEqualTo("vi");
+    }
+
+    @Test
+    @DisplayName("resolve - ưu tiên region có q cao rồi fallback base language")
+    void resolve_weightedRegion_fallsBackToBaseBeforeLowerWeightRange() {
+        when(localeRepository.findByCodeAndEnabledTrue("en-us")).thenReturn(Optional.empty());
+        when(localeRepository.findByCodeAndEnabledTrue("en")).thenReturn(Optional.of(locale("en", false)));
+
+        String resolved = resolver.resolve(null, "vi;q=0.5, en-US;q=0.9");
+
+        assertThat(resolved).isEqualTo("en");
+    }
+
+    @Test
+    @DisplayName("resolve - bỏ qua range malformed và q-value không hợp lệ")
+    void resolve_malformedRanges_ignoresThemAndUsesValidCandidate() {
+        when(localeRepository.findByCodeAndEnabledTrue("vi")).thenReturn(Optional.of(locale("vi", true)));
+
+        String resolved = resolver.resolve(null, "not-a-language, en;q=oops, vi;q=0.7");
+
+        assertThat(resolved).isEqualTo("vi");
+    }
+
+    @Test
     @DisplayName("resolve - fallback về locale mặc định khi locale không hỗ trợ")
     void resolve_unsupportedLocale_returnsDefaultLocale() {
         CatalogLocale vi = locale("vi", true);

@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,6 +40,12 @@ class ProductControllerTest extends AuthenticatedIntegrationTest {
     void setUp() {
         testDataFactory.seedPermissions("PRODUCT", BASE_PATH, "GET", "POST");
         testDataFactory.seedPermissions("PRODUCT", BASE_PATH + "/{id}", "DELETE", "GET", "PUT");
+        testDataFactory.seedPermissions("PRODUCT", BASE_PATH + "/{id}/status", "PATCH");
+        testDataFactory.seedPermissions("PRODUCT", BASE_PATH + "/{id}/translations", "GET", "PUT");
+        testDataFactory.seedPermissions(
+                "PRODUCT",
+                BASE_PATH + "/{id}/translations/{locale}",
+                "DELETE");
 
         adminToken = testDataFactory.jwtWithPermission();
         forbiddenToken = testDataFactory.jwtWithoutPermission();
@@ -137,6 +144,82 @@ class ProductControllerTest extends AuthenticatedIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.statusCode").value(404));
+    }
+
+    @Test
+    @DisplayName("translation API - admin có thể ghi và đọc raw bản dịch")
+    void translations_validEnglishBatch_returnsRawTranslations() throws Exception {
+        SeededEntity entity = seedEntity();
+        String slug = "english-product-" + UUID.randomUUID();
+        String body = """
+                {"translations":[{
+                  "localeCode":"en",
+                  "name":"English product",
+                  "slug":"%s",
+                  "shortDescription":"Short",
+                  "description":"Description",
+                  "material":"Cotton",
+                  "careInstruction":"Hand wash",
+                  "seoTitle":"SEO title",
+                  "seoDescription":"SEO description"
+                }]}
+                """.formatted(slug);
+
+        mockMvc.perform(put(BASE_PATH + "/" + entity.id() + "/translations")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.translations[0].localeCode").value("en"))
+                .andExpect(jsonPath("$.data.translations[0].name").value("English product"));
+
+        mockMvc.perform(get(BASE_PATH + "/" + entity.id() + "/translations")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.translations[0].slug").value(slug));
+    }
+
+    @Test
+    @DisplayName("translation API - raw translations không public")
+    void translations_missingToken_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get(BASE_PATH + "/" + MISSING_ID + "/translations"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("translation API - không cho xóa locale vi mặc định")
+    void deleteDefaultTranslation_returnsBadRequest() throws Exception {
+        SeededEntity entity = seedEntity();
+
+        mockMvc.perform(delete(BASE_PATH + "/" + entity.id() + "/translations/vi")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400));
+    }
+
+    @Test
+    @DisplayName("PATCH status - cập nhật bằng payload status riêng")
+    void updateStatus_validStatus_returnsUpdatedProduct() throws Exception {
+        SeededEntity entity = seedEntity();
+
+        mockMvc.perform(patch(BASE_PATH + "/" + entity.id() + "/status")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"INACTIVE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("INACTIVE"));
+    }
+
+    @Test
+    @DisplayName("PATCH status - từ chối status ngoài contract")
+    void updateStatus_invalidStatus_returnsBadRequest() throws Exception {
+        SeededEntity entity = seedEntity();
+
+        mockMvc.perform(patch(BASE_PATH + "/" + entity.id() + "/status")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

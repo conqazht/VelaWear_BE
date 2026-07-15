@@ -2,6 +2,7 @@ package vn.conganh.commercial.feature.product;
 
 import org.springframework.data.domain.Pageable;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
@@ -22,6 +23,8 @@ public interface ProductService {
     ProductResponse createProduct(CreateProductRequest request);
 
     ProductResponse updateProduct(Long id, UpdateProductRequest request);
+
+    ProductResponse updateStatus(Long id, UpdateStatusRequest request);
 
     void deleteProduct(Long id);
 }

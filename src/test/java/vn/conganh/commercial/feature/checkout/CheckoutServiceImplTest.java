@@ -10,6 +10,7 @@ import static org.mockito.Mockito.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,9 +31,11 @@ import vn.conganh.commercial.feature.cart.Cart;
 import vn.conganh.commercial.feature.cart.CartItem;
 import vn.conganh.commercial.feature.cart.CartItemRepository;
 import vn.conganh.commercial.feature.cart.CartRepository;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogContentLocalizationService;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutRequest;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewRequest;
 import vn.conganh.commercial.feature.checkout.dto.CheckoutResponse;
+import vn.conganh.commercial.feature.checkout.dto.CheckoutPreviewResponse;
 import vn.conganh.commercial.feature.coupon.Coupon;
 import vn.conganh.commercial.feature.coupon.CouponRepository;
 import vn.conganh.commercial.feature.coupon.CouponUsageRepository;
@@ -57,6 +60,9 @@ import vn.conganh.commercial.feature.salecampaign.SaleCampaignRepository;
 import vn.conganh.commercial.feature.salecampaign.SaleCustomerUsageRepository;
 import vn.conganh.commercial.feature.salecampaign.VariantPricing;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaign;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
 
@@ -101,6 +107,8 @@ class CheckoutServiceImplTest {
     private SaleAllocationRepository allocationRepository;
     @Mock
     private OrderResourceLifecycleService lifecycleService;
+    @Mock
+    private CatalogContentLocalizationService localizationService;
 
     @InjectMocks
     private CheckoutServiceImpl checkoutService;
@@ -122,6 +130,7 @@ class CheckoutServiceImplTest {
         product = new Product();
         ReflectionTestUtils.setField(product, "id", 1L);
         product.setName("Test Product");
+        product.setSlug("test-product");
         product.setStatus("ACTIVE");
 
         variant = new ProductVariant();
@@ -183,6 +192,144 @@ class CheckoutServiceImplTest {
                 BigDecimal.valueOf(15),
                 couponCode,
                 fingerprint);
+    }
+
+    private SaleCampaign liveCampaign(Long id) {
+        SaleCampaign campaign = new SaleCampaign();
+        ReflectionTestUtils.setField(campaign, "id", id);
+        campaign.setCode("SALE");
+        campaign.setName("Khuyến mãi");
+        campaign.setStatus(SaleCampaignStatus.PUBLISHED);
+        campaign.setStartsAt(Instant.now().minusSeconds(3600));
+        campaign.setEndsAt(Instant.now().plusSeconds(3600));
+        return campaign;
+    }
+
+    private SaleCampaignItem campaignItem(SaleCampaign campaign) {
+        SaleCampaignItem item = new SaleCampaignItem();
+        ReflectionTestUtils.setField(item, "id", 3L);
+        item.setCampaign(campaign);
+        item.setVariant(variant);
+        return item;
+    }
+
+    @Test
+    void preview_englishLocale_localizesProductNameAndSlug() {
+        when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCartId(300L)).thenReturn(List.of(cartItem));
+        when(pricingService.resolve(eq(List.of(variant)), any(Instant.class), eq(1L)))
+                .thenReturn(Map.of(1L, new VariantPricing(
+                        1L, BigDecimal.valueOf(100), BigDecimal.valueOf(80),
+                        PriceSource.BASE, null, null, null, 10)));
+        when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(List.of(1L))).thenReturn(List.of(variant));
+        when(localizationService.localizeProducts(any(), eq("en"))).thenReturn(Map.of(
+                1L,
+                new CatalogContentLocalizationService.LocalizedProduct("English product", "english-product")));
+        when(localizationService.localizeCampaignNames(any(), eq("en"))).thenReturn(Map.of());
+
+        CheckoutPreviewResponse response = checkoutService.preview(
+                new CheckoutPreviewRequest("COD", null),
+                "test@example.com",
+                "en");
+
+        assertEquals("English product", response.items().getFirst().productName());
+        assertEquals("english-product", response.items().getFirst().productSlug());
+    }
+
+    @Test
+    void checkout_priceConflict_containsLocalizedPreview() {
+        SaleCampaign campaign = liveCampaign(2L);
+        SaleCampaignItem campaignItem = campaignItem(campaign);
+        VariantPricing pricing = new VariantPricing(
+                1L, BigDecimal.valueOf(100), BigDecimal.valueOf(80),
+                PriceSource.STANDARD_SALE, campaignItem, null, null, 10);
+        when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+        when(cartRepository.findWithLockByUserId(1L)).thenReturn(Optional.of(cart));
+        when(orderRepository.findWithLockByUserIdAndCheckoutIdempotencyKey(1L, "key"))
+                .thenReturn(Optional.empty());
+        when(cartItemRepository.findByCartId(300L)).thenReturn(List.of(cartItem));
+        when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(List.of(1L))).thenReturn(List.of(variant));
+        when(pricingService.resolve(eq(List.of(variant)), any(Instant.class), eq(1L)))
+                .thenReturn(Map.of(1L, pricing));
+        when(localizationService.localizeProducts(any(), eq("en"))).thenReturn(Map.of(
+                1L,
+                new CatalogContentLocalizationService.LocalizedProduct("English product", "english-product")));
+        when(localizationService.localizeCampaignNames(any(), eq("en")))
+                .thenReturn(Map.of(2L, "English sale"));
+        CheckoutRequest staleRequest = new CheckoutRequest(
+                "Receiver", "0123456789", "Address", "COD",
+                BigDecimal.valueOf(15), null, "stale");
+
+        CodedBusinessException error = assertThrows(
+                CodedBusinessException.class,
+                () -> checkoutService.checkout(staleRequest, "test@example.com", "key", "en"));
+
+        assertEquals("PRICE_CHANGED", error.getCode());
+        CheckoutPreviewResponse preview = (CheckoutPreviewResponse) error.getDetails().get("preview");
+        assertEquals("English product", preview.items().getFirst().productName());
+        assertEquals("English sale", preview.items().getFirst().saleCampaignName());
+        assertEquals("English sale", preview.items().getFirst().pricing().campaignName());
+    }
+
+    @Test
+    void checkout_englishLocale_persistsLocalizedProductAndCampaignSnapshots() {
+        SaleCampaign campaign = liveCampaign(2L);
+        SaleCampaignItem campaignItem = campaignItem(campaign);
+        VariantPricing pricing = new VariantPricing(
+                1L, BigDecimal.valueOf(100), BigDecimal.valueOf(80),
+                PriceSource.STANDARD_SALE, campaignItem, null, null, 10);
+        when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(cart));
+        when(cartRepository.findWithLockByUserId(1L)).thenReturn(Optional.of(cart));
+        when(orderRepository.findWithLockByUserIdAndCheckoutIdempotencyKey(1L, "key"))
+                .thenReturn(Optional.empty());
+        when(cartItemRepository.findByCartId(300L)).thenReturn(List.of(cartItem));
+        when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(List.of(1L))).thenReturn(List.of(variant));
+        when(pricingService.resolve(eq(List.of(variant)), any(Instant.class), eq(1L)))
+                .thenReturn(Map.of(1L, pricing));
+        when(localizationService.localizeProducts(any(), eq("en"))).thenReturn(Map.of(
+                1L,
+                new CatalogContentLocalizationService.LocalizedProduct("English product", "english-product")));
+        when(localizationService.localizeCampaignNames(any(), eq("en")))
+                .thenReturn(Map.of(2L, "English sale"));
+        when(campaignRepository.findAllStatesWithLockByIdIn(List.of(2L))).thenReturn(List.of(campaign));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 100L);
+            return saved;
+        });
+        when(productVariantRepository.decrementStock(1L, 2)).thenReturn(1);
+        java.util.concurrent.atomic.AtomicReference<List<OrderItem>> snapshots =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(orderItemRepository.saveAll(any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            List<OrderItem> items = invocation.getArgument(0);
+            ReflectionTestUtils.setField(items.getFirst(), "id", 200L);
+            snapshots.set(items);
+            return items;
+        });
+        when(lifecycleService.confirmLockedOrder(any(Order.class))).thenReturn(true);
+        CheckoutPreviewResponse preview = checkoutService.preview(
+                new CheckoutPreviewRequest("COD", null),
+                "test@example.com",
+                "en");
+        CheckoutRequest localizedRequest = new CheckoutRequest(
+                "Receiver", "0123456789", "Address", "COD",
+                BigDecimal.valueOf(15), null, preview.pricingFingerprint());
+
+        CheckoutResponse response = checkoutService.checkout(
+                localizedRequest,
+                "test@example.com",
+                "key",
+                "en");
+
+        assertEquals("English product", snapshots.get().getFirst().getProductName());
+        assertEquals("english-product", snapshots.get().getFirst().getProductSlug());
+        assertEquals("English sale", snapshots.get().getFirst().getSaleCampaignName());
+        assertEquals("English product", response.items().getFirst().productName());
+        assertEquals("english-product", response.items().getFirst().productSlug());
+        assertEquals("English sale", response.items().getFirst().saleCampaignName());
     }
 
     // Task 5.1

@@ -6,13 +6,16 @@ import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,6 +26,7 @@ import vn.conganh.commercial.feature.cart.dto.CartFilterRequest;
 import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 import vn.conganh.commercial.feature.cart.dto.ReplaceCartItemsRequest;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 
 @RestController
 @RequestMapping("/api/v1/carts")
@@ -31,6 +35,7 @@ import vn.conganh.commercial.feature.cart.dto.ReplaceCartItemsRequest;
 public class CartController {
 
     private final CartService cartService;
+    private final CatalogLocaleResolver localeResolver;
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCarts(
@@ -40,13 +45,21 @@ public class CartController {
     }
 
     @GetMapping(path = "/{id}")
-    public ResponseEntity<ApiResponse<CartResponse>> getCart(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(cartService.getCartById(id)));
+    public ResponseEntity<ApiResponse<CartResponse>> getCart(
+            @PathVariable Long id,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+        return ResponseEntity.ok(ApiResponse.success(
+                cartService.getCartById(id, localeResolver.resolve(locale, acceptLanguage))));
     }
 
     @GetMapping(path = "/user/{userId}")
-    public ResponseEntity<ApiResponse<CartResponse>> getCartByUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(ApiResponse.success(cartService.getCartByUserId(userId)));
+    public ResponseEntity<ApiResponse<CartResponse>> getCartByUser(
+            @PathVariable Long userId,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+        return ResponseEntity.ok(ApiResponse.success(
+                cartService.getCartByUserId(userId, localeResolver.resolve(locale, acceptLanguage))));
     }
 
     @PostMapping
@@ -56,15 +69,24 @@ public class CartController {
     }
 
     @GetMapping(path = "/me")
-    public ResponseEntity<ApiResponse<CartResponse>> getMyCart(@AuthenticationPrincipal Jwt jwt) {
-        return ResponseEntity.ok(ApiResponse.success(cartService.getMyCart(jwt.getSubject())));
+    public ResponseEntity<ApiResponse<CartResponse>> getMyCart(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+        return ResponseEntity.ok(ApiResponse.success(
+                cartService.getMyCart(jwt.getSubject(), localeResolver.resolve(locale, acceptLanguage))));
     }
 
     @PutMapping(path = "/me/items")
     public ResponseEntity<ApiResponse<CartResponse>> replaceMyCartItems(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestBody @Valid ReplaceCartItemsRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(cartService.replaceMyCartItems(jwt.getSubject(), request)));
+            @RequestBody @Valid ReplaceCartItemsRequest request,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(name = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+        return ResponseEntity.ok(ApiResponse.success(cartService.replaceMyCartItems(
+                jwt.getSubject(),
+                request,
+                localeResolver.resolve(locale, acceptLanguage))));
     }
 
     @DeleteMapping(path = "/{id}")
