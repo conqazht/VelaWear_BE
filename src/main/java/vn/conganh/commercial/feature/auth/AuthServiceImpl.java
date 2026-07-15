@@ -210,8 +210,8 @@ public class AuthServiceImpl implements AuthService {
         List<String> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
+        String refreshToken = rotateRefreshToken(request.refreshToken(), user, currentSession);
         String accessToken = generateAccessToken(user.getEmail(), user.getId(), roles);
-        String refreshToken = rotateRefreshToken(request.refreshToken(), currentJti, user, currentSession);
 
         log.info("[VelaWear/Auth] - REFRESH_TOKEN: userId: {}", user.getId());
 
@@ -296,7 +296,6 @@ public class AuthServiceImpl implements AuthService {
 
     private String rotateRefreshToken(
             String currentRefreshToken,
-            String currentJti,
             User user,
             RefreshTokenSession currentSession) {
         Instant now = Instant.now();
@@ -311,14 +310,17 @@ public class AuthServiceImpl implements AuthService {
                 currentSession.deviceInfo(),
                 currentSession.ipAddress()
         ));
-        refreshTokenSessionService.rotate(currentJti, new RefreshTokenSession(
+        RefreshTokenSession replacementSession = new RefreshTokenSession(
                 newJti,
                 user.getId(),
                 refreshTokenService.hashToken(newRefreshToken),
                 currentSession.deviceInfo(),
                 currentSession.ipAddress(),
                 now,
-                expiresAt));
+                expiresAt);
+        if (!refreshTokenSessionService.rotateIfCurrent(currentSession, replacementSession)) {
+            throw new RefreshTokenSessionNotFoundException("Refresh session is expired or revoked");
+        }
         return newRefreshToken;
     }
 

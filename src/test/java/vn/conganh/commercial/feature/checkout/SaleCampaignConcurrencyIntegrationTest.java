@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -15,9 +16,19 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.aopalliance.intercept.MethodInterceptor;
+import org.aopalliance.intercept.MethodInvocation;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -85,7 +96,10 @@ import vn.conganh.commercial.util.constant.UserGender;
                 + "order_items, orders, cart_items, carts, coupons, product_images, product_variants, "
                 + "products, users RESTART IDENTITY CASCADE",
         executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
+@Import(SaleCampaignConcurrencyIntegrationTest.ContentionTestConfiguration.class)
 class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
+
+    private static final long RACE_TIMEOUT_SECONDS = 15;
 
     @Autowired CheckoutService checkoutService;
     @Autowired OrderResourceLifecycleService lifecycleService;
@@ -110,6 +124,7 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
     @Autowired CouponRepository couponRepository;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired SePayProperties sePayProperties;
+    @Autowired RepositoryContentionGate repositoryContentionGate;
 
     private User firstUser;
     private User secondUser;
@@ -117,6 +132,7 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        repositoryContentionGate.clear();
         sePayProperties.setEnabled(true);
         sePayProperties.setEnvironment("production");
         sePayProperties.setMerchantId("SP-LIVE-INTEGRATION-TEST");
@@ -304,6 +320,51 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
         assertEquals(1, orderRepository.count());
         assertEquals(1, paymentRepository.count());
         assertEquals(4, variantRepository.findById(variant.getId()).orElseThrow().getStockQuantity());
+    }
+
+    @Test
+    @DisplayName("Hai checkout SePay cùng idempotency key chỉ tạo một order và reservation")
+    void concurrentSepayCheckoutWithSameIdempotencyKey_createsOneOrderPaymentAndReservation() throws Exception {
+        ProductVariant variant = createVariant("SEPAY-IDEMPOTENT-RACE", 5);
+        SaleCampaignItem saleItem = createFlash(variant, 5, 2);
+        addCartItem(firstUser, variant, 1);
+        String fingerprint = checkoutService.preview(
+                new CheckoutPreviewRequest("SEPAY", null), firstUser.getEmail()).pricingFingerprint();
+        CheckoutRequest checkoutRequest = request("SEPAY", fingerprint);
+        repositoryContentionGate.armCart(firstUser.getId());
+
+        List<Result> results = race(
+                () -> checkoutService.checkout(
+                        checkoutRequest, firstUser.getEmail(), "sepay-concurrent-same-key"),
+                () -> checkoutService.checkout(
+                        checkoutRequest, firstUser.getEmail(), "sepay-concurrent-same-key"));
+
+        assertThat(results).allMatch(Result::success);
+        CheckoutResponse first = results.getFirst().response();
+        CheckoutResponse second = results.getLast().response();
+        assertEquals(first.orderId(), second.orderId());
+        assertEquals(first.paymentId(), second.paymentId());
+        assertThat(first.paymentInitiation()).isNotNull();
+        assertThat(second.paymentInitiation()).isEqualTo(first.paymentInitiation());
+
+        assertEquals(1, orderRepository.count());
+        assertEquals(1, orderItemRepository.count());
+        assertEquals(1, paymentRepository.count());
+        assertEquals(0, transactionRepository.count());
+        assertEquals(1, allocationRepository.count());
+        assertEquals(1, usageRepository.count());
+        assertEquals(1, inventoryLogRepository.count());
+        assertEquals(0, cartItemRepository.count());
+        assertEquals(4, variantRepository.findById(variant.getId()).orElseThrow().getStockQuantity());
+
+        SaleCampaignItem reloadedItem = campaignItemRepository.findById(saleItem.getId()).orElseThrow();
+        assertEquals(1, reloadedItem.getReservedQuantity());
+        assertEquals(0, reloadedItem.getSoldQuantity());
+        assertEquals(SaleAllocationStatus.RESERVED, allocationRepository.findAll().getFirst().getStatus());
+        SaleCustomerUsage usage = usageRepository
+                .findByCampaignItemIdAndUserId(saleItem.getId(), firstUser.getId()).orElseThrow();
+        assertEquals(1, usage.getReservedQuantity());
+        assertEquals(0, usage.getPurchasedQuantity());
     }
 
     @Test
@@ -567,6 +628,52 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
                         PaymentTransactionStatus.REFUND_PENDING);
     }
 
+    @Test
+    @DisplayName("Hai SePay IPN giống hệt nhau chỉ confirm payment và tài nguyên một lần")
+    void concurrentExactDuplicateSepayIpn_confirmsPaymentAndResourcesOnce() throws Exception {
+        ProductVariant variant = createVariant("FLASH-DUPLICATE-IPN-RACE", 2);
+        SaleCampaignItem saleItem = createFlash(variant, 2, 1);
+        addCartItem(firstUser, variant, 1);
+        String fingerprint = checkoutService.preview(
+                new CheckoutPreviewRequest("SEPAY", null), firstUser.getEmail()).pricingFingerprint();
+        CheckoutResponse checkout = checkoutService.checkout(
+                request("SEPAY", fingerprint), firstUser.getEmail(), "duplicate-ipn-race");
+        SePayIpnRequest ipn = paidIpn(checkout.orderCode(), checkout.finalAmount());
+        repositoryContentionGate.armOrder(checkout.orderCode());
+
+        raceVoid(() -> sePayService.handleIpn(ipn), () -> sePayService.handleIpn(ipn));
+
+        Order order = orderRepository.findById(checkout.orderId()).orElseThrow();
+        Payment payment = paymentRepository.findByOrderId(checkout.orderId()).orElseThrow();
+        assertEquals("PENDING", order.getStatus());
+        assertEquals("PAID", order.getPaymentStatus());
+        assertThat(order.getResourcesReleasedAt()).isNull();
+        assertEquals(PaymentStatus.SUCCESS, payment.getStatus());
+        assertEquals(ipn.transaction().transaction_id(), payment.getTransactionCode());
+        assertThat(payment.getPaidAt()).isNotNull();
+
+        assertEquals(1, orderRepository.count());
+        assertEquals(1, orderItemRepository.count());
+        assertEquals(1, paymentRepository.count());
+        assertEquals(1, transactionRepository.count());
+        assertEquals(PaymentTransactionStatus.SUCCESS,
+                transactionRepository.findAll().getFirst().getStatus());
+        assertEquals(1, allocationRepository.count());
+        assertEquals(SaleAllocationStatus.CONFIRMED,
+                allocationRepository.findAll().getFirst().getStatus());
+        assertEquals(1, usageRepository.count());
+        assertEquals(1, inventoryLogRepository.count());
+        assertEquals(1, variantRepository.findById(variant.getId()).orElseThrow().getStockQuantity());
+
+        SaleCampaignItem reloadedItem = campaignItemRepository.findById(saleItem.getId()).orElseThrow();
+        assertEquals(0, reloadedItem.getReservedQuantity());
+        assertEquals(1, reloadedItem.getSoldQuantity());
+        SaleCustomerUsage usage = usageRepository
+                .findByCampaignItemIdAndUserId(saleItem.getId(), firstUser.getId()).orElseThrow();
+        assertEquals(0, usage.getReservedQuantity());
+        assertEquals(1, usage.getPurchasedQuantity());
+    }
+
     private User createUser(String email) {
         User user = new User();
         user.setEmail(email);
@@ -655,16 +762,28 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     private List<Result> race(Callable<CheckoutResponse> first, Callable<CheckoutResponse> second) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-            Future<Result> one = executor.submit(() -> run(start, first));
-            Future<Result> two = executor.submit(() -> run(start, second));
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Result> one = executor.submit(() -> run(ready, start, first));
+            Future<Result> two = executor.submit(() -> run(ready, start, second));
+            awaitReady(ready);
             start.countDown();
-            return List.of(one.get(), two.get());
+            return List.of(
+                    one.get(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                    two.get(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
         }
     }
 
-    private Result run(CountDownLatch start, Callable<CheckoutResponse> task) throws InterruptedException {
+    private Result run(
+            CountDownLatch ready,
+            CountDownLatch start,
+            Callable<CheckoutResponse> task) throws InterruptedException {
+        ready.countDown();
         start.await();
         try {
             return new Result(true, task.call(), null);
@@ -676,39 +795,144 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     private void raceVoid(ThrowingRunnable first, ThrowingRunnable second) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-            Future<?> one = executor.submit(() -> runVoid(start, first));
-            Future<?> two = executor.submit(() -> runVoid(start, second));
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> one = executor.submit(() -> runVoid(ready, start, first));
+            Future<?> two = executor.submit(() -> runVoid(ready, start, second));
+            awaitReady(ready);
             start.countDown();
-            one.get();
-            two.get();
+            one.get(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            two.get(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (ExecutionException exception) {
             throw new AssertionError(exception.getCause());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
         }
     }
 
     private <T> List<T> raceValues(Callable<T> first, Callable<T> second) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-            Future<T> one = executor.submit(() -> runValue(start, first));
-            Future<T> two = executor.submit(() -> runValue(start, second));
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<T> one = executor.submit(() -> runValue(ready, start, first));
+            Future<T> two = executor.submit(() -> runValue(ready, start, second));
+            awaitReady(ready);
             start.countDown();
-            return List.of(one.get(), two.get());
+            return List.of(
+                    one.get(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                    two.get(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
         }
     }
 
-    private <T> T runValue(CountDownLatch start, Callable<T> task) throws Exception {
+    private <T> T runValue(
+            CountDownLatch ready,
+            CountDownLatch start,
+            Callable<T> task) throws Exception {
+        ready.countDown();
         start.await();
         return task.call();
     }
 
-    private void runVoid(CountDownLatch start, ThrowingRunnable runnable) {
+    private void runVoid(CountDownLatch ready, CountDownLatch start, ThrowingRunnable runnable) {
         try {
+            ready.countDown();
             start.await();
             runnable.run();
         } catch (Exception exception) {
             throw new RuntimeException(exception);
+        }
+    }
+
+    private void awaitReady(CountDownLatch ready) throws InterruptedException {
+        if (!ready.await(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            throw new AssertionError("Race workers did not become ready within the timeout");
+        }
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class ContentionTestConfiguration {
+
+        @Bean
+        static RepositoryContentionGate repositoryContentionGate() {
+            return new RepositoryContentionGate();
+        }
+    }
+
+    static final class RepositoryContentionGate implements BeanPostProcessor, MethodInterceptor {
+
+        private final AtomicReference<Gate> cartGate = new AtomicReference<>();
+        private final AtomicReference<Gate> orderGate = new AtomicReference<>();
+
+        void armCart(Long userId) {
+            cartGate.set(new Gate(
+                    userId,
+                    "Both checkouts did not reach the cart pessimistic-lock query"));
+        }
+
+        void armOrder(String orderCode) {
+            orderGate.set(new Gate(
+                    orderCode,
+                    "Both IPNs did not reach the order pessimistic-lock query"));
+        }
+
+        void clear() {
+            cartGate.set(null);
+            orderGate.set(null);
+        }
+
+        @Override
+        public Object postProcessAfterInitialization(Object bean, String beanName) {
+            if (!(bean instanceof CartRepository) && !(bean instanceof OrderRepository)) {
+                return bean;
+            }
+            ProxyFactory proxyFactory = new ProxyFactory(bean);
+            proxyFactory.addAdvice(this);
+            return proxyFactory.getProxy(bean.getClass().getClassLoader());
+        }
+
+        @Override
+        public Object invoke(MethodInvocation invocation) throws Throwable {
+            if ("findWithLockByUserId".equals(invocation.getMethod().getName())) {
+                awaitGate(cartGate, invocation.getArguments()[0]);
+            } else if ("findWithLockByOrderCode".equals(invocation.getMethod().getName())) {
+                awaitGate(orderGate, invocation.getArguments()[0]);
+            }
+            return invocation.proceed();
+        }
+
+        private void awaitGate(AtomicReference<Gate> reference, Object key) {
+            Gate gate = reference.get();
+            if (gate == null || !Objects.equals(gate.key(), key)) {
+                return;
+            }
+
+            gate.contenders().countDown();
+            try {
+                if (!gate.contenders().await(RACE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    throw new AssertionError(gate.timeoutMessage());
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while synchronizing race contenders", exception);
+            } finally {
+                if (gate.contenders().getCount() == 0) {
+                    reference.compareAndSet(gate, null);
+                }
+            }
+        }
+
+        private record Gate(Object key, String timeoutMessage, CountDownLatch contenders) {
+
+            private Gate(Object key, String timeoutMessage) {
+                this(key, timeoutMessage, new CountDownLatch(2));
+            }
         }
     }
 

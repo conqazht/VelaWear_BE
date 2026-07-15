@@ -1,7 +1,7 @@
 # ADR-001: Refresh Token Strategy — Cookie (SPA) + Body (Mobile)
 
 ## Status
-Accepted
+Accepted, amended 2026-07-15 with atomic refresh rotation.
 
 ## Context
 
@@ -73,6 +73,29 @@ Backend checks (in order):
 Response: same as login (new accessToken + new refreshToken + new cookie)
 ```
 
+### Atomic Rotation
+
+Redis stores the active refresh session by JWT `jti`; PostgreSQL keeps hashed audit
+rows. A refresh request first validates the JWT and the hash stored in the Redis
+session, then prepares a replacement JWT with a new `jti`.
+
+`RefreshTokenSessionService.rotateIfCurrent` uses one Redis Lua compare-and-swap:
+
+1. `GET` the old key and compare the complete serialized session with the expected snapshot.
+2. Create the replacement with `SET ... PX ... NX`.
+3. Delete the old key only after the replacement was created.
+
+The script is atomic, so two requests that both read the old session can never create
+two active successors. The winner returns the new token; the loser receives the existing
+`401 Refresh session is expired or revoked` response. PostgreSQL audit changes made by
+the losing request roll back with its transaction.
+
+The current deployment uses standalone Redis. A future Redis Cluster deployment must
+place both script keys in the same hash slot or redesign the session key layout.
+
+Concurrency behavior and runnable tests are documented in
+[`../RACE_CONDITION_TESTING_VI.md`](../RACE_CONDITION_TESTING_VI.md).
+
 ### Logout Endpoint
 ```
 POST /api/v1/auth/logout
@@ -121,11 +144,13 @@ if token is somehow compromised.
 ### Risks
 - If SPA and API are on different domains, `SameSite=Lax` may block cookies
   → Mitigation: deploy on same domain or subdomain (api.example.com + app.example.com)
-- Refresh token rotation not yet implemented
-  → Mitigation: short expiration (3 days) + plan to add rotation later
+- A database commit can theoretically fail after Redis CAS succeeds. The security-first
+  failure mode is fail-closed: the old token remains consumed and the client signs in again.
+- The current two-key Lua script targets standalone Redis, not Redis Cluster cross-slot execution.
 
 ## Files Affected
 - `config/SecurityConfig.java` — CORS + cookie config
 - `feature/auth/AuthController.java` — set/clear cookie
-- `feature/auth/AuthServiceImpl.java` — dual-source token extraction
+- `feature/auth/AuthServiceImpl.java` — issue tokens and handle rotation outcome
+- `feature/refreshtoken/RefreshTokenSessionService.java` — authoritative Redis session and Lua CAS
 - `application.yml` — token expiration config

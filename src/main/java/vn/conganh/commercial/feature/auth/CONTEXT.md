@@ -28,9 +28,15 @@ Auth exposes public endpoints under `/api/v1/auth`:
 
 When `/refresh` receives a valid refresh token:
 
-1. The old refresh token is marked `revoked = true`.
-2. A new access token is generated.
-3. A new refresh JWT is generated and stored as a hash.
-4. The new token pair is returned to the client.
+1. The active Redis session is loaded and its SHA-512 token hash is verified.
+2. The old PostgreSQL audit row is marked `revoked = true` and a new hashed row is prepared.
+3. A Redis Lua compare-and-swap atomically creates one replacement session and removes the old session.
+4. A request that loses the CAS receives the existing `401` response and its audit changes roll back.
+5. Only the CAS winner receives the new access and refresh tokens.
 
-This keeps refresh token replay risk smaller than reusing the same long-lived token.
+The Lua script compares the complete expected session, creates the successor with
+`SET ... PX ... NX`, then deletes the old key. Do not replace it with separate Redis
+commands or a process-local lock; the application may run on multiple instances.
+
+See [`docs/RACE_CONDITION_TESTING_VI.md`](../../../../../../../../docs/RACE_CONDITION_TESTING_VI.md)
+for the real Redis/PostgreSQL concurrency tests.
