@@ -33,6 +33,7 @@ V4__create_coupon_tables.sql
 V16__add_full_content_translations.sql
 V17__seed_content_management_permissions.sql
 V18__add_order_item_product_slug_snapshot.sql
+V19__seed_english_content_suggestion_permissions.sql
 ```
 
 Rules:
@@ -203,6 +204,11 @@ Quy tắc bắt buộc:
 
 Inventory và cách kiểm tra chi tiết nằm trong
 [`I18N_CATALOG_SALE_VI.md`](./I18N_CATALOG_SALE_VI.md).
+
+`V19__seed_english_content_suggestion_permissions.sql` chỉ seed ba permission
+POST tạo gợi ý English cho Product, Category và Sale Campaign rồi cấp cho
+`ADMIN`/`MANAGER`. Migration này không tạo bảng AI và không thay đổi dữ liệu
+translation; suggestion chỉ được lưu khi Admin gọi API translation hiện có.
 
 ---
 

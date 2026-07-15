@@ -158,7 +158,78 @@ nhật nội dung hiển thị. Campaign `CANCELLED`/`ENDED` là lịch sử ch�
 `end-and-clone` sao chép toàn bộ translation VI/EN sang draft mới; tên VI mới
 trong request được dùng cho bản VI của draft kế tiếp.
 
-## 4. Bật/tắt nhanh trong Admin
+## 4. Tạo gợi ý English từ nội dung VI
+
+Admin có thể dùng nút **Tạo nội dung English** trên form Product, Category hoặc
+Sale Campaign. Backend cung cấp ba API:
+
+```text
+POST /api/v1/products/translation-suggestions/en
+POST /api/v1/categories/translation-suggestions/en
+POST /api/v1/sale-campaigns/translation-suggestions/en
+```
+
+API nhận trực tiếp field VI của form nên dùng được cả trước khi entity được tạo
+và khi chỉnh sửa. Request Product gồm `model`, `name`, `shortDescription`,
+`description`, `material`, `careInstruction`, `seoTitle`, `seoDescription`.
+Category dùng `model`, `name`, `description`, `seoTitle`, `seoDescription`; Sale
+dùng `model`, `name`, `description`.
+
+`model` không bắt buộc. Nếu bỏ trống, backend dùng
+`GEMINI_DEFAULT_MODEL=gemini-3.1-flash-lite`. Danh sách cố định được phép chọn:
+
+| Model | Mục đích |
+|-------|----------|
+| `gemini-3.1-flash-lite` | Mặc định, ưu tiên chi phí thấp |
+| `gemini-3.5-flash` | Cân bằng chất lượng và tốc độ |
+| `gemini-3.1-pro-preview` | Chất lượng cao, trạng thái preview |
+
+Luồng hoạt động:
+
+1. Frontend gửi nội dung tab VI và model được chọn.
+2. Backend kiểm tra quyền, kích thước và whitelist model.
+3. Gemini trả structured JSON theo đúng field của loại nội dung.
+4. Backend validate lại độ dài và field bắt buộc rồi trả bản nháp EN.
+5. Frontend tự sinh slug EN từ English name; Admin xem lại và chủ động bấm lưu.
+
+Endpoint suggestion không nhận entity ID/version, không gọi repository
+translation và không tự lưu. Vì vậy Gemini bị tắt, hết quota hoặc trả lỗi không
+ảnh hưởng khả năng nhập EN thủ công. Response không có slug để model không được
+phép tự tạo URL. Sale Campaign vẫn áp dụng optimistic version/state guard ở API
+lưu translation hiện có.
+
+Tính năng mặc định tắt. Cấu hình local/prod chỉ ở backend:
+
+```dotenv
+ENGLISH_CONTENT_ENABLED=true
+GEMINI_API_KEY=<secret chỉ lưu trong .env hoặc secret manager>
+GEMINI_DEFAULT_MODEL=gemini-3.1-flash-lite
+ENGLISH_CONTENT_MAX_OUTPUT_TOKENS=16384
+```
+
+Không commit key thật, không chuyển key sang biến `NEXT_PUBLIC_*`, không log key
+hoặc nội dung đã gửi. `application-test.yml` luôn tắt provider để test không gọi
+Internet. Gemini `v1beta generateContent` hiện dùng structured output
+`responseMimeType=application/json` và `responseJsonSchema`; đây là payload đã
+được kiểm tra live, còn `responseFormat.text` trả `400 INVALID_ARGUMENT` trên
+endpoint/model đang dùng.
+
+Output mặc định cho phép tối đa `16384` token để đủ khoảng trống cho nội dung
+dài và thinking token. Backend chỉ chấp nhận candidate hoàn tất với
+`finishReason=STOP` (hoặc response cũ không có field này); `MAX_TOKENS` và mọi
+lý do dừng khác được trả thành `CONTENT_GENERATION_INVALID_RESPONSE`, không đưa
+bản dịch bị cắt dở lên form Admin.
+
+Mã lỗi có thể hiển thị an toàn cho Admin:
+
+- `CONTENT_GENERATION_DISABLED` (`503`): feature tắt hoặc thiếu API key.
+- `CONTENT_GENERATION_MODEL_NOT_ALLOWED` (`400`): model ngoài whitelist.
+- `CONTENT_GENERATION_INPUT_TOO_LARGE` (`400`): nội dung nguồn quá dài.
+- `CONTENT_GENERATION_RATE_LIMITED` (`429`): quota/rate limit từ Gemini.
+- `CONTENT_GENERATION_PROVIDER_ERROR` (`502`): provider không khả dụng.
+- `CONTENT_GENERATION_INVALID_RESPONSE` (`502`): output không đạt schema.
+
+## 5. Bật/tắt nhanh trong Admin
 
 Product, Category, Brand và Product Variant có endpoint
 `PATCH /api/v1/{resource}/{id}/status` với body `{ "status": "ACTIVE" }` hoặc
@@ -171,7 +242,7 @@ Product, Category, Brand và Product Variant có endpoint
   hoặc `DISCONTINUED`; các trạng thái này đi qua form cập nhật đầy đủ.
 - Guard campaign đang chạy vẫn được kiểm tra trước khi đổi Product/Variant.
 
-## 5. Development seed
+## 6. Development seed
 
 Thứ tự repeatable migration:
 
@@ -235,7 +306,7 @@ lấy giá trực tiếp từ variant rồi tính lại `orders.subtotal`, `fina
 payment. Chạy lại block order/item/payment không thêm item hoặc payment và không
 thể chạm vào bảy sale order fixture.
 
-## 6. Quy tắc khi thêm seed mới
+## 7. Quy tắc khi thêm seed mới
 
 1. Product/Category mới phải dùng base slug ổn định và thêm cả `vi`, `en` vào
    `R__5` trong cùng thay đổi.
@@ -247,7 +318,7 @@ thể chạm vào bảy sale order fixture.
 6. Không sửa migration versioned đã được chia sẻ; luôn tạo migration mới.
 7. Không dùng dữ liệu random cho fixture có acceptance test hoặc quan hệ audit.
 
-## 7. Kiểm tra
+## 8. Kiểm tra
 
 Chạy test seed trên PostgreSQL Testcontainers:
 

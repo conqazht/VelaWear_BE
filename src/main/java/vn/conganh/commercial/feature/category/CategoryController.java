@@ -23,6 +23,9 @@ import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
+import vn.conganh.commercial.feature.catalog.i18n.generation.EnglishContentSuggestionService;
+import vn.conganh.commercial.feature.catalog.i18n.generation.dto.CategoryEnglishSuggestionRequest;
+import vn.conganh.commercial.feature.catalog.i18n.generation.dto.CategoryEnglishSuggestionResponse;
 import vn.conganh.commercial.feature.category.dto.CategoryFilterRequest;
 import vn.conganh.commercial.feature.category.dto.CategoryResponse;
 import vn.conganh.commercial.feature.category.dto.CategoryTranslationsResponse;
@@ -39,6 +42,7 @@ public class CategoryController {
     private final CategoryService categoryService;
     private final CategoryTranslationService categoryTranslationService;
     private final CatalogLocaleResolver catalogLocaleResolver;
+    private final EnglishContentSuggestionService englishContentSuggestionService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getCategories(
@@ -72,6 +76,13 @@ public class CategoryController {
     public ResponseEntity<ApiResponse<CategoryResponse>> createCategory(
             @RequestBody @Valid CreateCategoryRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(categoryService.createCategory(request)));
+    }
+
+    @PostMapping(path = "/translation-suggestions/en")
+    public ResponseEntity<ApiResponse<CategoryEnglishSuggestionResponse>> suggestEnglishContent(
+            @RequestBody @Valid CategoryEnglishSuggestionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                englishContentSuggestionService.suggestCategory(request)));
     }
 
     @PutMapping(path = "/{id}")

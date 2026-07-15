@@ -23,6 +23,9 @@ import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.dto.UpdateStatusRequest;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
+import vn.conganh.commercial.feature.catalog.i18n.generation.EnglishContentSuggestionService;
+import vn.conganh.commercial.feature.catalog.i18n.generation.dto.ProductEnglishSuggestionRequest;
+import vn.conganh.commercial.feature.catalog.i18n.generation.dto.ProductEnglishSuggestionResponse;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
 import vn.conganh.commercial.feature.product.dto.ProductFilterRequest;
 import vn.conganh.commercial.feature.product.dto.ProductResponse;
@@ -39,6 +42,7 @@ public class ProductController {
     private final ProductService productService;
     private final ProductTranslationService productTranslationService;
     private final CatalogLocaleResolver catalogLocaleResolver;
+    private final EnglishContentSuggestionService englishContentSuggestionService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getProducts(
@@ -72,6 +76,13 @@ public class ProductController {
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
             @RequestBody @Valid CreateProductRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(productService.createProduct(request)));
+    }
+
+    @PostMapping(path = "/translation-suggestions/en")
+    public ResponseEntity<ApiResponse<ProductEnglishSuggestionResponse>> suggestEnglishContent(
+            @RequestBody @Valid ProductEnglishSuggestionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                englishContentSuggestionService.suggestProduct(request)));
     }
 
     @PutMapping(path = "/{id}")

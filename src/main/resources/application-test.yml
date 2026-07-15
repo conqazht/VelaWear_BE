@@ -16,6 +16,9 @@ jwt:
   refresh-token-expiration: 259200
 
 app:
+  english-content:
+    gemini:
+      enabled: false
   upload:
     base-dir: target/test-uploads
     url-prefix: /uploads

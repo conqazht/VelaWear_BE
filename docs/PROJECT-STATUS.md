@@ -1,3 +1,10 @@
+### Gợi ý nội dung English bằng Gemini
+
+- **Date/Time**: 2026-07-15 (Asia/Saigon)
+- **Summary of Changes**: Thêm ba endpoint không persistence để Admin tạo bản nháp English cho Product, Category và Sale Campaign từ field VI. Provider dùng Gemini `v1beta generateContent`, structured JSON, model whitelist và API key chỉ ở backend; response không chứa slug và Admin vẫn phải xem lại/lưu bằng API translation hiện có.
+- **Security/Configuration**: Tính năng mặc định tắt; hỗ trợ `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-3.1-pro-preview`. Flyway V19 cấp quyền tạo suggestion cho `ADMIN`/`MANAGER`; request không có token nhận 401, role thiếu quyền nhận 403.
+- **Verification Performed**: Targeted service/provider/controller suite pass 15/15. Toàn bộ `mvnw.cmd -q test` pass 622/622, không failure/error/skipped. Integration test chạy PostgreSQL/Redis Testcontainers, apply đủ 25 migration gồm V19, kiểm tra ba endpoint typed và chứng minh số row Product/Category/Sale translation không đổi sau khi gọi suggestion. Gemini live test xác nhận `responseMimeType` + `responseJsonSchema` hoạt động; `responseFormat.text` trả `400 INVALID_ARGUMENT` nên không được dùng cho adapter này.
+
 ### Nội dung VI/EN và Sale seed hoàn chỉnh
 
 - **Date/Time**: 2026-07-15
