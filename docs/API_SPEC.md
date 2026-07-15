@@ -1149,6 +1149,82 @@ từng locale; locale không tồn tại hoặc chưa bật bị từ chối.
 Response Product, Category và Sale có `translationLocales` để Admin biết entity
 đã có bản dịch nào; storefront vẫn chỉ nhận nội dung của locale đã resolve.
 
+### Gợi ý nội dung English bằng Gemini
+
+Ba endpoint dưới đây chỉ tạo bản nháp English từ nội dung VI đang có trên form;
+chúng không cần entity ID và không ghi vào database:
+
+| Method | Endpoint | Permission |
+|--------|----------|------------|
+| POST | `/api/v1/products/translation-suggestions/en` | `GENERATE_PRODUCT_ENGLISH_CONTENT` |
+| POST | `/api/v1/categories/translation-suggestions/en` | `GENERATE_CATEGORY_ENGLISH_CONTENT` |
+| POST | `/api/v1/sale-campaigns/translation-suggestions/en` | `GENERATE_SALE_CAMPAIGN_ENGLISH_CONTENT` |
+
+Các permission chỉ cấp mặc định cho `ADMIN` và `MANAGER`. Product request:
+
+```json
+{
+  "model": "gemini-3.1-flash-lite",
+  "name": "Áo thun cotton thiết yếu",
+  "shortDescription": "Áo thun cotton mềm mại.",
+  "description": "Mô tả chi tiết tiếng Việt.",
+  "material": "100% cotton",
+  "careInstruction": "Giặt máy bằng nước lạnh.",
+  "seoTitle": "Áo thun cotton thiết yếu",
+  "seoDescription": "Mô tả SEO tiếng Việt."
+}
+```
+
+Product response trong `ApiResponse.data`:
+
+```json
+{
+  "localeCode": "en",
+  "name": "Essential Cotton Tee",
+  "shortDescription": "A soft cotton tee.",
+  "description": "Detailed English description.",
+  "material": "100% cotton",
+  "careInstruction": "Machine wash cold.",
+  "seoTitle": "Essential Cotton Tee",
+  "seoDescription": "English SEO description."
+}
+```
+
+Category request/response dùng `name`, `description`, `seoTitle`,
+`seoDescription`; Sale Campaign dùng `name`, `description`. Cả ba request có
+`model` tùy chọn. Các model được whitelist:
+
+- `gemini-3.1-flash-lite` — mặc định, tiết kiệm.
+- `gemini-3.5-flash` — cân bằng.
+- `gemini-3.1-pro-preview` — chất lượng cao, preview.
+
+Response cố ý không trả `slug`. Frontend tự tạo English slug theo cách xác định
+từ English name rồi Admin xem lại. Chỉ thao tác lưu translation hiện có mới ghi
+database; vì vậy provider lỗi không ảnh hưởng luồng tạo/sửa thủ công.
+
+| Status | Code | Ý nghĩa |
+|--------|------|---------|
+| 400 | `CONTENT_GENERATION_MODEL_NOT_ALLOWED` | Model không thuộc whitelist |
+| 400 | `CONTENT_GENERATION_INPUT_TOO_LARGE` | Tổng nội dung VI vượt giới hạn |
+| 429 | `CONTENT_GENERATION_RATE_LIMITED` | Gemini trả rate limit |
+| 502 | `CONTENT_GENERATION_PROVIDER_ERROR` | Gemini lỗi hoặc không truy cập được |
+| 502 | `CONTENT_GENERATION_INVALID_RESPONSE` | JSON trả về sai schema/validation |
+| 503 | `CONTENT_GENERATION_DISABLED` | Tính năng tắt hoặc backend chưa có key |
+
+API key chỉ đọc từ `GEMINI_API_KEY` ở backend và không xuất hiện trong request
+Frontend, response hoặc log. Adapter gọi Gemini `generateContent` bằng header
+`x-goog-api-key`; structured output dùng cặp
+`generationConfig.responseMimeType=application/json` và
+`generationConfig.responseJsonSchema`. Shape này đã được kiểm tra trực tiếp với
+`v1beta`; không dùng `responseFormat.text` vì endpoint này trả
+`400 INVALID_ARGUMENT` với shape mới đó.
+
+`ENGLISH_CONTENT_MAX_OUTPUT_TOKENS` mặc định là `16384`. Backend từ chối
+candidate có `finishReason` khác `STOP` (nhưng chấp nhận response tương thích cũ
+không có field này), vì output `MAX_TOKENS` có thể là JSON hợp lệ nhưng nội dung
+đã bị cắt. Với field VI null/rỗng, response tương ứng luôn bị ép về null kể cả
+khi provider tự sinh text, để không bịa thêm thuộc tính sản phẩm/campaign.
+
 ### Admin bật/tắt nhanh trạng thái
 
 Các endpoint toggle nhận body `{ "status": "ACTIVE" }` hoặc

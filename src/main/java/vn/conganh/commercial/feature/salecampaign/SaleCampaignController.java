@@ -24,6 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
+import vn.conganh.commercial.feature.catalog.i18n.generation.EnglishContentSuggestionService;
+import vn.conganh.commercial.feature.catalog.i18n.generation.dto.SaleCampaignEnglishSuggestionRequest;
+import vn.conganh.commercial.feature.catalog.i18n.generation.dto.SaleCampaignEnglishSuggestionResponse;
 import vn.conganh.commercial.feature.salecampaign.dto.CreateSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.EndAndCloneSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.IncreaseQuotaRequest;
@@ -43,6 +46,7 @@ public class SaleCampaignController {
     private final SaleCampaignService service;
     private final SaleCampaignTranslationService translationService;
     private final CatalogLocaleResolver localeResolver;
+    private final EnglishContentSuggestionService englishContentSuggestionService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getAll(
@@ -90,6 +94,13 @@ public class SaleCampaignController {
             @AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.created(service.create(request, subject(jwt))));
+    }
+
+    @PostMapping("/translation-suggestions/en")
+    public ResponseEntity<ApiResponse<SaleCampaignEnglishSuggestionResponse>> suggestEnglishContent(
+            @RequestBody @Valid SaleCampaignEnglishSuggestionRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                englishContentSuggestionService.suggestSaleCampaign(request)));
     }
 
     @PutMapping("/{id}")
