@@ -1,7 +1,6 @@
 package vn.conganh.commercial.feature.salecampaign;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 
 public record VariantPricing(

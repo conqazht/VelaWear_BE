@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.checkout;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
@@ -23,6 +24,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import vn.conganh.commercial.AbstractIntegrationTest;
 import vn.conganh.commercial.exception.CodedBusinessException;
+import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.feature.cart.Cart;
 import vn.conganh.commercial.feature.cart.CartItem;
 import vn.conganh.commercial.feature.cart.CartItemRepository;
@@ -61,7 +63,10 @@ import vn.conganh.commercial.feature.salecampaign.SaleCampaignRepository;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignType;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignService;
+import vn.conganh.commercial.feature.salecampaign.dto.CreateSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.IncreaseQuotaRequest;
+import vn.conganh.commercial.feature.salecampaign.dto.SaleCampaignItemRequest;
+import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleDisplayRequest;
 import vn.conganh.commercial.feature.salecampaign.SaleCustomerUsage;
 import vn.conganh.commercial.feature.salecampaign.SaleCustomerUsageRepository;
@@ -365,6 +370,36 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void createCampaign_withWhitespaceAndCaseVariantOfExistingCode_isRejectedWithoutInserting() {
+        ProductVariant variant = createVariant("FLASH-CODE-CREATE", 5);
+        saleCampaignService.create(campaignRequest("FLASH-CODE", variant), firstUser.getEmail());
+        long campaignCount = campaignRepository.count();
+
+        assertThatThrownBy(() -> saleCampaignService.create(
+                        campaignRequest("  flash-code  ", variant), firstUser.getEmail()))
+                .isExactlyInstanceOf(InvalidRequestException.class)
+                .hasMessage("Sale campaign code already exists");
+
+        assertThat(campaignRepository.count()).isEqualTo(campaignCount);
+    }
+
+    @Test
+    void updateCampaign_withWhitespaceAndCaseVariantOfAnotherCode_isRejectedWithoutChangingCampaigns() {
+        ProductVariant variant = createVariant("FLASH-CODE-UPDATE", 5);
+        saleCampaignService.create(campaignRequest("EXISTING-CODE", variant), firstUser.getEmail());
+        var target = saleCampaignService.create(campaignRequest("TARGET-CODE", variant), firstUser.getEmail());
+        long campaignCount = campaignRepository.count();
+
+        assertThatThrownBy(() -> saleCampaignService.update(
+                        target.id(), updateCampaignRequest(target.version(), "  existing-code  ", variant)))
+                .isExactlyInstanceOf(InvalidRequestException.class)
+                .hasMessage("Sale campaign code already exists");
+
+        assertThat(campaignRepository.count()).isEqualTo(campaignCount);
+        assertThat(campaignRepository.findById(target.id()).orElseThrow().getCode()).isEqualTo("TARGET-CODE");
+    }
+
+    @Test
     void productParentInOutstandingCampaign_cannotBeDeleted() {
         ProductVariant variant = createVariant("FLASH-PARENT-GUARD", 5);
         createFlash(variant, 5, 1);
@@ -569,6 +604,34 @@ class SaleCampaignConcurrencyIntegrationTest extends AbstractIntegrationTest {
         campaign.replaceItems(List.of(item));
         campaignRepository.saveAndFlush(campaign);
         return item;
+    }
+
+    private CreateSaleCampaignRequest campaignRequest(String code, ProductVariant variant) {
+        Instant startsAt = Instant.now().plusSeconds(3600);
+        return new CreateSaleCampaignRequest(
+                code,
+                "Campaign code normalization test",
+                null,
+                null,
+                SaleCampaignType.FLASH,
+                startsAt,
+                startsAt.plusSeconds(3600),
+                List.of(new SaleCampaignItemRequest(
+                        variant.getId(), new BigDecimal("80.00"), 5, 1)));
+    }
+
+    private UpdateSaleCampaignRequest updateCampaignRequest(long version, String code, ProductVariant variant) {
+        CreateSaleCampaignRequest request = campaignRequest(code, variant);
+        return new UpdateSaleCampaignRequest(
+                version,
+                request.code(),
+                request.name(),
+                request.description(),
+                request.bannerUrl(),
+                request.type(),
+                request.startsAt(),
+                request.endsAt(),
+                request.items());
     }
 
     private Cart addCartItem(User user, ProductVariant variant, int quantity) {

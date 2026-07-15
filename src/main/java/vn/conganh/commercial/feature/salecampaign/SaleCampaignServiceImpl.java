@@ -334,7 +334,7 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
 
     private void applyCampaign(SaleCampaign campaign, String code, String name, String description, String bannerUrl,
                                SaleCampaignType type, Instant startsAt, Instant endsAt) {
-        campaign.setCode(code.trim().toUpperCase(Locale.ROOT));
+        campaign.setCode(normalizeCode(code));
         campaign.setName(name.trim());
         campaign.setDescription(description);
         campaign.setBannerUrl(bannerUrl);
@@ -350,11 +350,15 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
     }
 
     private void validateUniqueCode(String code, Long currentId) {
-        campaignRepository.findDetailedByCode(code).ifPresent(existing -> {
+        campaignRepository.findDetailedByCode(normalizeCode(code)).ifPresent(existing -> {
             if (currentId == null || !existing.getId().equals(currentId)) {
                 throw new InvalidRequestException("Sale campaign code already exists");
             }
         });
+    }
+
+    private String normalizeCode(String code) {
+        return code.trim().toUpperCase(Locale.ROOT);
     }
 
     private void verifyVersion(SaleCampaign campaign, long expected) {
