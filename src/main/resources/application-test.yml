@@ -16,6 +16,10 @@ jwt:
   refresh-token-expiration: 259200
 
 app:
+  security:
+    hmac-secret: test-security-hmac-secret-for-integration-tests-32-bytes-minimum
+    rate-limit:
+      enabled: false
   english-content:
     gemini:
       enabled: false

@@ -28,8 +28,10 @@ import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.OAuth2ExchangeRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
+import vn.conganh.commercial.feature.auth.dto.SecurityChangeResponse;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
+import vn.conganh.commercial.security.ClientIpResolver;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -42,6 +44,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtProperties jwtProperties;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(
@@ -51,7 +54,7 @@ public class AuthController {
         TokenResponse response = authService.authenticate(
                 request,
                 httpRequest.getHeader("User-Agent"),
-                extractClientIp(httpRequest));
+                clientIpResolver.resolve(httpRequest).address());
         setRefreshTokenCookie(httpRequest, httpResponse, response.refreshToken());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -73,7 +76,7 @@ public class AuthController {
         TokenResponse response = authService.exchangeOAuth2Code(
                 request,
                 httpRequest.getHeader("User-Agent"),
-                extractClientIp(httpRequest));
+                clientIpResolver.resolve(httpRequest).address());
         setRefreshTokenCookie(httpRequest, httpResponse, response.refreshToken());
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -108,7 +111,7 @@ public class AuthController {
             HttpServletResponse httpResponse) {
         String token = extractRefreshTokenFromCookie(httpRequest);
         authService.logout(new RefreshTokenRequest(token));
-        clearRefreshTokenCookie(httpResponse);
+        clearRefreshTokenCookie(httpRequest, httpResponse);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
@@ -119,27 +122,49 @@ public class AuthController {
 
     @PostMapping("/forgot-password/reset")
     @Operation(summary = "Reset password using verified OTP", description = "Resets the user's password if they have successfully verified the FORGOT_PASSWORD OTP.")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody @Valid ForgotPasswordResetRequest request) {
+    public ResponseEntity<ApiResponse<SecurityChangeResponse>> resetPassword(
+            @RequestBody @Valid ForgotPasswordResetRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         authService.resetPassword(request);
-        return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), null, "Password reset successfully", java.time.LocalDateTime.now()));
+        clearRefreshTokenCookie(httpRequest, httpResponse);
+        return ResponseEntity.ok(new ApiResponse<>(
+                HttpStatus.OK.value(),
+                SecurityChangeResponse.revokedAndReauthenticationRequired(),
+                "Password reset successfully",
+                java.time.LocalDateTime.now()));
     }
 
     @PutMapping("/me/email")
     @Operation(summary = "Change email using verified OTP", description = "Changes the authenticated user's email if they have successfully verified the CHANGE_EMAIL OTP for the new email.")
-    public ResponseEntity<ApiResponse<Void>> changeEmail(
+    public ResponseEntity<ApiResponse<SecurityChangeResponse>> changeEmail(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestBody @Valid ChangeEmailRequest request) {
+            @RequestBody @Valid ChangeEmailRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         authService.changeEmail(jwt.getSubject(), request);
-        return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), null, "Email updated successfully", java.time.LocalDateTime.now()));
+        clearRefreshTokenCookie(httpRequest, httpResponse);
+        return ResponseEntity.ok(new ApiResponse<>(
+                HttpStatus.OK.value(),
+                SecurityChangeResponse.revokedAndReauthenticationRequired(),
+                "Email updated successfully",
+                java.time.LocalDateTime.now()));
     }
 
     @PutMapping("/me/password")
     @Operation(summary = "Set or change password", description = "Sets a first password for OAuth-only users, or changes an existing password after checking the current password.")
-    public ResponseEntity<ApiResponse<Void>> changePassword(
+    public ResponseEntity<ApiResponse<SecurityChangeResponse>> changePassword(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestBody @Valid ChangePasswordRequest request) {
+            @RequestBody @Valid ChangePasswordRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         authService.changePassword(jwt.getSubject(), request);
-        return ResponseEntity.ok(new ApiResponse<>(HttpStatus.OK.value(), null, "Password updated successfully", java.time.LocalDateTime.now()));
+        clearRefreshTokenCookie(httpRequest, httpResponse);
+        return ResponseEntity.ok(new ApiResponse<>(
+                HttpStatus.OK.value(),
+                SecurityChangeResponse.revokedAndReauthenticationRequired(),
+                "Password updated successfully",
+                java.time.LocalDateTime.now()));
     }
 
     private String extractRefreshToken(HttpServletRequest httpRequest) {
@@ -173,24 +198,17 @@ public class AuthController {
                         + "; Max-Age=" + jwtProperties.refreshTokenExpiration());
     }
 
-    private void clearRefreshTokenCookie(HttpServletResponse response) {
+    private void clearRefreshTokenCookie(HttpServletRequest request, HttpServletResponse response) {
         response.setHeader("Set-Cookie",
                 REFRESH_TOKEN_COOKIE_NAME + "=; Max-Age=0; Path=" + COOKIE_PATH
-                        + "; HttpOnly; SameSite=Lax");
+                        + "; HttpOnly; SameSite=Lax"
+                        + secureCookieAttribute(request));
     }
 
     private String secureCookieAttribute(HttpServletRequest request) {
-        if (request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"))) {
+        if (request.isSecure()) {
             return "; Secure";
         }
         return "";
-    }
-
-    private String extractClientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return forwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

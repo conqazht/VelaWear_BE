@@ -84,7 +84,7 @@ public class CookieOAuth2AuthorizationRequestRepository
                 .append(COOKIE_PATH)
                 .append("; HttpOnly; SameSite=Lax; Max-Age=")
                 .append(maxAgeSeconds);
-        if (request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"))) {
+        if (request.isSecure()) {
             header.append("; Secure");
         }
         return header.toString();

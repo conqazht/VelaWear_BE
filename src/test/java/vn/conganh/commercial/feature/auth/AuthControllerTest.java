@@ -11,8 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import com.nimbusds.jwt.SignedJWT;
 import java.text.ParseException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,8 @@ import vn.conganh.commercial.feature.refreshtoken.RefreshTokenRepository;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.security.SecurityHmacService;
+import vn.conganh.commercial.util.constant.OtpPurpose;
 import vn.conganh.commercial.util.constant.UserGender;
 
 @Transactional
@@ -59,6 +63,24 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private SecurityHmacService securityHmacService;
+
+    private String seedOtpProof(String email, OtpPurpose purpose, Long actorUserId) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        String actor = purpose == OtpPurpose.CHANGE_EMAIL ? String.valueOf(actorUserId) : "-";
+        String scopeDigest = securityHmacService.hash(
+                "otp-scope",
+                purpose.name() + '\n' + normalizedEmail + '\n' + actor);
+        String proofToken = securityHmacService.randomToken();
+        String proofDigest = securityHmacService.hash("otp-proof", proofToken);
+        String proofKey = "auth:otp:v2:proof:" + proofDigest;
+        Duration ttl = Duration.ofMinutes(5);
+        redisTemplate.opsForValue().set(proofKey, scopeDigest, ttl);
+        redisTemplate.opsForValue().set("auth:otp:v2:proof-active:" + scopeDigest, proofKey, ttl);
+        return proofToken;
+    }
 
     @Nested
     @DisplayName("Happy path")
@@ -94,16 +116,16 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
         @DisplayName("POST /auth/register - 201: đăng ký user thành công và gắn role USER")
         void register_validRequest_returnsCreatedUserAndAssignsUserRole() throws Exception {
             // Arrange
+            String proof = seedOtpProof(
+                    "auth.register@velawear.local", OtpPurpose.REGISTER, null);
             RegisterRequest request = new RegisterRequest(
                     "Register User",
                     "auth.register@velawear.local",
                     "Password123!",
                     LocalDate.of(2000, 1, 1),
                     null,
-                    UserGender.OTHER);
-
-            // Seed verified marker in Redis
-            redisTemplate.opsForValue().set("auth:otp:verified:REGISTER:auth.register@velawear.local", "true", 5, java.util.concurrent.TimeUnit.MINUTES);
+                    UserGender.OTHER,
+                    proof);
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/register")
@@ -308,7 +330,8 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                     "1234567",
                     LocalDate.of(2000, 1, 1),
                     null,
-                    UserGender.OTHER);
+                    UserGender.OTHER,
+                    "x".repeat(43));
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/register")
@@ -352,7 +375,8 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                     "Password123!",
                     LocalDate.of(2000, 1, 1),
                     null,
-                    UserGender.OTHER);
+                    UserGender.OTHER,
+                    "x".repeat(43));
             long userCountBefore = userRepository.count();
 
             // Act & Assert
@@ -439,7 +463,8 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                     "Password123!",
                     LocalDate.of(2000, 1, 1),
                     null,
-                    UserGender.OTHER);
+                    UserGender.OTHER,
+                    "x".repeat(43));
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/register")
@@ -447,7 +472,7 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.statusCode").value(400))
-                    .andExpect(jsonPath("$.message").value("Email address has not been verified with OTP."));
+                    .andExpect(jsonPath("$.code").value("OTP_PROOF_INVALID_OR_EXPIRED"));
         }
 
         @Test
@@ -455,16 +480,15 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
         void register_verifiedEmail_success() throws Exception {
             // Arrange
             String email = "verified-register@velawear.local";
+            String proof = seedOtpProof(email, OtpPurpose.REGISTER, null);
             RegisterRequest request = new RegisterRequest(
                     "New User",
                     email,
                     "Password123!",
                     LocalDate.of(2000, 1, 1),
                     null,
-                    UserGender.OTHER);
-
-            // Seed verified marker in Redis
-            redisTemplate.opsForValue().set("auth:otp:verified:REGISTER:" + email, "true", 5, java.util.concurrent.TimeUnit.MINUTES);
+                    UserGender.OTHER,
+                    proof);
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/register")
@@ -474,8 +498,9 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                     .andExpect(jsonPath("$.statusCode").value(201))
                     .andExpect(jsonPath("$.data.email").value(email));
 
-            // Verify marker consumed
-            assertThat(redisTemplate.hasKey("auth:otp:verified:REGISTER:" + email)).isFalse();
+            // Proof is single-use and removed by the final action.
+            assertThat(redisTemplate.hasKey(
+                    "auth:otp:v2:proof:" + securityHmacService.hash("otp-proof", proof))).isFalse();
         }
 
         @Test
@@ -485,7 +510,8 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
             userRepository.save(user("unverified-forgot@velawear.local", "OldPassword123!"));
             ForgotPasswordResetRequest request = new ForgotPasswordResetRequest(
                     "unverified-forgot@velawear.local",
-                    "NewPassword123!");
+                    "NewPassword123!",
+                    "x".repeat(43));
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/forgot-password/reset")
@@ -493,7 +519,7 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.statusCode").value(400))
-                    .andExpect(jsonPath("$.message").value("Email address has not been verified with OTP."));
+                    .andExpect(jsonPath("$.code").value("OTP_PROOF_INVALID_OR_EXPIRED"));
         }
 
         @Test
@@ -502,12 +528,11 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
             // Arrange
             String email = "verified-forgot@velawear.local";
             userRepository.save(user(email, "OldPassword123!"));
+            String proof = seedOtpProof(email, OtpPurpose.FORGOT_PASSWORD, null);
             ForgotPasswordResetRequest request = new ForgotPasswordResetRequest(
                     email,
-                    "NewPassword123!");
-
-            // Seed verified marker in Redis
-            redisTemplate.opsForValue().set("auth:otp:verified:FORGOT_PASSWORD:" + email, "true", 5, java.util.concurrent.TimeUnit.MINUTES);
+                    "NewPassword123!",
+                    proof);
 
             // Act & Assert
             mockMvc.perform(post("/api/v1/auth/forgot-password/reset")
@@ -515,10 +540,12 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.statusCode").value(200))
-                    .andExpect(jsonPath("$.message").value("Password reset successfully"));
+                    .andExpect(jsonPath("$.message").value("Password reset successfully"))
+                    .andExpect(jsonPath("$.data.allSessionsRevoked").value(true))
+                    .andExpect(jsonPath("$.data.reauthenticationRequired").value(true));
 
-            // Verify marker consumed
-            assertThat(redisTemplate.hasKey("auth:otp:verified:FORGOT_PASSWORD:" + email)).isFalse();
+            assertThat(redisTemplate.hasKey(
+                    "auth:otp:v2:proof:" + securityHmacService.hash("otp-proof", proof))).isFalse();
 
             // Verify user password updated by attempting login
             LoginRequest loginRequest = new LoginRequest(email, "NewPassword123!");
@@ -536,12 +563,10 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
             String newEmail = "new-change@velawear.local";
             User savedUser = userRepository.save(user(currentEmail, "Password123!"));
 
-            // Seed verified marker in Redis for the new email
-            redisTemplate.opsForValue().set("auth:otp:verified:CHANGE_EMAIL:" + newEmail, "true", 5, java.util.concurrent.TimeUnit.MINUTES);
-
             // Generate user token
             String token = tokenWithRoles(currentEmail, savedUser.getId(), List.of("ROLE_USER"));
-            ChangeEmailRequest request = new ChangeEmailRequest(newEmail);
+            String proof = seedOtpProof(newEmail, OtpPurpose.CHANGE_EMAIL, savedUser.getId());
+            ChangeEmailRequest request = new ChangeEmailRequest(newEmail, proof);
 
             // Act & Assert
             mockMvc.perform(put("/api/v1/auth/me/email")
@@ -550,10 +575,12 @@ class AuthControllerTest extends AuthenticatedIntegrationTest {
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.statusCode").value(200))
-                    .andExpect(jsonPath("$.message").value("Email updated successfully"));
+                    .andExpect(jsonPath("$.message").value("Email updated successfully"))
+                    .andExpect(jsonPath("$.data.allSessionsRevoked").value(true))
+                    .andExpect(jsonPath("$.data.reauthenticationRequired").value(true));
 
-            // Verify marker consumed
-            assertThat(redisTemplate.hasKey("auth:otp:verified:CHANGE_EMAIL:" + newEmail)).isFalse();
+            assertThat(redisTemplate.hasKey(
+                    "auth:otp:v2:proof:" + securityHmacService.hash("otp-proof", proof))).isFalse();
 
             // Verify database updated
             User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();

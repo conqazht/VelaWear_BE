@@ -53,12 +53,18 @@ spring:
 
 server:
   port: ${SERVER_PORT}
+  forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:NONE}
+  tomcat:
+    remoteip:
+      internal-proxies: "${TRUSTED_PROXY_REGEX:(?!)}"
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       probes:
@@ -86,6 +92,88 @@ payment:
     cancel-url: ${SEPAY_CANCEL_URL:}
 
 app:
+  security:
+    hmac-secret: ${SECURITY_HMAC_SECRET:development-only-security-hmac-secret-change-before-production}
+    rate-limit:
+      enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+      otp:
+        request-cooldown: ${OTP_REQUEST_COOLDOWN:60s}
+        max-attempts: ${OTP_MAX_ATTEMPTS:5}
+        attempts-lock: ${OTP_ATTEMPTS_LOCK:10m}
+      policies:
+        otp-request:
+          dimensions:
+            ip:
+              - { limit: 20, window: 10m }
+              - { limit: 100, window: 24h }
+            global:
+              - { limit: 300, window: 1m }
+            recipient-purpose:
+              - { limit: 1, window: "${OTP_REQUEST_COOLDOWN:60s}" }
+              - { limit: 5, window: 15m }
+              - { limit: 10, window: 24h }
+            recipient:
+              - { limit: 15, window: 24h }
+            ip-recipient:
+              - { limit: 3, window: 15m }
+            user:
+              - { limit: 5, window: 1h }
+        otp-verify:
+          dimensions:
+            ip:
+              - { limit: 30, window: 10m }
+              - { limit: 100, window: 1h }
+            global:
+              - { limit: 600, window: 1m }
+        login:
+          dimensions:
+            ip:
+              - { limit: 30, window: 5m }
+              - { limit: 100, window: 1h }
+            global:
+              - { limit: 600, window: 1m }
+            account:
+              - { limit: 10, window: 15m }
+            ip-account:
+              - { limit: 5, window: 15m }
+        register-reset:
+          dimensions:
+            ip:
+              - { limit: 20, window: 1h }
+            global:
+              - { limit: 300, window: 1m }
+        sensitive-change:
+          dimensions:
+            ip:
+              - { limit: 30, window: 1h }
+            global:
+              - { limit: 300, window: 1m }
+            user:
+              - { limit: 5, window: 1h }
+        refresh:
+          dimensions:
+            ip:
+              - { limit: 120, window: 1m }
+            global:
+              - { limit: 1000, window: 1m }
+            session:
+              - { limit: 30, window: 1m }
+        oauth-exchange:
+          dimensions:
+            ip:
+              - { limit: 30, window: 10m }
+            global:
+              - { limit: 300, window: 1m }
+        auth-session:
+          dimensions:
+            ip:
+              - { limit: 300, window: 1m }
+            global:
+              - { limit: 2000, window: 1m }
+            user:
+              - { limit: 120, window: 1m }
+            session:
+              - { limit: 120, window: 1m }
   english-content:
     gemini:
       enabled: ${ENGLISH_CONTENT_ENABLED:false}
@@ -102,9 +190,7 @@ app:
     login-code-ttl-seconds: ${OAUTH2_LOGIN_CODE_TTL_SECONDS:120}
   otp:
     ttl-seconds: 300
-    cooldown-seconds: 60
-    max-attempts: 5
-    verified-ttl-seconds: 300
+    proof-ttl-seconds: 300
   upload:
     base-dir: ./uploads
     url-prefix: /uploads

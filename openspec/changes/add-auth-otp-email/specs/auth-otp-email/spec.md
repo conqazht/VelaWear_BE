@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-07-16):** Các requirement tạo/consume verified-marker trong
+> file này không còn normative. Requirement hiện hành nằm ở
+> `openspec/changes/harden-otp-auth-v1/specs/otp-auth-hardening/spec.md`.
+
 ## ADDED Requirements
 
 ### Requirement: OTP Email Request

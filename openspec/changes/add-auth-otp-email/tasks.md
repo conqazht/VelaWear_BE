@@ -1,3 +1,6 @@
+> **SUPERSEDED (2026-07-16):** Checklist này ghi lại implementation OTP v1. Change
+> `harden-otp-auth-v1` thay verified-marker và mở rộng năm lớp Auth/OTP security.
+
 ## 1. Email Provider Setup
 
 - [x] 1.1 Add Resend configuration properties and environment variables to application config and `.env.example`

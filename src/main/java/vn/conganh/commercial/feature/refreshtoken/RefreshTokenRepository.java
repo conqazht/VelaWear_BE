@@ -15,6 +15,16 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     long deleteByUserIdAndRevokedTrue(Long userId);
 
+    @Modifying(flushAutomatically = true)
+    @Transactional
+    @Query("""
+            update RefreshToken r
+            set r.revoked = true
+            where r.user.id = :userId
+              and r.revoked = false
+            """)
+    int revokeAllByUserId(Long userId);
+
     @Modifying
     @Transactional
     // Bulk delete rẻ hơn việc load từng token entity rồi xóa từng bản ghi.

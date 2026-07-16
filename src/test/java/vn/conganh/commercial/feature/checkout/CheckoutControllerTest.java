@@ -1,7 +1,6 @@
 package vn.conganh.commercial.feature.checkout;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -59,7 +58,6 @@ class CheckoutControllerTest {
     void setUpSecurity() {
         when(permissionAuthorizationManager.authorize(any(), any())).thenReturn(new AuthorizationDecision(true));
         when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(false);
-        when(tokenBlacklistService.getRoleUpdateTimestamp(anyLong())).thenReturn(null);
     }
 
     // Task 5.7
@@ -99,7 +97,9 @@ class CheckoutControllerTest {
                 """;
 
         mockMvc.perform(post("/api/v1/checkout")
-                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")))
+                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")
+                                .claim("userId", 1L)
+                                .claim("securityVersion", 0L)))
                         .header("Idempotency-Key", "checkout-test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -124,7 +124,9 @@ class CheckoutControllerTest {
                 """;
 
         mockMvc.perform(post("/api/v1/checkout")
-                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")))
+                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")
+                                .claim("userId", 1L)
+                                .claim("securityVersion", 0L)))
                         .header("Idempotency-Key", "validation-test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -147,7 +149,9 @@ class CheckoutControllerTest {
                 """;
 
         mockMvc.perform(post("/api/v1/checkout")
-                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")))
+                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")
+                                .claim("userId", 1L)
+                                .claim("securityVersion", 0L)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -161,7 +165,9 @@ class CheckoutControllerTest {
         doNothing().when(checkoutService).cancelOrder(1L, "test@example.com");
 
         mockMvc.perform(post("/api/v1/checkout/{orderId}/cancel", 1L)
-                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com"))))
+                        .with(jwt().jwt(jwt -> jwt.subject("test@example.com")
+                                .claim("userId", 1L)
+                                .claim("securityVersion", 0L))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCode").value(200));
     }

@@ -30,6 +30,19 @@ public record RegisterRequest(
         String avatar,
 
         @NotNull(message = "Gender is required")
-        UserGender gender
+        UserGender gender,
+
+        @NotBlank(message = "OTP proof token is required")
+        @Size(min = 32, max = 512, message = "OTP proof token is invalid")
+        String otpProofToken
 ) {
+    public RegisterRequest(
+            String fullName,
+            String email,
+            String password,
+            LocalDate birthDate,
+            String avatar,
+            UserGender gender) {
+        this(fullName, email, password, birthDate, avatar, gender, null);
+    }
 }

@@ -6,15 +6,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
+import vn.conganh.commercial.TestDataFactory;
 
 @Transactional
 @TestPropertySource(properties = {
@@ -28,6 +29,9 @@ import vn.conganh.commercial.AuthenticatedIntegrationTest;
 class FileControllerTest extends AuthenticatedIntegrationTest {
 
     private static final String ENDPOINT = "/api/v1/files";
+
+    @Autowired
+    private TestDataFactory testDataFactory;
 
     @Nested
     @DisplayName("Upload file")
@@ -113,7 +117,7 @@ class FileControllerTest extends AuthenticatedIntegrationTest {
     }
 
     private String noAccessToken() {
-        return tokenWithRoles("no-access@velawear.local", 999_999L, List.of("ROLE_NO_ACCESS"));
+        return testDataFactory.jwtWithoutPermission();
     }
 
     private byte[] jpegBytes() {
