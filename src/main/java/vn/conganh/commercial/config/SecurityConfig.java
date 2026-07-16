@@ -97,6 +97,7 @@ public class SecurityConfig {
                                 "/api/v1/products",
                                 "/api/v1/products/*",
                                 "/api/v1/products/slug/*",
+                                "/api/v1/storefront/products",
                                 "/api/v1/categories",
                                 "/api/v1/categories/*",
                                 "/api/v1/categories/slug/*",
@@ -111,8 +112,10 @@ public class SecurityConfig {
                                 "/api/v1/auth/me",
                                 "/api/v1/auth/me/email",
                                 "/api/v1/auth/me/password",
+                                "/api/v1/reviews/me",
                                 "/api/v1/wishlists/me",
                                 "/api/v1/wishlists/me/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/reviews").authenticated()
                         .anyRequest().access(permissionAuthorizationManager))
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(endpoint -> endpoint

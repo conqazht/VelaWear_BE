@@ -2,7 +2,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 5MB
-      max-request-size: 6MB
+      max-request-size: 26MB
   jpa:
     hibernate:
       ddl-auto: validate
@@ -35,7 +35,6 @@ app:
     allowed-folders:
       - avatars
       - products
-      - reviews
 
 springdoc:
   api-docs:

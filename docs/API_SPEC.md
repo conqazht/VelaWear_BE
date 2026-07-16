@@ -3,6 +3,7 @@
 > All endpoints return `ApiResponse<T>` wrapper.
 > Update this file whenever endpoints change.
 > Sale Campaign design, state machine và race-condition notes: [SALE_CAMPAIGN_BACKEND.md](./SALE_CAMPAIGN_BACKEND.md).
+> Storefront Catalog, effective pricing và verified review: [STOREFRONT_CATALOG_UX_BACKEND_VI.md](./STOREFRONT_CATALOG_UX_BACKEND_VI.md).
 > OTP/Auth hardening, Redis invariants và trusted-proxy notes: [OTP_SECURITY_FLOW_VI.md](./OTP_SECURITY_FLOW_VI.md).
 
 ---
@@ -44,6 +45,9 @@ Public endpoints:
 | GET | `/login/oauth2/code/google` | Google OAuth2 callback managed by Spring Security |
 | GET | `/api/v1/sales` | List published, non-ended STANDARD/FLASH campaigns; phase is returned per row |
 | GET | `/api/v1/sales/{code}` | Public campaign detail and pricing |
+| GET | `/api/v1/storefront/products` | Storefront search, facets, effective-price sort and one-based pagination |
+| GET | `/api/v1/reviews/product/{productId}` | Public product reviews; no private order/user IDs |
+| GET | `/api/v1/reviews/product/{productId}/summary` | Public review summary and star distribution |
 | GET | `/actuator/health` | Health check |
 | GET | `/actuator/info` | Build/application information |
 | GET | `/v3/api-docs/**` | OpenAPI docs |
@@ -202,7 +206,7 @@ Filter behavior:
 - Invalid enum values, malformed dates, and `from > to` ranges return `400 Bad Request`.
 - Soft-deleted rows are always excluded for users, brands, categories, products, and product variants.
 - Path-scoped list endpoints enforce the path id; a conflicting query id returns `400 Bad Request`.
-- Sorting is delegated to Spring `Pageable`; there is no custom `sortBy` or `sortDir` parser.
+- Sorting của các list API quản trị được delegated cho Spring `Pageable`; riêng storefront catalog và public review dùng enum whitelist được mô tả bên dưới.
 
 Supported filters:
 
@@ -229,6 +233,9 @@ Supported filters:
 | `GET /reviews/user/{userId}` | Same as `/reviews`, but `userId` is enforced from the path |
 | `GET /reviews/order/{orderId}` | Same as `/reviews`, but `orderId` is enforced from the path |
 | `GET /reviews/order-item/{orderItemId}` | Same as `/reviews`, but `orderItemId` is enforced from the path |
+| `GET /reviews/product/{productId}` | `rating` (1–5), `sort` (`newest`, `oldest`, `rating-high`, `rating-low`); `page` 1-based, default `size=10` |
+| `GET /reviews/me` | `orderId` tùy chọn; luôn scope theo JWT principal |
+| `GET /storefront/products` | `q`, `categorySlugs`, `colorIds`, `sizeIds`, `minPrice`, `maxPrice`, `sort`, `page`, `size`, `locale` |
 | `GET /wishlists` | `userId`, `productId`, `createdFrom`, `createdTo` |
 
 ---
@@ -1137,6 +1144,37 @@ Soft archive product by setting `status = ARCHIVED` and `deleted_at = now`.
 
 ---
 
+## 6.1 Storefront Catalog Implemented
+
+### GET /api/v1/storefront/products Public
+
+Endpoint này tách biệt với `/products` quản trị. Chỉ Product, Category và Product
+Variant `ACTIVE`, chưa soft-delete được trả về. Màu, size và khoảng giá phải khớp
+trên cùng variant; OR trong cùng facet và AND giữa các facet.
+
+| Query | Contract |
+|---|---|
+| `q` | tối đa 120 ký tự |
+| `categorySlugs` | CSV hoặc repeated slug list |
+| `colorIds`, `sizeIds` | CSV hoặc repeated positive ID list |
+| `minPrice`, `maxPrice` | inclusive, không âm, min không lớn hơn max |
+| `sort` | `featured`, `newest`, `price-asc`, `price-desc` |
+| `page`, `size` | 1-based; mặc định 1/12; size tối đa 60 |
+| `locale` | query, rồi `Accept-Language`, rồi `vi` |
+
+```http
+GET /api/v1/storefront/products?categorySlugs=ao,ao-khoac&colorIds=1,2&sizeIds=3,4&minPrice=300000&maxPrice=1800000&sort=price-asc&page=1&size=12
+```
+
+`data` có dạng `{result, meta, facets}`. `facets` gồm `categories`, `colors`,
+`sizes`, `priceRange`; count là số Product distinct. Giá filter/sort/response lấy
+từ `VariantPricingService` và trả chi tiết trong `ProductResponse.pricing`.
+
+Tài liệu contract, thuật toán và response đầy đủ xem
+[STOREFRONT_CATALOG_UX_BACKEND_VI.md](./STOREFRONT_CATALOG_UX_BACKEND_VI.md).
+
+---
+
 ## 7. Files Implemented
 
 ### POST /files
@@ -1184,7 +1222,38 @@ Client uses the returned `fileName` to update the related entity, for example `a
 
 ---
 
-## 7.1 Locale và nội dung động
+## 7.1 Verified Product Reviews Implemented
+
+### GET /api/v1/reviews/product/{productId} Public
+
+Nhận `rating`, public sort whitelist, `page` 1-based và `size` mặc định 10. Service
+giới hạn size tối đa 100. Item dùng `PublicReviewResponse`, không trả `userId`,
+`orderId`, `orderCode` hoặc `orderItemId`.
+
+### GET /api/v1/reviews/product/{productId}/summary Public
+
+Trả `{total, averageRating, ratingCounts}`; `ratingCounts` luôn đủ key 1–5.
+
+### GET /api/v1/reviews/me Bearer
+
+Nhận `orderId` tùy chọn và luôn ép User theo JWT subject. Response giàu thông tin
+đơn hàng chỉ dành cho principal hiện tại.
+
+### POST /api/v1/reviews Bearer
+
+`Content-Type: multipart/form-data`, part `review` là JSON
+`{orderItemId, rating, comment}`, part `images` tùy chọn và lặp tối đa 5 lần.
+Mỗi ảnh tối đa 5 MB, chỉ JPG/JPEG/PNG/WebP. OrderItem phải thuộc principal,
+Order phải `COMPLETED`; duplicate trả `409 REVIEW_ALREADY_EXISTS` và đơn chưa
+hoàn tất trả `409 REVIEW_ORDER_NOT_COMPLETED`.
+
+File dùng UUID, ghi `.tmp` rồi atomic move vào `/uploads/reviews`. Generic
+`POST /files` từ chối `folder=reviews`. Chi tiết rollback/cleanup và error contract:
+[STOREFRONT_CATALOG_UX_BACKEND_VI.md](./STOREFRONT_CATALOG_UX_BACKEND_VI.md).
+
+---
+
+## 7.2 Locale và nội dung động
 
 Các API hiển thị Product, Category, Product Variant, Sale, Cart và Checkout resolve
 đúng một locale theo thứ tự:
@@ -1490,9 +1559,12 @@ Sale Campaign; there is no standalone `salePrice` field.
 | DELETE | `/payments/{id}` | Delete payment |
 | GET | `/reviews` | List reviews |
 | GET | `/reviews/user/{userId}` | List reviews by user |
+| GET | `/reviews/product/{productId}` | List public product reviews with rating/sort/page |
+| GET | `/reviews/product/{productId}/summary` | Get public rating summary |
+| GET | `/reviews/me` | List current principal reviews, optional `orderId` |
 | GET | `/reviews/order/{orderId}` | List reviews by order |
 | GET | `/reviews/order-item/{orderItemId}` | List reviews by order item |
-| POST | `/reviews` | Create review |
+| POST | `/reviews` | Create verified review using multipart JSON and optional images |
 
 ### Sale Campaign Admin
 
@@ -1781,6 +1853,7 @@ Flash quota.
 | DELETE | `/categories/{id}` | Bearer | Implemented | Delete category |
 | GET | `/products` | Bearer | Implemented | List products |
 | GET | `/products/{id}` | Bearer | Implemented | Get product |
+| GET | `/api/v1/storefront/products` | Public | Implemented | Search/filter/sort products with effective price and facets |
 | POST | `/products` | Bearer | Implemented | Create product |
 | PUT | `/products/{id}` | Bearer | Implemented | Update product |
 | DELETE | `/products/{id}` | Bearer | Implemented | Soft archive product |
@@ -1854,7 +1927,10 @@ Flash quota.
 | GET | `/reviews/user/{userId}` | Bearer | Implemented | List reviews by user |
 | GET | `/reviews/order/{orderId}` | Bearer | Implemented | List reviews by order |
 | GET | `/reviews/order-item/{orderItemId}` | Bearer | Implemented | List reviews by order item |
-| POST | `/reviews` | Bearer | Implemented | Create review |
+| GET | `/reviews/product/{productId}` | Public | Implemented | Public filtered/sorted product reviews |
+| GET | `/reviews/product/{productId}/summary` | Public | Implemented | Public review summary and star distribution |
+| GET | `/reviews/me` | Bearer | Implemented | Principal-scoped review list, optional order filter |
+| POST | `/reviews` | Bearer | Implemented | Create verified review with optional multipart images |
 | POST | `/api/v1/checkout/preview` | Bearer | Implemented | Authoritative checkout pricing preview |
 | POST | `/api/v1/checkout` | Bearer | Implemented | Idempotent checkout and Sale reservation |
 | POST | `/api/v1/checkout/{orderId}/cancel` | Bearer | Implemented | Cancel and release/reverse resources |

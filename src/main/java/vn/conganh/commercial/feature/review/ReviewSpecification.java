@@ -22,7 +22,11 @@ public final class ReviewSpecification {
 
             if (filter != null) {
                 FilterSpecifications.addEquals(predicates, cb, from.get("user").get("id"), filter.userId());
-                FilterSpecifications.addEquals(predicates, cb, from.get("orderItem").get("order").get("id"), filter.orderId());
+                FilterSpecifications.addEquals(
+                        predicates,
+                        cb,
+                        from.get("orderItem").get("order").get("id"),
+                        filter.orderId());
                 FilterSpecifications.addEquals(predicates, cb, from.get("orderItem").get("id"), filter.orderItemId());
                 
                 if (filter.productId() != null) {

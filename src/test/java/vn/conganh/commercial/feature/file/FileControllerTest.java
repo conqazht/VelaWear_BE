@@ -77,6 +77,18 @@ class FileControllerTest extends AuthenticatedIntegrationTest {
         }
 
         @Test
+        @DisplayName("POST /api/v1/files - 400: không cho upload trực tiếp vào folder reviews")
+        void upload_reviewsFolder_returnsBadRequest() throws Exception {
+            mockMvc.perform(multipart(ENDPOINT)
+                            .file(imageFile("review.jpg", "image/jpeg", jpegBytes()))
+                            .param("folder", "reviews")
+                            .header("Authorization", "Bearer " + adminToken()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message")
+                            .value("Review images must be uploaded through the review endpoint"));
+        }
+
+        @Test
         @DisplayName("POST /api/v1/files - 400: tu choi request thieu file")
         void upload_missingFile_returnsBadRequestApiResponse() throws Exception {
             // Act & Assert

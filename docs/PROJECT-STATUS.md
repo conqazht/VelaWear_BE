@@ -64,6 +64,44 @@
 
 # Project Status
 
+## 2026-07-16 — Storefront Catalog UX và verified review
+
+### Completed
+
+- Thêm public `GET /api/v1/storefront/products` cho Collection/Search với `q`,
+  multi-category/color/size, effective-price range, bốn storefront sort, page
+  1-based và category/color/size/price facets.
+- Giữ invariant color + size + effective price trên cùng ACTIVE variant; OR trong
+  một facet, AND giữa các facet. Result, filter và sort dùng
+  `VariantPricingService` cho Base/Standard/Flash, quota và customer limit.
+- Thêm review summary, public filtered/sorted review page, principal-scoped
+  `/reviews/me` và `POST /reviews` multipart gắn JWT.
+- Tạo review chỉ cho owned OrderItem của Order `COMPLETED`; public DTO không lộ ID
+  user/order/order item; duplicate race được đổi thành
+  `409 REVIEW_ALREADY_EXISTS`.
+- Ảnh review dùng UUID, validate extension/MIME/signature, ghi tạm + atomic move,
+  rollback cleanup và scheduled orphan cleanup sau 24 giờ. Generic `/files` chặn
+  upload trực tiếp vào folder `reviews`.
+- Không thay đổi schema và không thêm Flyway migration.
+
+### Documentation
+
+- Thêm [STOREFRONT_CATALOG_UX_BACKEND_VI.md](./STOREFRONT_CATALOG_UX_BACKEND_VI.md)
+  và đồng bộ `API_SPEC.md`, Product/Review context, filter strategy và README.
+- OpenSpec change: `complete-storefront-catalog-ux`.
+
+### Verification coverage
+
+- Catalog coverage: CSV/list binding, anonymous access, page 1-based, same-variant,
+  Base/Standard/Flash effective price, featured/newest/price sort, facet counts và
+  seed integration.
+- Review coverage: JWT principal, privacy DTO, summary/filter/sort,
+  `COMPLETED`/foreign/duplicate race, UUID atomic storage, rollback, MIME/signature
+  và orphan cleanup.
+- Bàn giao ngày 2026-07-16: targeted catalog/review suite pass `50/50`;
+  `mvnw.cmd clean verify` pass `648/648` và đóng gói JAR thành công; strict OpenSpec,
+  `git diff --check`, quét link Markdown nội bộ và UTF-8 đều đạt.
+
 ## 2026-06-30
 
 ### Completed

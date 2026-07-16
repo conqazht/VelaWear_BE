@@ -6,43 +6,37 @@ import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.review.Review;
 
-public record ReviewResponse(
+public record PublicReviewResponse(
         Long id,
-        Long userId,
         String userName,
-        Long orderId,
-        String orderCode,
-        Long orderItemId,
-        String productName,
         Long productId,
+        String productName,
         String productSlug,
         String variantName,
         Short rating,
         String comment,
         List<String> images,
+        boolean verifiedPurchase,
         Instant createdAt
 ) {
 
-    public static ReviewResponse fromEntity(
+    public static PublicReviewResponse fromEntity(
             Review review,
             ProductVariant variant,
             List<String> images) {
         Product product = variant == null ? null : variant.getProduct();
 
-        return new ReviewResponse(
+        return new PublicReviewResponse(
                 review.getId(),
-                review.getUser().getId(),
                 review.getUser().getFullName(),
-                review.getOrderItem().getOrder().getId(),
-                review.getOrderItem().getOrder().getOrderCode(),
-                review.getOrderItem().getId(),
-                review.getOrderItem().getProductName(),
                 product == null ? null : product.getId(),
+                review.getOrderItem().getProductName(),
                 product == null ? review.getOrderItem().getProductSlug() : product.getSlug(),
                 review.getOrderItem().getVariantName(),
                 review.getRating(),
                 review.getComment(),
                 images == null ? List.of() : List.copyOf(images),
+                "COMPLETED".equalsIgnoreCase(review.getOrderItem().getOrder().getStatus()),
                 review.getCreatedAt());
     }
 }

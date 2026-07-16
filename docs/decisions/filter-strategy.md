@@ -139,7 +139,7 @@ public class ProductService {
 
 ```java
 @RestController
-@RequestMapping("/api/products")
+@RequestMapping("/api/v1/products")
 public class ProductController {
 
     private final ProductService productService;
@@ -154,7 +154,7 @@ public class ProductController {
         @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         ResultPaginationDTO result = productService.filter(filter, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", result));
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }
 ```
@@ -165,13 +165,13 @@ public class ProductController {
 
 ```
 # Filter đơn giản
-GET /api/products?name=iphone&status=ACTIVE
+GET /api/v1/products?name=iphone&status=ACTIVE
 
 # Range filter
-GET /api/products?priceFrom=100&priceTo=500&createdFrom=2024-01-01
+GET /api/v1/product-variants?priceFrom=100&priceTo=500&createdFrom=2024-01-01
 
 # Kết hợp + phân trang
-GET /api/products?name=samsung&status=ACTIVE&page=0&size=10&sortBy=price&sortDir=asc
+GET /api/v1/products?name=samsung&status=ACTIVE&page=1&size=10&sort=createdAt,desc
 ```
 
 ---
@@ -201,3 +201,45 @@ CREATE INDEX idx_product_name_text ON products USING gin(to_tsvector('english', 
 | Client tự build filter | RSQL Parser |
 | Auto-suggest / typeahead | Redis cache + prefix index |
 | Report/analytics query | Native query hoặc jOOQ |
+
+---
+
+## 7. Ngoại lệ có chủ đích: Storefront Catalog
+
+Ngày cập nhật: **2026-07-16**<br>
+OpenSpec change: **`complete-storefront-catalog-ux`**
+
+`GET /api/v1/storefront/products` không dùng `ProductSpecification` + entity
+`Pageable` như list quản trị. Lý do là result, facets và sort đều phụ thuộc giá
+hiệu lực của **cùng Product Variant** sau khi chạy `VariantPricingService`, gồm
+Base, Standard Sale, Flash Sale, quota và giới hạn theo khách hàng.
+
+Thiết kế hiện tại:
+
+1. `StorefrontCatalogLoader` nạp snapshot chỉ gồm Product/Category/Variant
+   `ACTIVE`, chưa soft-delete, rồi resolve pricing theo batch.
+2. `StorefrontCatalogFilterEngine` áp dụng `q`, OR trong cùng facet và AND giữa
+   category/color/size/price.
+3. Color, size và effective price được kiểm tra trên cùng `Offer`; không ghép các
+   variant khác nhau.
+4. Khi tính count cho một facet, engine bỏ qua chính nhóm facet đó nhưng giữ các
+   nhóm còn lại. Count là Product distinct.
+5. Sort dùng whitelist `featured|newest|price-asc|price-desc`, không chuyển chuỗi
+   storefront thành property của entity.
+6. Sort toàn bộ candidate trước, sau đó cắt page 1-based; mặc định 12, tối đa 60.
+
+Ví dụ đúng contract:
+
+```http
+GET /api/v1/storefront/products?categorySlugs=ao,ao-khoac&colorIds=1,2&sizeIds=3,4&minPrice=300000&maxPrice=1800000&sort=price-asc&page=1&size=12
+```
+
+Không gửi `sort=price`; Product không có property đại diện cho effective price.
+Giá hiển thị/filter/sort phải cùng lấy từ `VariantPricingService`.
+
+Snapshot in-memory phù hợp seed hiện tại khoảng 100 Product. Khi dữ liệu tăng,
+phải đo P95 và heap trước; nếu cần đẩy query xuống PostgreSQL thì vẫn phải giữ test
+same-variant, cross-facet count và effective-price sort.
+
+Chi tiết đầy đủ:
+[Storefront Catalog UX — Backend](../STOREFRONT_CATALOG_UX_BACKEND_VI.md).

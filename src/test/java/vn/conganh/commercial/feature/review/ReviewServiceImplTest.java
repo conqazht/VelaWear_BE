@@ -3,13 +3,15 @@ package vn.conganh.commercial.feature.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -18,33 +20,43 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.exception.CodedBusinessException;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
-import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.review.dto.CreateReviewRequest;
 import vn.conganh.commercial.feature.review.dto.ReviewResponse;
+import vn.conganh.commercial.feature.review.dto.ReviewSummaryResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Review - ReviewServiceImpl")
+@SuppressWarnings("unchecked")
 class ReviewServiceImplTest {
+
+    private static final String USER_EMAIL = "user1@example.com";
 
     @Mock
     private ReviewRepository reviewRepository;
+
+    @Mock
+    private ReviewImageRepository reviewImageRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -53,7 +65,10 @@ class ReviewServiceImplTest {
     private OrderItemRepository orderItemRepository;
 
     @Mock
-    private ProductVariantRepository productVariantRepository;
+    private ReviewResponseAssembler reviewResponseAssembler;
+
+    @Mock
+    private ReviewImageStorage reviewImageStorage;
 
     private ReviewServiceImpl reviewService;
 
@@ -61,9 +76,11 @@ class ReviewServiceImplTest {
     void setUp() {
         reviewService = new ReviewServiceImpl(
                 reviewRepository,
+                reviewImageRepository,
                 userRepository,
                 orderItemRepository,
-                productVariantRepository);
+                reviewResponseAssembler,
+                reviewImageStorage);
     }
 
     @Nested
@@ -71,160 +88,259 @@ class ReviewServiceImplTest {
     class CreateReview {
 
         @Test
-        @DisplayName("createReview - tạo review thành công cho item thuộc order đã hoàn thành")
-        void createReview_validRequest_returnsReviewResponse() {
-            // Arrange
+        @DisplayName("createReview - dùng principal và tạo review cho đơn đã hoàn thành")
+        void createReview_validPrincipal_returnsReviewResponse() {
             User user = user(1L);
             OrderItem orderItem = orderItem(20L, order(10L, user, "COMPLETED"));
-            CreateReviewRequest request = new CreateReviewRequest(1L, 20L, (short) 5, "Good product");
-            when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+            CreateReviewRequest request = new CreateReviewRequest(20L, (short) 5, " Good product ");
+            ReviewResponse expected = response(100L);
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(user));
             when(orderItemRepository.findById(20L)).thenReturn(Optional.of(orderItem));
             when(reviewRepository.existsByUserIdAndOrderItemId(1L, 20L)).thenReturn(false);
-            when(reviewRepository.save(any(Review.class))).thenAnswer(invocation -> {
+            when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(invocation -> {
                 Review review = invocation.getArgument(0);
                 ReflectionTestUtils.setField(review, "id", 100L);
                 return review;
             });
+            when(reviewImageStorage.store(anyList())).thenReturn(List.of());
+            when(reviewResponseAssembler.toAdminResponse(any(Review.class))).thenReturn(expected);
 
-            // Act
-            ReviewResponse response = reviewService.createReview(request);
+            ReviewResponse response = reviewService.createReview(USER_EMAIL, request, List.of());
 
-            // Assert
-            assertThat(response.id()).isEqualTo(100L);
-            assertThat(response.userId()).isEqualTo(1L);
-            assertThat(response.orderItemId()).isEqualTo(20L);
-            assertThat(response.productName()).isEqualTo("Classic Shirt");
-            assertThat(response.rating()).isEqualTo((short) 5);
-            verify(reviewRepository).save(argThat(review ->
-                    review.getUser().equals(user) && review.getOrderItem().equals(orderItem)));
+            assertThat(response).isEqualTo(expected);
+            ArgumentCaptor<Review> reviewCaptor = ArgumentCaptor.forClass(Review.class);
+            verify(reviewRepository).saveAndFlush(reviewCaptor.capture());
+            assertThat(reviewCaptor.getValue().getUser()).isEqualTo(user);
+            assertThat(reviewCaptor.getValue().getComment()).isEqualTo("Good product");
         }
 
         @Test
-        @DisplayName("createReview - không gọi save khi order item không thuộc user")
-        void createReview_orderItemBelongsToAnotherUser_throwsInvalidRequestExceptionAndDoesNotSave() {
-            // Arrange
+        @DisplayName("createReview - lưu URL ảnh sau khi ghi file bằng UUID")
+        void createReview_withImage_persistsReviewImage() {
+            User user = user(1L);
+            OrderItem orderItem = orderItem(20L, order(10L, user, "COMPLETED"));
+            Review saved = review(100L, user, orderItem);
+            MockMultipartFile image = new MockMultipartFile(
+                    "images", "review.jpg", "image/jpeg", jpegBytes());
+            StoredReviewImage storedImage = new StoredReviewImage(
+                    "/uploads/reviews/uuid.jpg", Path.of("uuid.jpg"));
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(user));
+            when(orderItemRepository.findById(20L)).thenReturn(Optional.of(orderItem));
+            when(reviewRepository.saveAndFlush(any(Review.class))).thenReturn(saved);
+            when(reviewImageStorage.store(List.of(image))).thenReturn(List.of(storedImage));
+            when(reviewResponseAssembler.toAdminResponse(saved)).thenReturn(response(100L));
+
+            reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 5, "Good"),
+                    List.of(image));
+
+            ArgumentCaptor<List<ReviewImage>> imagesCaptor = ArgumentCaptor.forClass(List.class);
+            verify(reviewImageRepository).saveAllAndFlush(imagesCaptor.capture());
+            assertThat(imagesCaptor.getValue()).singleElement().satisfies(savedImage -> {
+                assertThat(savedImage.getReview()).isEqualTo(saved);
+                assertThat(savedImage.getImage()).isEqualTo("/uploads/reviews/uuid.jpg");
+            });
+        }
+
+        @Test
+        @DisplayName("createReview - xóa file khi lưu review_images thất bại")
+        void createReview_imagePersistenceFails_deletesStoredFiles() {
+            User user = user(1L);
+            OrderItem orderItem = orderItem(20L, order(10L, user, "COMPLETED"));
+            Review saved = review(100L, user, orderItem);
+            StoredReviewImage storedImage = new StoredReviewImage(
+                    "/uploads/reviews/uuid.jpg", Path.of("uuid.jpg"));
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(user));
+            when(orderItemRepository.findById(20L)).thenReturn(Optional.of(orderItem));
+            when(reviewRepository.saveAndFlush(any(Review.class))).thenReturn(saved);
+            when(reviewImageStorage.store(anyList())).thenReturn(List.of(storedImage));
+            when(reviewImageRepository.saveAllAndFlush(anyList())).thenThrow(new IllegalStateException("DB failed"));
+
+            assertThatThrownBy(() -> reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 5, "Good"),
+                    List.of(new MockMultipartFile("images", "review.jpg", "image/jpeg", jpegBytes()))))
+                    .isInstanceOf(IllegalStateException.class);
+            verify(reviewImageStorage).delete(List.of(storedImage));
+        }
+
+        @Test
+        @DisplayName("createReview - 404 khi order item thuộc người khác")
+        void createReview_orderItemBelongsToAnotherUser_throwsNotFound() {
             User requestUser = user(1L);
             User orderUser = user(2L);
-            CreateReviewRequest request = new CreateReviewRequest(1L, 20L, (short) 5, "Good product");
-            when(userRepository.findById(1L)).thenReturn(Optional.of(requestUser));
-            when(orderItemRepository.findById(20L)).thenReturn(Optional.of(orderItem(20L, order(10L, orderUser, "COMPLETED"))));
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(requestUser));
+            when(orderItemRepository.findById(20L))
+                    .thenReturn(Optional.of(orderItem(20L, order(10L, orderUser, "COMPLETED"))));
 
-            // Act & Assert
-            assertThatThrownBy(() -> reviewService.createReview(request))
-                    .isInstanceOf(InvalidRequestException.class)
-                    .hasMessageContaining("does not belong");
-            verify(reviewRepository, never()).save(any());
+            assertThatThrownBy(() -> reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 5, "Good"),
+                    List.of()))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(reviewRepository, never()).saveAndFlush(any());
         }
 
         @Test
-        @DisplayName("createReview - không gọi save khi order chưa hoàn thành")
-        void createReview_orderNotCompleted_throwsInvalidRequestExceptionAndDoesNotSave() {
-            // Arrange
+        @DisplayName("createReview - 409 khi order chưa hoàn thành")
+        void createReview_orderNotCompleted_throwsConflict() {
             User user = user(1L);
-            CreateReviewRequest request = new CreateReviewRequest(1L, 20L, (short) 5, "Good product");
-            when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-            when(orderItemRepository.findById(20L)).thenReturn(Optional.of(orderItem(20L, order(10L, user, "PENDING"))));
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(user));
+            when(orderItemRepository.findById(20L))
+                    .thenReturn(Optional.of(orderItem(20L, order(10L, user, "PENDING"))));
 
-            // Act & Assert
-            assertThatThrownBy(() -> reviewService.createReview(request))
-                    .isInstanceOf(InvalidRequestException.class)
-                    .hasMessageContaining("completed");
-            verify(reviewRepository, never()).save(any());
+            assertThatThrownBy(() -> reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 5, "Good"),
+                    List.of()))
+                    .isInstanceOfSatisfying(CodedBusinessException.class, exception -> {
+                        assertThat(exception.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                        assertThat(exception.getCode()).isEqualTo("REVIEW_ORDER_NOT_COMPLETED");
+                    });
         }
 
         @Test
-        @DisplayName("createReview - không gọi save khi rating ngoài khoảng 1 đến 5")
-        void createReview_invalidRating_throwsInvalidRequestExceptionAndDoesNotSave() {
-            // Arrange
+        @DisplayName("createReview - 409 khi review đã tồn tại")
+        void createReview_duplicateReview_throwsConflict() {
             User user = user(1L);
-            CreateReviewRequest request = new CreateReviewRequest(1L, 20L, (short) 6, "Good product");
-            when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-            when(orderItemRepository.findById(20L)).thenReturn(Optional.of(orderItem(20L, order(10L, user, "COMPLETED"))));
-
-            // Act & Assert
-            assertThatThrownBy(() -> reviewService.createReview(request))
-                    .isInstanceOf(InvalidRequestException.class)
-                    .hasMessageContaining("between 1 and 5");
-            verify(reviewRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("createReview - không gọi save khi review cho order item đã tồn tại")
-        void createReview_duplicateOrderItemReview_throwsInvalidRequestExceptionAndDoesNotSave() {
-            // Arrange
-            User user = user(1L);
-            CreateReviewRequest request = new CreateReviewRequest(1L, 20L, (short) 5, "Good product");
-            when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-            when(orderItemRepository.findById(20L)).thenReturn(Optional.of(orderItem(20L, order(10L, user, "COMPLETED"))));
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(user));
+            when(orderItemRepository.findById(20L))
+                    .thenReturn(Optional.of(orderItem(20L, order(10L, user, "COMPLETED"))));
             when(reviewRepository.existsByUserIdAndOrderItemId(1L, 20L)).thenReturn(true);
 
-            // Act & Assert
-            assertThatThrownBy(() -> reviewService.createReview(request))
-                    .isInstanceOf(InvalidRequestException.class)
-                    .hasMessageContaining("already exists");
-            verify(reviewRepository, never()).save(any());
+            assertThatThrownBy(() -> reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 5, "Good"),
+                    List.of()))
+                    .isInstanceOfSatisfying(CodedBusinessException.class, exception ->
+                            assertThat(exception.getCode()).isEqualTo("REVIEW_ALREADY_EXISTS"));
         }
 
         @Test
-        @DisplayName("createReview - ném ResourceNotFoundException khi order item không tồn tại")
-        void createReview_missingOrderItem_throwsResourceNotFoundException() {
-            // Arrange
-            CreateReviewRequest request = new CreateReviewRequest(1L, 99L, (short) 5, "Good product");
-            when(userRepository.findById(1L)).thenReturn(Optional.of(user(1L)));
-            when(orderItemRepository.findById(99L)).thenReturn(Optional.empty());
+        @DisplayName("createReview - chuyển unique-constraint race thành 409")
+        void createReview_concurrentDuplicate_throwsConflict() {
+            User user = user(1L);
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(user));
+            when(orderItemRepository.findById(20L))
+                    .thenReturn(Optional.of(orderItem(20L, order(10L, user, "COMPLETED"))));
+            when(reviewRepository.saveAndFlush(any(Review.class)))
+                    .thenThrow(new DataIntegrityViolationException("uq_reviews_user_order_item"));
 
-            // Act & Assert
-            assertThatThrownBy(() -> reviewService.createReview(request))
-                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 5, "Good"),
+                    List.of()))
+                    .isInstanceOfSatisfying(CodedBusinessException.class, exception -> {
+                        assertThat(exception.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                        assertThat(exception.getCode()).isEqualTo("REVIEW_ALREADY_EXISTS");
+                    });
+        }
+
+        @Test
+        @DisplayName("createReview - 400 khi rating hoặc comment không hợp lệ")
+        void createReview_invalidFields_throwsBadRequest() {
+            assertThatThrownBy(() -> reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 6, "Good"),
+                    List.of()))
+                    .isInstanceOf(InvalidRequestException.class);
+            assertThatThrownBy(() -> reviewService.createReview(
+                    USER_EMAIL,
+                    new CreateReviewRequest(20L, (short) 5, "x".repeat(1001)),
+                    List.of()))
+                    .isInstanceOf(InvalidRequestException.class);
         }
     }
 
     @Nested
-    @DisplayName("Read review")
-    class ReadReview {
+    @DisplayName("Read reviews")
+    class ReadReviews {
 
         @Test
-        @DisplayName("getReviewsByOrderId - trả về review theo order")
-        void getReviewsByOrderId_existingReviews_returnsResponses() {
-            // Arrange
-            Pageable pageable = PageRequest.of(0, 10);
-            User user = user(1L);
-            when(reviewRepository.findAll(ArgumentMatchers.<Specification<Review>>any(), eq(pageable)))
-                    .thenReturn(new PageImpl<>(
-                            List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
-                            pageable,
-                            1));
+        @DisplayName("getPublicReviewsByProductId - dùng sort whitelist và DTO public")
+        void getPublicReviewsByProductId_validFilter_returnsPublicPage() {
+            Pageable input = PageRequest.of(0, 10);
+            PageImpl<Review> page = new PageImpl<>(List.of(), input, 0);
+            ResultPaginationDTO expected = emptyPage();
+            when(reviewRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+            when(reviewResponseAssembler.toPublicPage(page)).thenReturn(expected);
 
-            // Act
-            ResultPaginationDTO responses = reviewService.getReviewsByOrderId(10L, null, pageable);
+            ResultPaginationDTO result = reviewService.getPublicReviewsByProductId(
+                    10L, (short) 5, "rating-high", input);
 
-            // Assert
-            assertThat(responses.result()).hasSize(1);
-            assertThat(responses.result()).extracting("orderId").containsExactly(10L);
-            assertThat(responses.result()).extracting("orderItemId").containsExactly(20L);
-            assertThat(responses.meta().page()).isEqualTo(1);
+            assertThat(result).isEqualTo(expected);
+            ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+            verify(reviewRepository).findAll(any(Specification.class), pageableCaptor.capture());
+            assertThat(pageableCaptor.getValue().getSort()
+                    .getOrderFor("rating")
+                    .getDirection()
+                    .isDescending()).isTrue();
         }
 
         @Test
-        @DisplayName("getReviewsByOrderItemId - trả về review theo order item")
-        void getReviewsByOrderItemId_existingReviews_returnsResponses() {
-            // Arrange
+        @DisplayName("getPublicReviewsByProductId - từ chối rating và sort không hợp lệ")
+        void getPublicReviewsByProductId_invalidFilter_throwsBadRequest() {
             Pageable pageable = PageRequest.of(0, 10);
-            User user = user(1L);
-            when(reviewRepository.findAll(ArgumentMatchers.<Specification<Review>>any(), eq(pageable)))
-                    .thenReturn(new PageImpl<>(
-                            List.of(review(100L, user, orderItem(20L, order(10L, user, "COMPLETED")))),
-                            pageable,
-                            1));
-
-            // Act
-            ResultPaginationDTO responses = reviewService.getReviewsByOrderItemId(20L, null, pageable);
-
-            // Assert
-            assertThat(responses.result()).hasSize(1);
-            assertThat(responses.result()).extracting("productName").containsExactly("Classic Shirt");
-            assertThat(responses.meta().page()).isEqualTo(1);
+            assertThatThrownBy(() -> reviewService.getPublicReviewsByProductId(
+                    10L, (short) 0, "newest", pageable))
+                    .isInstanceOf(InvalidRequestException.class);
+            assertThatThrownBy(() -> reviewService.getPublicReviewsByProductId(
+                    10L, null, "unknown", pageable))
+                    .isInstanceOf(InvalidRequestException.class);
         }
+
+        @Test
+        @DisplayName("getProductReviewSummary - trả tổng, trung bình và đủ count 1 đến 5 sao")
+        void getProductReviewSummary_existingReviews_returnsSummary() {
+            when(reviewRepository.summarizeByProductId(10L)).thenReturn(List.of(
+                    ratingCount((short) 5, 3L),
+                    ratingCount((short) 3, 1L)));
+
+            ReviewSummaryResponse summary = reviewService.getProductReviewSummary(10L);
+
+            assertThat(summary.total()).isEqualTo(4);
+            assertThat(summary.averageRating()).isEqualTo(4.5);
+            assertThat(summary.ratingCounts()).containsEntry(1, 0L).containsEntry(5, 3L);
+        }
+
+        @Test
+        @DisplayName("getMyReviews - luôn scope theo email principal và order tùy chọn")
+        void getMyReviews_authenticatedPrincipal_returnsScopedPage() {
+            User user = user(1L);
+            Pageable pageable = PageRequest.of(0, 10);
+            PageImpl<Review> page = new PageImpl<>(List.of(), pageable, 0);
+            ResultPaginationDTO expected = emptyPage();
+            when(userRepository.findByEmailAndDeletedAtIsNull(USER_EMAIL)).thenReturn(Optional.of(user));
+            when(reviewRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+            when(reviewResponseAssembler.toAdminPage(page)).thenReturn(expected);
+
+            assertThat(reviewService.getMyReviews(USER_EMAIL, 99L, pageable)).isEqualTo(expected);
+        }
+    }
+
+    private ReviewRatingCount ratingCount(Short rating, Long total) {
+        return new ReviewRatingCount() {
+            @Override
+            public Short getRating() {
+                return rating;
+            }
+
+            @Override
+            public Long getTotal() {
+                return total;
+            }
+        };
+    }
+
+    private ResultPaginationDTO emptyPage() {
+        return new ResultPaginationDTO(new ResultPaginationDTO.Meta(1, 10, 0, 0), List.of());
+    }
+
+    private ReviewResponse response(Long id) {
+        return new ReviewResponse(
+                id, 1L, "User 1", 10L, "ORD-10", 20L, "Classic Shirt", null,
+                "classic-shirt", "White / M", (short) 5, "Good product", List.of(), Instant.now());
     }
 
     private Review review(Long id, User user, OrderItem orderItem) {
@@ -242,12 +358,13 @@ class ReviewServiceImplTest {
         ReflectionTestUtils.setField(orderItem, "id", id);
         orderItem.setOrder(order);
         orderItem.setProductName("Classic Shirt");
+        orderItem.setProductSlug("classic-shirt");
         orderItem.setVariantName("White / M");
         orderItem.setSku("SKU-001");
         orderItem.setPrice(BigDecimal.valueOf(100000));
         orderItem.setQuantity(1);
         orderItem.setSubtotal(BigDecimal.valueOf(100000));
-        orderItem.setStatus("FULFILLED");
+        orderItem.setStatus("CONFIRMED");
         return orderItem;
     }
 
@@ -278,5 +395,9 @@ class ReviewServiceImplTest {
         user.setBirthDate(LocalDate.of(2000, 1, 1));
         user.setGender(UserGender.MALE);
         return user;
+    }
+
+    private byte[] jpegBytes() {
+        return new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00};
     }
 }

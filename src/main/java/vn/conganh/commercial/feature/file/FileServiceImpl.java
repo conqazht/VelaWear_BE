@@ -24,6 +24,7 @@ public class FileServiceImpl implements FileService {
     private static final String PATH_TRAVERSAL_TOKEN = "..";
     private static final int MAX_SIGNATURE_BYTES = 12;
     private static final int WEBP_FORMAT_OFFSET = 8;
+    private static final String RESERVED_REVIEW_FOLDER = "reviews";
 
     private final UploadProperties uploadProperties;
 
@@ -68,6 +69,9 @@ public class FileServiceImpl implements FileService {
         }
 
         String normalizedFolder = folder.trim().toLowerCase(Locale.ROOT);
+        if (RESERVED_REVIEW_FOLDER.equals(normalizedFolder)) {
+            throw new InvalidRequestException("Review images must be uploaded through the review endpoint");
+        }
         if (!uploadProperties.allowedFolders().contains(normalizedFolder)) {
             throw new InvalidRequestException("Folder is not allowed");
         }
