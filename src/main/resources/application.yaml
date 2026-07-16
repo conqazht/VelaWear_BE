@@ -8,7 +8,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 5MB
-      max-request-size: 6MB
+      max-request-size: 26MB
   jpa:
     open-in-view: false
     properties:
@@ -117,7 +117,6 @@ app:
     allowed-folders:
       - avatars
       - products
-      - reviews
 
 springdoc:
   api-docs:

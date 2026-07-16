@@ -64,6 +64,16 @@ class FileServiceImplTest {
         }
 
         @Test
+        @DisplayName("store - không cho upload review qua API file dùng chung")
+        void store_reviewsFolder_throwsInvalidRequestException() {
+            MockMultipartFile file = imageFile("review.jpg", jpegBytes());
+
+            assertThatThrownBy(() -> fileService.store(file, "reviews"))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessage("Review images must be uploaded through the review endpoint");
+        }
+
+        @Test
         @DisplayName("store - nem InvalidRequestException khi extension khong duoc phep")
         void store_disallowedExtension_throwsInvalidRequestException() {
             // Arrange

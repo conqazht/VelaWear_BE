@@ -2,10 +2,13 @@ package vn.conganh.commercial.feature.review;
 
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
 import vn.conganh.commercial.TestDataFactory;
@@ -97,14 +101,23 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST / - 403: từ chối token hợp lệ nhưng không có quyền tạo review")
-    void create_authenticatedRoleWithoutPermission_returnsForbidden() throws Exception {
-        // Act & Assert
-        mockMvc.perform(post(BASE_PATH)
-                        .header("Authorization", "Bearer " + noAccessToken())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isForbidden());
+    @DisplayName("POST / - 201: khách đã đăng nhập tạo review multipart không cần quyền staff")
+    void create_authenticatedCustomer_returnsCreatedReviewWithImage() throws Exception {
+        String email = unique("review-customer") + "@local.test";
+        Long userId = insertUserRowWithEmail(unique("review-customer"), email);
+        ReviewOrderSeed orderSeed = seedReviewOrderForUser(userId, "COMPLETED");
+        String token = tokenWithRoles(email, userId, List.of("ROLE_USER"));
+
+        mockMvc.perform(multipart(BASE_PATH)
+                        .file(reviewPart(orderSeed.orderItemId(), 5, "Excellent"))
+                        .file(new MockMultipartFile(
+                                "images", "review.jpg", "image/jpeg", jpegBytes()))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.userId").value(userId))
+                .andExpect(jsonPath("$.data.orderItemId").value(orderSeed.orderItemId()))
+                .andExpect(jsonPath("$.data.images[0]").value(org.hamcrest.Matchers.matchesPattern(
+                        "/uploads/reviews/[0-9a-f-]+\\.jpg")));
     }
 
     @Test
@@ -128,11 +141,51 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
     void getReviewsByProduct_publicRequest_returnsList() throws Exception {
         ReviewSeed review = seedReview();
 
-        mockMvc.perform(get(BASE_PATH + "/product/" + review.productId()))
+        mockMvc.perform(get(BASE_PATH + "/product/" + review.productId())
+                        .queryParam("rating", "5")
+                        .queryParam("sort", "rating-high")
+                        .queryParam("page", "1")
+                        .queryParam("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCode").value(200))
                 .andExpect(jsonPath("$.data.result[0].productId").value(review.productId()))
-                .andExpect(jsonPath("$.data.result[0].productSlug").isNotEmpty());
+                .andExpect(jsonPath("$.data.result[0].productSlug").isNotEmpty())
+                .andExpect(jsonPath("$.data.result[0].verifiedPurchase").value(true))
+                .andExpect(jsonPath("$.data.result[0].images[0]").value("/uploads/reviews/seed-review.jpg"))
+                .andExpect(jsonPath("$.data.result[0].userId").doesNotExist())
+                .andExpect(jsonPath("$.data.result[0].orderId").doesNotExist())
+                .andExpect(jsonPath("$.data.result[0].orderCode").doesNotExist())
+                .andExpect(jsonPath("$.data.result[0].orderItemId").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /product/{productId}/summary - 200: trả phân bố đủ 1 đến 5 sao")
+    void getProductReviewSummary_publicRequest_returnsSummary() throws Exception {
+        ReviewSeed review = seedReview();
+
+        mockMvc.perform(get(BASE_PATH + "/product/" + review.productId() + "/summary"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.averageRating").value(5.0))
+                .andExpect(jsonPath("$.data.ratingCounts.1").value(0))
+                .andExpect(jsonPath("$.data.ratingCounts.5").value(1));
+    }
+
+    @Test
+    @DisplayName("GET /me - 200: khách chỉ xem review của principal hiện tại")
+    void getMyReviews_authenticatedCustomer_returnsOwnReviews() throws Exception {
+        String email = unique("my-review") + "@local.test";
+        Long userId = insertUserRowWithEmail(unique("my-review"), email);
+        ReviewSeed review = seedReviewForUser(userId);
+        String token = tokenWithRoles(email, userId, List.of("ROLE_USER"));
+
+        mockMvc.perform(get(BASE_PATH + "/me")
+                        .queryParam("orderId", review.orderId().toString())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.meta.total").value(1))
+                .andExpect(jsonPath("$.data.result[0].userId").value(userId))
+                .andExpect(jsonPath("$.data.result[0].orderId").value(review.orderId()));
     }
 
     @Test
@@ -165,26 +218,43 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
 
     private ReviewSeed seedReview() {
         Long userId = insertUserRow(unique("review-user"));
+        return seedReviewForUser(userId);
+    }
+
+    private ReviewSeed seedReviewForUser(Long userId) {
+        ReviewOrderSeed orderSeed = seedReviewOrderForUser(userId, "COMPLETED");
+        Long reviewId = insertForId("""
+                insert into reviews (user_id, order_item_id, rating, comment)
+                values (?, ?, 5, 'Good product')
+                returning id
+                """, userId, orderSeed.orderItemId());
+        jdbcTemplate.update(
+                "insert into review_images (review_id, image) values (?, '/uploads/reviews/seed-review.jpg')",
+                reviewId);
+        return new ReviewSeed(
+                reviewId,
+                userId,
+                orderSeed.orderId(),
+                orderSeed.orderItemId(),
+                orderSeed.productId());
+    }
+
+    private ReviewOrderSeed seedReviewOrderForUser(Long userId, String orderStatus) {
         Long categoryId = seedCategory();
         Long brandId = seedBrand();
         Long productId = seedProduct(categoryId, brandId);
         Long colorId = seedColor();
         Long sizeId = seedSize();
         Long variantId = seedVariant(productId, colorId, sizeId);
-        Long orderId = insertOrderRow(userId, unique("review-order").toUpperCase(), "COMPLETED");
+        Long orderId = insertOrderRow(userId, unique("review-order").toUpperCase(), orderStatus);
         Long orderItemId = insertForId("""
-                insert into order_items (order_id, variant_id, product_name, variant_name, sku, image,
+                insert into order_items (order_id, variant_id, product_name, product_slug, variant_name, sku, image,
                     list_price, price, price_source, quantity, subtotal, status)
-                values (?, ?, 'Review Product', 'Black / M', ?, null,
+                values (?, ?, 'Review Product', 'review-product', 'Black / M', ?, null,
                     100000, 100000, 'BASE', 1, 100000, 'CONFIRMED')
                 returning id
                 """, orderId, variantId, unique("review-sku").toUpperCase());
-        Long reviewId = insertForId("""
-                insert into reviews (user_id, order_item_id, rating, comment)
-                values (?, ?, 5, 'Good product')
-                returning id
-                """, userId, orderItemId);
-        return new ReviewSeed(reviewId, userId, orderId, orderItemId, productId);
+        return new ReviewOrderSeed(orderId, orderItemId, productId);
     }
 
     private Long seedBrand() {
@@ -211,7 +281,9 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
     }
 
     private Long seedSize() {
-        return insertForId("insert into sizes (name, sort_order) values (?, 1) returning id", "Size " + unique("size"));
+        return insertForId(
+                "insert into sizes (name, sort_order) values (?, 1) returning id",
+                "Size " + unique("size"));
     }
 
     private Long seedProduct(Long categoryId, Long brandId) {
@@ -232,12 +304,16 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
     }
 
     private Long insertUserRow(String suffix) {
+        return insertUserRowWithEmail(suffix, suffix + "@test.local");
+    }
+
+    private Long insertUserRowWithEmail(String suffix, String email) {
         return insertForId("""
                 insert into users (full_name, email, password, birth_date, gender)
                 values (?, ?, '$2a$10$XPBc3MlN1.2ligKqIhCbHOG6rTvZd/k8JxKkZIcJQq2HFlpGMlwRq',
                     date '1999-01-01', 'OTHER')
                 returning id
-                """, "User " + suffix, suffix + "@test.local");
+                """, "User " + suffix, email);
     }
 
     private Long insertOrderRow(Long userId, String orderCode, String status) {
@@ -261,7 +337,25 @@ class ReviewControllerTest extends AuthenticatedIntegrationTest {
         return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
+    private MockMultipartFile reviewPart(Long orderItemId, int rating, String comment) {
+        String json = """
+                {"orderItemId":%d,"rating":%d,"comment":"%s"}
+                """.formatted(orderItemId, rating, comment);
+        return new MockMultipartFile(
+                "review",
+                "review.json",
+                MediaType.APPLICATION_JSON_VALUE,
+                json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private byte[] jpegBytes() {
+        return new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 0x00};
+    }
+
     private record ReviewSeed(Long reviewId, Long userId, Long orderId, Long orderItemId, Long productId) {
+    }
+
+    private record ReviewOrderSeed(Long orderId, Long orderItemId, Long productId) {
     }
 }
 
