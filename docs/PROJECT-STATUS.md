@@ -1,3 +1,16 @@
+### BE-003: Serialize coupon counter updates
+
+- **Date/Time**: 2026-07-16 (Asia/Saigon)
+- **Summary of Changes**: Admin update/delete coupon dùng dedicated
+  `PESSIMISTIC_WRITE` lookup trong transaction trước khi mutation toàn entity.
+  Checkout và order lifecycle tiếp tục dùng guarded atomic SQL cho
+  `consumeUsage`/`releaseUsage`; không đổi entity, schema hoặc lock order checkout.
+- **Correctness**: PostgreSQL serialize admin whole-row mutation với coupon counter
+  update trên cùng row, đóng lost-update window có thể làm `usedCount` bị ghi đè.
+- **Verification**: Focused suite pass `12/12`; concurrency pair
+  `CouponConcurrencyIntegrationTest,CheckoutConcurrencyTest` pass 3 vòng liên tiếp;
+  full `mvnw.cmd clean verify` pass `712/712` và build JAR thành công.
+
 ### BE-002: Thu hồi legacy cross-account permissions của ROLE_USER
 
 - **Date/Time**: 2026-07-16 (Asia/Saigon)

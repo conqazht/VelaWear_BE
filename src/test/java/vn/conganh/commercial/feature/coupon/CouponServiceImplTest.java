@@ -196,7 +196,7 @@ class CouponServiceImplTest {
                     startDate(),
                     endDate(),
                     CouponStatus.INACTIVE);
-            when(couponRepository.findById(1L)).thenReturn(Optional.of(coupon));
+            when(couponRepository.findWithLockById(1L)).thenReturn(Optional.of(coupon));
             when(couponRepository.save(any(Coupon.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
             // Act
@@ -205,6 +205,52 @@ class CouponServiceImplTest {
             // Assert
             assertThat(response.type()).isEqualTo(CouponType.FIXED_AMOUNT);
             assertThat(response.status()).isEqualTo(CouponStatus.INACTIVE);
+            verify(couponRepository).findWithLockById(1L);
+            verify(couponRepository, never()).findById(1L);
+        }
+
+        @Test
+        @DisplayName("updateCoupon - dùng locked lookup và ném ResourceNotFoundException khi không tìm thấy")
+        void updateCoupon_missingCoupon_usesLockedLookupAndThrowsResourceNotFoundException() {
+            // Arrange
+            UpdateCouponRequest request = new UpdateCouponRequest(
+                    CouponType.PERCENTAGE,
+                    BigDecimal.TEN,
+                    BigDecimal.ZERO,
+                    BigDecimal.valueOf(100000),
+                    10,
+                    startDate(),
+                    endDate(),
+                    CouponStatus.ACTIVE);
+            when(couponRepository.findWithLockById(99L)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> couponService.updateCoupon(99L, request))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(couponRepository).findWithLockById(99L);
+            verify(couponRepository, never()).findById(99L);
+            verify(couponRepository, never()).save(any(Coupon.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("Delete coupon")
+    class DeleteCoupon {
+
+        @Test
+        @DisplayName("deleteCoupon - khóa coupon trước khi xóa")
+        void deleteCoupon_existingCoupon_usesLockedLookup() {
+            // Arrange
+            Coupon coupon = coupon(1L, "SALE10");
+            when(couponRepository.findWithLockById(1L)).thenReturn(Optional.of(coupon));
+
+            // Act
+            couponService.deleteCoupon(1L);
+
+            // Assert
+            verify(couponRepository).findWithLockById(1L);
+            verify(couponRepository).delete(coupon);
+            verify(couponRepository, never()).findById(1L);
         }
     }
 
