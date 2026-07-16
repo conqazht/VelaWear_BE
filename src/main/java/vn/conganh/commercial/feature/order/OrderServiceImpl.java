@@ -59,6 +59,47 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public ResultPaginationDTO getMyOrders(String email, Pageable pageable) {
+        User user = findActiveUser(email);
+        return ResultPaginationDTO.fromPage(orderRepository.findByUserId(user.getId(), pageable)
+                .map(OrderResponse::fromEntity));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getMyOrderById(String email, Long id) {
+        User user = findActiveUser(email);
+        Order order = orderRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
+        return toDetailedResponse(order);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getMyOrderByOrderCode(String email, String orderCode) {
+        User user = findActiveUser(email);
+        Order order = orderRepository.findByOrderCodeAndUserId(orderCode, user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "orderCode", orderCode));
+        return toDetailedResponse(order);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ResultPaginationDTO getMyOrderStatusHistories(
+            String email,
+            Long id,
+            OrderStatusHistoryFilterRequest filter,
+            Pageable pageable) {
+        User user = findActiveUser(email);
+        orderRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
+        return ResultPaginationDTO.fromPage(orderStatusHistoryRepository
+                .findAll(Specification.where(OrderStatusHistorySpecification.build(id, filter)), pageable)
+                .map(OrderStatusHistoryResponse::fromEntity));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ResultPaginationDTO getOrdersByUserId(Long userId, OrderFilterRequest filter, Pageable pageable) {
         FilterSpecifications.requireMatchingPathId("userId", userId, filter == null ? null : filter.userId());
         OrderFilterRequest scopedFilter = filter == null
@@ -224,5 +265,10 @@ public class OrderServiceImpl implements OrderService {
 
     private OrderResponse toDetailedResponse(Order order) {
         return OrderResponse.fromEntity(order, orderItemRepository.findByOrderId(order.getId()));
+    }
+
+    private User findActiveUser(String email) {
+        return userRepository.findByEmailAndDeletedAtIsNull(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
     }
 }

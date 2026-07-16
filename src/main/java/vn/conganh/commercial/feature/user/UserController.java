@@ -7,6 +7,8 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
+import vn.conganh.commercial.feature.user.dto.UpdateMyProfileRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRolesRequest;
 import vn.conganh.commercial.feature.user.dto.UserFilterRequest;
@@ -54,6 +57,13 @@ public class UserController {
             @PathVariable Long id,
             @RequestBody @Valid UpdateUserRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request)));
+    }
+
+    @PutMapping(path = "/me")
+    public ResponseEntity<ApiResponse<UserResponse>> updateMyProfile(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody @Valid UpdateMyProfileRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateMyProfile(jwt.getSubject(), request)));
     }
 
     @PutMapping(path = "/{id}/roles")

@@ -8,14 +8,82 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @DisplayName("System/Security - Kiểm tra bảo vệ các API nghiệp vụ")
 class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Test
+    @DisplayName("V21 seed đúng 10 self-service permissions cho bốn production roles")
+    void customerSelfServicePermissions_areExactAdditiveAndGrantedToProductionRoles() {
+        List<PermissionExpectation> expectations = List.of(
+                new PermissionExpectation(
+                        "UPDATE_MY_PROFILE", "/api/v1/users/me", "PUT", "USER"),
+                new PermissionExpectation(
+                        "VIEW_MY_ORDERS", "/api/v1/orders/me", "GET", "ORDER"),
+                new PermissionExpectation(
+                        "VIEW_MY_ORDER_BY_CODE", "/api/v1/orders/me/code/{orderCode}", "GET", "ORDER"),
+                new PermissionExpectation(
+                        "VIEW_MY_ORDER", "/api/v1/orders/me/{id}", "GET", "ORDER"),
+                new PermissionExpectation(
+                        "VIEW_MY_ORDER_STATUS_HISTORIES",
+                        "/api/v1/orders/me/{id}/status-histories",
+                        "GET",
+                        "ORDER"),
+                new PermissionExpectation(
+                        "VIEW_MY_USER_ADDRESSES", "/api/v1/user-addresses/me", "GET", "USER_ADDRESS"),
+                new PermissionExpectation(
+                        "CREATE_MY_USER_ADDRESS", "/api/v1/user-addresses/me", "POST", "USER_ADDRESS"),
+                new PermissionExpectation(
+                        "VIEW_MY_USER_ADDRESS", "/api/v1/user-addresses/me/{id}", "GET", "USER_ADDRESS"),
+                new PermissionExpectation(
+                        "UPDATE_MY_USER_ADDRESS", "/api/v1/user-addresses/me/{id}", "PUT", "USER_ADDRESS"),
+                new PermissionExpectation(
+                        "DELETE_MY_USER_ADDRESS", "/api/v1/user-addresses/me/{id}", "DELETE", "USER_ADDRESS"));
+
+        for (PermissionExpectation expectation : expectations) {
+            List<Map<String, Object>> permissions = jdbcTemplate.queryForList("""
+                    select name, api_path, method, module
+                    from permissions
+                    where api_path = ? and method = ?
+                    """, expectation.apiPath(), expectation.method());
+
+            assertThat(permissions).hasSize(1);
+            Map<String, Object> permission = permissions.getFirst();
+            assertThat(permission.get("name")).isEqualTo(expectation.name());
+            assertThat(permission.get("api_path")).isEqualTo(expectation.apiPath());
+            assertThat(permission.get("method")).isEqualTo(expectation.method());
+            assertThat(permission.get("module")).isEqualTo(expectation.module());
+
+            List<String> roleNames = jdbcTemplate.queryForList("""
+                    select r.name
+                    from roles r
+                    join permission_role pr on pr.role_id = r.id
+                    join permissions p on p.id = pr.permission_id
+                    where p.api_path = ? and p.method = ?
+                      and r.name in ('ADMIN', 'MANAGER', 'STAFF', 'USER')
+                    order by r.name
+                    """, String.class, expectation.apiPath(), expectation.method());
+            assertThat(roleNames).containsExactly("ADMIN", "MANAGER", "STAFF", "USER");
+        }
+
+        assertThat(hasRolePermission("USER", "/api/v1/orders/{id}", "GET")).isTrue();
+        assertThat(hasRolePermission("USER", "/api/v1/orders/code/{orderCode}", "GET")).isTrue();
+        assertThat(hasRolePermission("USER", "/api/v1/user-addresses/{id}", "GET")).isTrue();
+        assertThat(hasRolePermission("USER", "/api/v1/user-addresses/{id}", "PUT")).isTrue();
+        assertThat(hasRolePermission("USER", "/api/v1/user-addresses/{id}", "DELETE")).isTrue();
+    }
 
     @Test
     @DisplayName("Actuator metrics chỉ cho ADMIN")
@@ -164,5 +232,23 @@ class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isForbidden());
+    }
+
+    private boolean hasRolePermission(String roleName, String apiPath, String method) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from permissions p
+                join permission_role pr on pr.permission_id = p.id
+                join roles r on r.id = pr.role_id
+                where r.name = ? and p.api_path = ? and p.method = ?
+                """, Integer.class, roleName, apiPath, method);
+        return count != null && count == 1;
+    }
+
+    private record PermissionExpectation(
+            String name,
+            String apiPath,
+            String method,
+            String module) {
     }
 }

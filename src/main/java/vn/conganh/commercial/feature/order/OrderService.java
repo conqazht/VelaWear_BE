@@ -16,6 +16,18 @@ public interface OrderService {
 
     OrderResponse getOrderByOrderCode(String orderCode);
 
+    ResultPaginationDTO getMyOrders(String email, Pageable pageable);
+
+    OrderResponse getMyOrderById(String email, Long id);
+
+    OrderResponse getMyOrderByOrderCode(String email, String orderCode);
+
+    ResultPaginationDTO getMyOrderStatusHistories(
+            String email,
+            Long id,
+            OrderStatusHistoryFilterRequest filter,
+            Pageable pageable);
+
     ResultPaginationDTO getOrdersByUserId(Long userId, OrderFilterRequest filter, Pageable pageable);
 
     ResultPaginationDTO getOrderStatusHistories(Long id, OrderStatusHistoryFilterRequest filter, Pageable pageable);

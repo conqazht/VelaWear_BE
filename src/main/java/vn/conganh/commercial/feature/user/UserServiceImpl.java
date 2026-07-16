@@ -17,6 +17,7 @@ import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
+import vn.conganh.commercial.feature.user.dto.UpdateMyProfileRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
 import lombok.RequiredArgsConstructor;
 import vn.conganh.commercial.feature.user.dto.UserFilterRequest;
@@ -88,6 +89,16 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public UserResponse updateMyProfile(String email, UpdateMyProfileRequest request) {
+        User user = findActiveUser(email);
+        user.setFullName(request.fullName());
+        user.setBirthDate(request.birthDate());
+        user.setGender(request.gender());
+        return UserResponse.fromEntity(userRepository.save(user));
+    }
+
+    @Override
+    @Transactional
     public UserResponse updateUserRoles(Long id, UpdateUserRolesRequest request) {
         User user = findActiveUser(id);
 
@@ -122,6 +133,11 @@ public class UserServiceImpl implements UserService {
     private User findActiveUser(Long id) {
         return userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+    }
+
+    private User findActiveUser(String email) {
+        return userRepository.findByEmailAndDeletedAtIsNull(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
     }
 
     private Map<Long, List<UserResponse.RoleSummaryResponse>> rolesByUserId(List<User> users) {

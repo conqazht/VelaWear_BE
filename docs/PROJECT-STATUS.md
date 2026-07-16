@@ -1,3 +1,24 @@
+### BE-001: Customer self-service contract theo principal
+
+- **Date/Time**: 2026-07-16 (Asia/Saigon)
+- **Summary of Changes**: Thêm `PUT /api/v1/users/me`, bốn route
+  `/api/v1/orders/me/**` và năm route `/api/v1/user-addresses/me/**`. Identity lấy
+  từ JWT subject trong service; order/address lookup theo cả resource identifier và
+  owner ID. Self-create address không nhận `userId`; self-profile DTO chỉ có
+  `fullName`, `birthDate`, `gender` và không thể thay đổi `avatar`.
+- **Security/Compatibility**: Foreign và missing order ID/code/history hoặc address
+  ID cùng trả `404`. V21 seed additive đủ 10 method/path permissions cho
+  `ADMIN`, `MANAGER`, `STAFF`, `USER`; generic customer routes/permissions vẫn được
+  giữ trong expand phase. Default address cũ được flush trước khi persist/promote
+  default mới để giữ partial unique-index invariant.
+- **Rollout**: Thứ tự bắt buộc là **BE-001 → FE-001 → BE-002**. FE-001 phải chuyển
+  toàn bộ customer caller sang `/me` trước khi BE-002 thu hồi generic `ROLE_USER`
+  permissions.
+- **Verification**: Focused Testcontainers suite pass `116/116`; Flyway áp dụng đủ
+  28 versioned/repeatable migrations và schema đạt V21. `mvnw.cmd clean verify`
+  pass `703/703`, không failure/error/skipped và đóng gói JAR thành công.
+  `git diff --check`, exact allowlist, contract scan và ba vòng cold review đều đạt.
+
 ### Hardening OTP/Auth v1: proof một lần, limiter và revoke-all
 
 - **Date/Time**: 2026-07-16 (Asia/Saigon)

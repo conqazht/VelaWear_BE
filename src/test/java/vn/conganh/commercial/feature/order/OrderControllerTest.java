@@ -39,6 +39,10 @@ class OrderControllerTest extends AuthenticatedIntegrationTest {
     void setUp() {
         testDataFactory.seedPermissions("ORDER", BASE_PATH, "GET", "POST");
         testDataFactory.seedPermissions("ORDER", BASE_PATH + "/{id}", "DELETE", "GET", "PUT");
+        testDataFactory.seedPermissions("ORDER", BASE_PATH + "/me", "GET");
+        testDataFactory.seedPermissions("ORDER", BASE_PATH + "/me/{id}", "GET");
+        testDataFactory.seedPermissions("ORDER", BASE_PATH + "/me/code/{orderCode}", "GET");
+        testDataFactory.seedPermissions("ORDER", BASE_PATH + "/me/{id}/status-histories", "GET");
 
         adminToken = testDataFactory.jwtWithPermission();
         forbiddenToken = testDataFactory.jwtWithoutPermission();
@@ -137,6 +141,63 @@ class OrderControllerTest extends AuthenticatedIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.statusCode").value(404));
+    }
+
+    @Test
+    @DisplayName("GET /me/** - 200: trả list, detail, code và history của principal")
+    void getMyOrderRoutes_ownedOrder_returnExpectedEnvelopes() throws Exception {
+        String principalEmail = unique("self-order-user") + "@test.local";
+        String principalToken = testDataFactory.jwtWithPermission(principalEmail);
+        Long userId = jdbcTemplate.queryForObject(
+                "select id from users where email = ?", Long.class, principalEmail);
+        String orderCode = unique("self-order").toUpperCase();
+        Long orderId = insertOrderRow(userId, orderCode, "PENDING");
+        Long historyId = insertForId("""
+                insert into order_status_histories (order_id, from_status, to_status, changed_by, reason)
+                values (?, null, 'PENDING', ?, 'Controller self route test')
+                returning id
+                """, orderId, userId);
+
+        mockMvc.perform(get(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + principalToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.meta.total").value(1))
+                .andExpect(jsonPath("$.data.result[0].id").value(orderId))
+                .andExpect(jsonPath("$.data.result[0].userId").value(userId));
+
+        mockMvc.perform(get(BASE_PATH + "/me/" + orderId)
+                        .header("Authorization", "Bearer " + principalToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(orderId))
+                .andExpect(jsonPath("$.data.userId").value(userId));
+
+        mockMvc.perform(get(BASE_PATH + "/me/code/" + orderCode)
+                        .header("Authorization", "Bearer " + principalToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(orderId))
+                .andExpect(jsonPath("$.data.orderCode").value(orderCode));
+
+        mockMvc.perform(get(BASE_PATH + "/me/" + orderId + "/status-histories")
+                        .header("Authorization", "Bearer " + principalToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.meta.total").value(1))
+                .andExpect(jsonPath("$.data.result[0].id").value(historyId))
+                .andExpect(jsonPath("$.data.result[0].orderId").value(orderId));
+    }
+
+    @Test
+    @DisplayName("GET /me - 401: từ chối request không có access token")
+    void getMyOrders_missingToken_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get(BASE_PATH + "/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /me - 403: từ chối token không có permission")
+    void getMyOrders_withoutPermission_returnsForbidden() throws Exception {
+        mockMvc.perform(get(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + noAccessToken()))
+                .andExpect(status().isForbidden());
     }
 
     @Test

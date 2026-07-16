@@ -51,6 +51,7 @@ class UserControllerTest extends AuthenticatedIntegrationTest {
     void setUp() {
         testDataFactory.seedPermissions("USER", BASE_PATH, "GET", "POST");
         testDataFactory.seedPermissions("USER", BASE_PATH + "/{id}", "DELETE", "GET", "PUT");
+        testDataFactory.seedPermissions("USER", BASE_PATH + "/me", "PUT");
 
         adminToken = testDataFactory.jwtWithPermission();
         forbiddenToken = testDataFactory.jwtWithoutPermission();
@@ -240,6 +241,77 @@ class UserControllerTest extends AuthenticatedIntegrationTest {
                         .content(entity.updateBody()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.statusCode").value(404));
+    }
+
+    @Test
+    @DisplayName("PUT /me - 200: cập nhật profile từ principal nhưng không cho đổi avatar")
+    void updateMyProfile_validBody_updatesAllowedFieldsAndPreservesAvatar() throws Exception {
+        String sentinelAvatar = "https://cdn.test.local/original-avatar.png";
+        jdbcTemplate.update(
+                "update users set avatar = ? where email = 'test@example.com'",
+                sentinelAvatar);
+
+        mockMvc.perform(put(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(
+                                "fullName", "Updated Self Profile",
+                                "birthDate", "1998-05-20",
+                                "gender", "FEMALE",
+                                "avatar", "https://attacker.invalid/replaced.png")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.fullName").value("Updated Self Profile"))
+                .andExpect(jsonPath("$.data.birthDate").value("1998-05-20"))
+                .andExpect(jsonPath("$.data.gender").value("FEMALE"))
+                .andExpect(jsonPath("$.data.avatar").value(sentinelAvatar));
+
+        entityManager.flush();
+        assertThat(jdbcTemplate.queryForObject(
+                "select full_name from users where email = 'test@example.com'", String.class))
+                .isEqualTo("Updated Self Profile");
+        assertThat(jdbcTemplate.queryForObject(
+                "select birth_date::text from users where email = 'test@example.com'", String.class))
+                .isEqualTo("1998-05-20");
+        assertThat(jdbcTemplate.queryForObject(
+                "select gender from users where email = 'test@example.com'", String.class))
+                .isEqualTo("FEMALE");
+        assertThat(jdbcTemplate.queryForObject(
+                "select avatar from users where email = 'test@example.com'", String.class))
+                .isEqualTo(sentinelAvatar);
+    }
+
+    @Test
+    @DisplayName("PUT /me - 400: từ chối self-profile không hợp lệ")
+    void updateMyProfile_invalidBody_returnsBadRequest() throws Exception {
+        mockMvc.perform(put(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(
+                                "fullName", "",
+                                "birthDate", "2999-01-01",
+                                "gender", "OTHER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400));
+    }
+
+    @Test
+    @DisplayName("PUT /me - 401: từ chối request không có access token")
+    void updateMyProfile_missingToken_returnsUnauthorized() throws Exception {
+        mockMvc.perform(put(BASE_PATH + "/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("PUT /me - 403: từ chối token không có permission")
+    void updateMyProfile_withoutPermission_returnsForbidden() throws Exception {
+        mockMvc.perform(put(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + noAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
