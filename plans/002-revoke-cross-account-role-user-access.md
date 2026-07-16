@@ -13,9 +13,9 @@ Read this plan fully. This is the contract phase of an expand/migrate/contract r
 - Risk: High
 - Category: Security / RBAC
 - Priority / effort / wave: P1 / M / 1
-- Planned against: `2be2362` on 2026-07-16
+- Planned against: `c3b1361` on 2026-07-16
 - Branch: `fix/cross-account-role-user-access`
-- Dependencies: BE-001 and external FE-001 merged
+- Dependencies: BE-001 merged at `c3b1361`; external FE-001 merged at `4c2767b`
 - Reserved migration: `V22__revoke_legacy_customer_permissions.sql`
 
 ## Why
@@ -26,9 +26,10 @@ Read this plan fully. This is the contract phase of an expand/migrate/contract r
 
 - `src/main/java/vn/conganh/commercial/security/PermissionAuthorizationManager.java`, `authorize(...)`, parses stored `method + apiPath` values and calls `pathMatcher.match(apiPath, requestPath)` without resource ownership checks.
 - `src/main/resources/db/migration/V2__seed_rbac.sql:122-137`, `V3__align_rbac_api_paths.sql:59-68`, and `V5__seed_missing_permissions.sql:106-119` grant USER generic cart/order/address/review/wishlist paths.
-- `src/main/java/vn/conganh/commercial/config/SecurityConfig.java:111-119` authenticates several `/me` paths; other self paths are represented in RBAC migrations.
-- `src/test/java/vn/conganh/commercial/TestDataFactory.java:33-87` creates a broad `TEST_ROLE`; it is not evidence that production `ROLE_USER` is safe.
-- BE-001 is expected to introduce V21 and ownership-scoped profile/order/address routes; FE-001 is expected to remove customer calls to generic routes.
+- `src/main/java/vn/conganh/commercial/config/SecurityConfig.java`, `filterChain(...)`, authenticates the direct self-service paths; other `/me` paths are represented in RBAC migrations.
+- `src/test/java/vn/conganh/commercial/TestDataFactory.java:33-117` creates a broad `TEST_ROLE`; it is not evidence that production `ROLE_USER` is safe.
+- `src/main/resources/db/migration/V21__seed_customer_self_service_permissions.sql:4-37` adds the ownership-scoped profile/order/address permissions delivered by BE-001.
+- BE-001 is merged at `c3b1361`; external FE-001 is merged at `4c2767b` and removes customer calls to the generic routes reviewed here.
 
 The V22 review starts from this explicit revoke set for `ROLE_USER` and must verify each stored method/path before deletion:
 
@@ -43,7 +44,7 @@ Keep catalog reads, all V21 `/me` grants, checkout, self-cart/wishlist/coupon gr
 Run this drift check before implementation:
 
 ```powershell
-git diff --stat 2be2362..HEAD -- src/main/resources/db/migration src/main/java/vn/conganh/commercial/security src/main/java/vn/conganh/commercial/config/SecurityConfig.java src/test docs
+git diff --stat c3b1361..HEAD -- src/main/resources/db/migration src/main/java/vn/conganh/commercial/security src/main/java/vn/conganh/commercial/config/SecurityConfig.java src/test docs
 ```
 
 | Gate | Exact command | Expected result |
@@ -64,6 +65,7 @@ git diff --stat 2be2362..HEAD -- src/main/resources/db/migration src/main/java/v
 
 - New: `src/main/resources/db/migration/V22__revoke_legacy_customer_permissions.sql`.
 - Existing: `src/test/java/vn/conganh/commercial/SystemSecurityIntegrationTest.java`, `src/test/java/vn/conganh/commercial/CustomerSelfScopeIntegrationTest.java`, `docs/API_SPEC.md`, `docs/PROJECT-STATUS.md`, `src/main/java/vn/conganh/commercial/feature/permission/CONTEXT.md`, and `src/main/java/vn/conganh/commercial/feature/role/CONTEXT.md`.
+- Reconciled plan mirrors: `plans/002-revoke-cross-account-role-user-access.md` and `plans/vi/002-revoke-cross-account-role-user-access.vi.md`.
 - No controller/service/frontend file may change in this contract PR; update both plan mirrors before expanding scope.
 
 ### Out of scope
