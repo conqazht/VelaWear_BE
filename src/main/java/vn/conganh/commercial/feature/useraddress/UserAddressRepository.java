@@ -11,6 +11,8 @@ public interface UserAddressRepository
 
     Page<UserAddress> findByUserId(Long userId, Pageable pageable);
 
+    Optional<UserAddress> findByIdAndUserId(Long id, Long userId);
+
     Optional<UserAddress> findByUserIdAndIsDefaultTrue(Long userId);
 
     boolean existsByUserIdAndIsDefaultTrue(Long userId);

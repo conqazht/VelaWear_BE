@@ -7,6 +7,8 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,6 +43,37 @@ public class OrderController {
     @GetMapping(path = "/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrderById(id)));
+    }
+
+    @GetMapping(path = "/me")
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getMyOrders(
+            @AuthenticationPrincipal Jwt jwt,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getMyOrders(jwt.getSubject(), pageable)));
+    }
+
+    @GetMapping(path = "/me/{id}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getMyOrderById(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getMyOrderById(jwt.getSubject(), id)));
+    }
+
+    @GetMapping(path = "/me/code/{orderCode}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getMyOrderByCode(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String orderCode) {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getMyOrderByOrderCode(jwt.getSubject(), orderCode)));
+    }
+
+    @GetMapping(path = "/me/{id}/status-histories")
+    public ResponseEntity<ApiResponse<ResultPaginationDTO>> getMyOrderStatusHistories(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id,
+            @ParameterObject OrderStatusHistoryFilterRequest filter,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                orderService.getMyOrderStatusHistories(jwt.getSubject(), id, filter, pageable)));
     }
 
     @GetMapping(path = "/code/{orderCode}")

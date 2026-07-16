@@ -755,9 +755,43 @@ Create a user. Password is stored only as BCrypt hash.
 
 ---
 
+### PUT /api/v1/users/me
+
+Cập nhật profile của user đang đăng nhập. Backend lấy identity từ JWT subject; client
+không gửi `userId`.
+
+Request dùng riêng `UpdateMyProfileRequest`:
+
+```json
+{
+  "fullName": "Tran Thi B Updated",
+  "birthDate": "1995-05-20",
+  "gender": "FEMALE"
+}
+```
+
+Ba field trên đều bắt buộc và `birthDate` phải ở quá khứ. DTO này không có
+`avatar`; field `avatar` gửi thừa không được bind và không thể thay đổi avatar đang
+lưu. Customer avatar upload được quản lý ở contract file riêng trong BE-004.
+
+**Success Response (200):** `UserResponse`
+
+**Errors:**
+
+| Status | When |
+|--------|------|
+| 400 | Validation failed |
+| 401 | Missing/invalid access token |
+| 403 | Authenticated role lacks the exact permission |
+| 404 | Active user from JWT subject no longer exists |
+
+---
+
 ### PUT /users/{id}
 
-Update profile fields. Email and password are not updated by this endpoint.
+Generic operator endpoint kept for compatibility. Email and password are not
+updated here; unlike `/api/v1/users/me`, its legacy `UpdateUserRequest` still
+contains `avatar` during the BE-001 expand phase.
 
 **Request Body:**
 
@@ -1515,11 +1549,33 @@ Sale Campaign; there is no standalone `salePrice` field.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/v1/user-addresses/me` | List only the authenticated user's addresses |
+| GET | `/api/v1/user-addresses/me/{id}` | Get an owned address; foreign/missing ID is `404` |
+| POST | `/api/v1/user-addresses/me` | Create for the authenticated user; body has no `userId` |
+| PUT | `/api/v1/user-addresses/me/{id}` | Update an owned address; foreign/missing ID is `404` |
+| DELETE | `/api/v1/user-addresses/me/{id}` | Delete an owned address; foreign/missing ID is `404` |
 | GET | `/user-addresses` | List addresses, optionally filter by `userId` |
 | GET | `/user-addresses/{id}` | Get address |
 | POST | `/user-addresses` | Create address |
 | PUT | `/user-addresses/{id}` | Update address |
 | DELETE | `/user-addresses/{id}` | Delete address |
+
+`POST /api/v1/user-addresses/me` dùng `CreateMyUserAddressRequest`:
+
+```json
+{
+  "receiverName": "Tran Thi B",
+  "phone": "0900000000",
+  "province": "Ho Chi Minh",
+  "ward": "Ben Nghe",
+  "addressDetail": "123 Test Street",
+  "isDefault": true
+}
+```
+
+Owner luôn được resolve từ JWT trong service. Khi một address được đặt làm default,
+default cũ chỉ bị gỡ trong cùng user; invariant mỗi user tối đa một default address
+được giữ nguyên.
 
 ### Coupon, Cart, Wishlist
 
@@ -1544,6 +1600,10 @@ Sale Campaign; there is no standalone `salePrice` field.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/v1/orders/me` | Paginated orders owned by the authenticated user |
+| GET | `/api/v1/orders/me/{id}` | Owned order detail; foreign/missing ID is `404` |
+| GET | `/api/v1/orders/me/code/{orderCode}` | Owned order detail by business code; foreign/missing code is `404` |
+| GET | `/api/v1/orders/me/{id}/status-histories` | History of an owned order; foreign/missing order ID is `404` |
 | GET | `/orders` | List orders |
 | GET | `/orders/{id}` | Get order by id |
 | GET | `/orders/code/{orderCode}` | Get order by business code |
@@ -1565,6 +1625,12 @@ Sale Campaign; there is no standalone `salePrice` field.
 | GET | `/reviews/order/{orderId}` | List reviews by order |
 | GET | `/reviews/order-item/{orderItemId}` | List reviews by order item |
 | POST | `/reviews` | Create verified review using multipart JSON and optional images |
+
+Các customer route `/orders/me/**` và `/user-addresses/me/**` bind ownership ở
+service/repository bằng principal + identifier, không load unscoped rồi authorize ở
+controller. BE-001 giữ các generic route/permission để tương thích migration window.
+Thứ tự rollout bắt buộc là **BE-001 → FE-001 → BE-002**; chỉ BE-002 mới thu hồi
+generic `ROLE_USER` permissions sau khi frontend đã chuyển hết sang `/me`.
 
 ### Sale Campaign Admin
 
@@ -1834,6 +1900,7 @@ Flash quota.
 | GET | `/users` | Bearer | Implemented | List users |
 | GET | `/users/{id}` | Bearer | Implemented | Get user |
 | POST | `/users` | Bearer | Implemented | Create user |
+| PUT | `/api/v1/users/me` | Bearer | Implemented | Principal-scoped profile update; cannot mutate avatar |
 | PUT | `/users/{id}` | Bearer | Implemented | Update user |
 | DELETE | `/users/{id}` | Bearer | Implemented | Soft delete user |
 | GET | `/roles` | Bearer | Implemented | List roles |
@@ -1891,6 +1958,11 @@ Flash quota.
 | POST | `/api/v1/sale-campaigns/{id}/end-and-clone` | Bearer | Implemented | End and clone to DRAFT |
 | GET | `/api/v1/sales` | Public | Implemented | Public STANDARD/FLASH list |
 | GET | `/api/v1/sales/{code}` | Public | Implemented | Public campaign detail |
+| GET | `/api/v1/user-addresses/me` | Bearer | Implemented | List principal-owned addresses |
+| GET | `/api/v1/user-addresses/me/{id}` | Bearer | Implemented | Get principal-owned address; foreign ID is 404 |
+| POST | `/api/v1/user-addresses/me` | Bearer | Implemented | Create address bound to principal; no userId body field |
+| PUT | `/api/v1/user-addresses/me/{id}` | Bearer | Implemented | Update principal-owned address |
+| DELETE | `/api/v1/user-addresses/me/{id}` | Bearer | Implemented | Delete principal-owned address |
 | GET | `/user-addresses` | Bearer | Implemented | List user addresses, optional `userId` filter |
 | GET | `/user-addresses/{id}` | Bearer | Implemented | Get user address |
 | POST | `/user-addresses` | Bearer | Implemented | Create user address |
@@ -1910,6 +1982,10 @@ Flash quota.
 | GET | `/wishlists/{id}` | Bearer | Implemented | Get wishlist item |
 | POST | `/wishlists` | Bearer | Implemented | Create wishlist item |
 | DELETE | `/wishlists/{id}` | Bearer | Implemented | Delete wishlist item |
+| GET | `/api/v1/orders/me` | Bearer | Implemented | List principal-owned orders |
+| GET | `/api/v1/orders/me/{id}` | Bearer | Implemented | Get principal-owned order; foreign ID is 404 |
+| GET | `/api/v1/orders/me/code/{orderCode}` | Bearer | Implemented | Get principal-owned order by code; foreign code is 404 |
+| GET | `/api/v1/orders/me/{id}/status-histories` | Bearer | Implemented | List history for a principal-owned order |
 | GET | `/orders` | Bearer | Implemented | List orders |
 | GET | `/orders/{id}` | Bearer | Implemented | Get order by id |
 | GET | `/orders/code/{orderCode}` | Bearer | Implemented | Get order by code |

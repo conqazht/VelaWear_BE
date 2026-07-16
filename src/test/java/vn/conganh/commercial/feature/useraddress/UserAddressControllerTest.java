@@ -39,6 +39,8 @@ class UserAddressControllerTest extends AuthenticatedIntegrationTest {
     void setUp() {
         testDataFactory.seedPermissions("USERADDRESS", BASE_PATH, "GET", "POST");
         testDataFactory.seedPermissions("USERADDRESS", BASE_PATH + "/{id}", "DELETE", "GET", "PUT");
+        testDataFactory.seedPermissions("USER_ADDRESS", BASE_PATH + "/me", "GET", "POST");
+        testDataFactory.seedPermissions("USER_ADDRESS", BASE_PATH + "/me/{id}", "DELETE", "GET", "PUT");
 
         adminToken = testDataFactory.jwtWithPermission();
         forbiddenToken = testDataFactory.jwtWithoutPermission();
@@ -137,6 +139,104 @@ class UserAddressControllerTest extends AuthenticatedIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.statusCode").value(404));
+    }
+
+    @Test
+    @DisplayName("/me CRUD - principal tự quản lý địa chỉ mà không chọn được owner")
+    void myAddressRoutes_validRequests_bindPrincipalAndReturnExpectedEnvelopes() throws Exception {
+        Long userId = testPrincipalId();
+        Long foreignUserId = insertUserRow(unique("foreign-address-owner"));
+        Long addressId = insertAddressRow(userId, "Owned Receiver", false);
+
+        mockMvc.perform(get(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.meta.total").value(1))
+                .andExpect(jsonPath("$.data.result[0].id").value(addressId))
+                .andExpect(jsonPath("$.data.result[0].userId").value(userId));
+
+        mockMvc.perform(get(BASE_PATH + "/me/" + addressId)
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(addressId))
+                .andExpect(jsonPath("$.data.userId").value(userId));
+
+        mockMvc.perform(post(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(
+                                "userId", foreignUserId,
+                                "receiverName", "Created Receiver",
+                                "phone", "0900000001",
+                                "province", "Ha Noi",
+                                "ward", "Dich Vong",
+                                "addressDetail", "456 Test",
+                                "isDefault", false)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statusCode").value(201))
+                .andExpect(jsonPath("$.data.userId").value(userId));
+
+        mockMvc.perform(put(BASE_PATH + "/me/" + addressId)
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(
+                                "receiverName", "Updated Owned Receiver",
+                                "phone", "0900000002",
+                                "province", "Da Nang",
+                                "ward", "Hai Chau",
+                                "addressDetail", "789 Test",
+                                "isDefault", true)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(addressId))
+                .andExpect(jsonPath("$.data.userId").value(userId))
+                .andExpect(jsonPath("$.data.isDefault").value(true));
+
+        entityManager.flush();
+        assertThat(jdbcTemplate.queryForObject(
+                "select receiver_name from user_addresses where id = ?", String.class, addressId))
+                .isEqualTo("Updated Owned Receiver");
+
+        mockMvc.perform(delete(BASE_PATH + "/me/" + addressId)
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200));
+
+        entityManager.flush();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from user_addresses where id = ?", Integer.class, addressId))
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("POST /me - 400: từ chối self-create address không hợp lệ")
+    void createMyAddress_invalidBody_returnsBadRequest() throws Exception {
+        mockMvc.perform(post(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(
+                                "receiverName", "",
+                                "phone", "",
+                                "province", "",
+                                "ward", "",
+                                "addressDetail", "",
+                                "isDefault", false)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400));
+    }
+
+    @Test
+    @DisplayName("GET /me - 401: từ chối request không có access token")
+    void getMyAddresses_missingToken_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get(BASE_PATH + "/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /me - 403: từ chối token không có permission")
+    void getMyAddresses_withoutPermission_returnsForbidden() throws Exception {
+        mockMvc.perform(get(BASE_PATH + "/me")
+                        .header("Authorization", "Bearer " + noAccessToken()))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -289,6 +389,20 @@ class UserAddressControllerTest extends AuthenticatedIntegrationTest {
 
     private SeededEntity seedEntity() {
         return seedUserAddress();
+    }
+
+    private Long testPrincipalId() {
+        return jdbcTemplate.queryForObject(
+                "select id from users where email = 'test@example.com'", Long.class);
+    }
+
+    private Long insertAddressRow(Long userId, String receiverName, boolean isDefault) {
+        return insertForId("""
+                insert into user_addresses (user_id, receiver_name, phone, province, ward,
+                    address_detail, is_default)
+                values (?, ?, '0900000000', 'Ho Chi Minh', 'Ben Nghe', '123 Test', ?)
+                returning id
+                """, userId, receiverName, isDefault);
     }
 
     private SeededEntity seedBrand() {

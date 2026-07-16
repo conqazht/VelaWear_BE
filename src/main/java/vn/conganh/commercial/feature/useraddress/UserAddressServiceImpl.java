@@ -11,6 +11,7 @@ import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.useraddress.dto.CreateUserAddressRequest;
+import vn.conganh.commercial.feature.useraddress.dto.CreateMyUserAddressRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UpdateUserAddressRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UserAddressFilterRequest;
 import vn.conganh.commercial.feature.useraddress.dto.UserAddressResponse;
@@ -49,6 +50,58 @@ public class UserAddressServiceImpl implements UserAddressService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ResultPaginationDTO getMyUserAddresses(String email, Pageable pageable) {
+        User user = findUser(email);
+        return ResultPaginationDTO.fromPage(userAddressRepository.findByUserId(user.getId(), pageable)
+                .map(UserAddressResponse::fromEntity));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserAddressResponse getMyUserAddressById(String email, Long id) {
+        User user = findUser(email);
+        return UserAddressResponse.fromEntity(findUserAddress(id, user.getId()));
+    }
+
+    @Override
+    @Transactional
+    public UserAddressResponse createMyUserAddress(String email, CreateMyUserAddressRequest request) {
+        User user = findUser(email);
+
+        UserAddress userAddress = new UserAddress();
+        userAddress.setUser(user);
+        userAddress.setReceiverName(request.receiverName());
+        userAddress.setPhone(request.phone());
+        userAddress.setProvince(request.province());
+        userAddress.setWard(request.ward());
+        userAddress.setAddressDetail(request.addressDetail());
+
+        if (request.isDefault()) {
+            unsetCurrentDefault(user.getId());
+            userAddress.setDefault(true);
+        }
+
+        return UserAddressResponse.fromEntity(userAddressRepository.save(userAddress));
+    }
+
+    @Override
+    @Transactional
+    public UserAddressResponse updateMyUserAddress(String email, Long id, UpdateUserAddressRequest request) {
+        User user = findUser(email);
+        UserAddress userAddress = findUserAddress(id, user.getId());
+        updateFields(userAddress, request);
+        return UserAddressResponse.fromEntity(userAddressRepository.save(userAddress));
+    }
+
+    @Override
+    @Transactional
+    public void deleteMyUserAddress(String email, Long id) {
+        User user = findUser(email);
+        userAddressRepository.delete(findUserAddress(id, user.getId()));
+    }
+
+    @Override
     @Transactional
     public UserAddressResponse createUserAddress(CreateUserAddressRequest request) {
         User user = findUser(request.userId());
@@ -73,19 +126,7 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Transactional
     public UserAddressResponse updateUserAddress(Long id, UpdateUserAddressRequest request) {
         UserAddress userAddress = findUserAddress(id);
-        userAddress.setReceiverName(request.receiverName());
-        userAddress.setPhone(request.phone());
-        userAddress.setProvince(request.province());
-        userAddress.setWard(request.ward());
-        userAddress.setAddressDetail(request.addressDetail());
-
-        if (request.isDefault() && !userAddress.isDefault()) {
-            unsetCurrentDefault(userAddress.getUser().getId());
-            userAddress.setDefault(true);
-        } else if (!request.isDefault() && userAddress.isDefault()) {
-            userAddress.setDefault(false);
-        }
-
+        updateFields(userAddress, request);
         return UserAddressResponse.fromEntity(userAddressRepository.save(userAddress));
     }
 
@@ -101,9 +142,34 @@ public class UserAddressServiceImpl implements UserAddressService {
                 .orElseThrow(() -> new ResourceNotFoundException("UserAddress", "id", id));
     }
 
+    private UserAddress findUserAddress(Long id, Long userId) {
+        return userAddressRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("UserAddress", "id", id));
+    }
+
     private User findUser(Long id) {
         return userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+    }
+
+    private User findUser(String email) {
+        return userRepository.findByEmailAndDeletedAtIsNull(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+    }
+
+    private void updateFields(UserAddress userAddress, UpdateUserAddressRequest request) {
+        userAddress.setReceiverName(request.receiverName());
+        userAddress.setPhone(request.phone());
+        userAddress.setProvince(request.province());
+        userAddress.setWard(request.ward());
+        userAddress.setAddressDetail(request.addressDetail());
+
+        if (request.isDefault() && !userAddress.isDefault()) {
+            unsetCurrentDefault(userAddress.getUser().getId());
+            userAddress.setDefault(true);
+        } else if (!request.isDefault() && userAddress.isDefault()) {
+            userAddress.setDefault(false);
+        }
     }
 
     private void unsetCurrentDefault(Long userId) {
@@ -111,6 +177,9 @@ public class UserAddressServiceImpl implements UserAddressService {
                 .ifPresent(address -> {
                     address.setDefault(false);
                     userAddressRepository.save(address);
+                    // The partial unique index permits only one default per user.
+                    // Flush the demotion before an IDENTITY insert or promotion can write true.
+                    userAddressRepository.flush();
                 });
     }
 }
