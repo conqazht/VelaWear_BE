@@ -13,9 +13,9 @@ Read fully, preserve checkout lock ordering, and prove concurrency against Postg
 - Risk: High
 - Category: Correctness / Concurrency
 - Priority / effort / wave: P1 / M / 2
-- Planned against: `2be2362` on 2026-07-16
+- Planned against: `03ffae9` on 2026-07-16
 - Branch: `fix/coupon-counter-concurrency`
-- Dependency: BE-002
+- Dependency: BE-002 merged in PR #23 at `03ffae9`
 - Migration: none expected
 
 ## Why
@@ -34,7 +34,7 @@ Checkout uses conditional atomic updates for `usedCount`, but admin coupon edits
 Run this drift check before implementation:
 
 ```powershell
-git diff --stat 2be2362..HEAD -- src/main/java/vn/conganh/commercial/feature/coupon src/main/java/vn/conganh/commercial/feature/checkout src/test
+git diff --stat 03ffae9..HEAD -- src/main/java/vn/conganh/commercial/feature/coupon src/main/java/vn/conganh/commercial/feature/checkout src/test
 ```
 
 | Gate | Exact command | Expected result |
@@ -53,7 +53,7 @@ git diff --stat 2be2362..HEAD -- src/main/java/vn/conganh/commercial/feature/cou
 
 ### Exact file allowlist
 
-- Existing: `src/main/java/vn/conganh/commercial/feature/coupon/CouponRepository.java`, `src/main/java/vn/conganh/commercial/feature/coupon/CouponServiceImpl.java`, `src/test/java/vn/conganh/commercial/feature/coupon/CouponServiceImplTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/CheckoutConcurrencyTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/SaleCampaignConcurrencyIntegrationTest.java`, `src/main/java/vn/conganh/commercial/feature/checkout/CONTEXT.md`, `docs/PROJECT-STATUS.md`.
+- Existing: `src/main/java/vn/conganh/commercial/feature/coupon/CouponRepository.java`, `src/main/java/vn/conganh/commercial/feature/coupon/CouponServiceImpl.java`, `src/test/java/vn/conganh/commercial/feature/coupon/CouponServiceImplTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/CheckoutConcurrencyTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/SaleCampaignConcurrencyIntegrationTest.java`, `src/main/java/vn/conganh/commercial/feature/checkout/CONTEXT.md`, `docs/PROJECT-STATUS.md`, `plans/003-serialize-coupon-counter-updates.md`, `plans/vi/003-serialize-coupon-counter-updates.vi.md`.
 - New: `src/test/java/vn/conganh/commercial/feature/coupon/CouponConcurrencyIntegrationTest.java`.
 - No entity, migration, checkout production, or other file may change without plan reconciliation.
 

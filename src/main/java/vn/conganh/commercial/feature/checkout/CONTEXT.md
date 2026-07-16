@@ -35,6 +35,10 @@ về trạng thái trước checkout; không gọi "bù" bằng một transactio
 
 - Không dùng luồng `SELECT counter -> kiểm tra Java -> save counter`.
 - Stock/quota/customer limit/coupon phải dùng atomic conditional update và kiểm tra affected row.
+- Admin update/delete coupon phải lấy `PESSIMISTIC_WRITE` lock trên row coupon trong
+  transaction trước khi ghi toàn entity. Atomic `consumeUsage`/`releaseUsage` của
+  checkout và lifecycle giữ nguyên; PostgreSQL row lock serialize hai loại mutation,
+  tránh admin save ghi đè `usedCount` vừa tăng/giảm.
 - Counter quota luôn thỏa `reserved + sold <= quota`.
 - Customer usage luôn thỏa `reserved + purchased <= maxPerCustomer` khi có limit.
 - Khóa nhiều row theo ID tăng dần để giảm deadlock.

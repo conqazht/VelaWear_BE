@@ -13,9 +13,9 @@
 - Risk: High
 - Category: Correctness / Concurrency
 - Priority / effort / wave: P1 / M / 2
-- Planned against: `2be2362` ngày 2026-07-16
+- Planned against: `03ffae9` ngày 2026-07-16
 - Branch: `fix/coupon-counter-concurrency`
-- Dependency: BE-002
+- Dependency: BE-002 đã merge trong PR #23 tại `03ffae9`
 - Migration: dự kiến không có
 
 ## Vì sao
@@ -34,7 +34,7 @@ Checkout dùng conditional atomic update cho `usedCount`, nhưng admin coupon ed
 Chạy drift check này trước implementation:
 
 ```powershell
-git diff --stat 2be2362..HEAD -- src/main/java/vn/conganh/commercial/feature/coupon src/main/java/vn/conganh/commercial/feature/checkout src/test
+git diff --stat 03ffae9..HEAD -- src/main/java/vn/conganh/commercial/feature/coupon src/main/java/vn/conganh/commercial/feature/checkout src/test
 ```
 
 | Gate | Exact command | Expected result |
@@ -53,7 +53,7 @@ git diff --stat 2be2362..HEAD -- src/main/java/vn/conganh/commercial/feature/cou
 
 ### Exact file allowlist
 
-- Existing: `src/main/java/vn/conganh/commercial/feature/coupon/CouponRepository.java`, `src/main/java/vn/conganh/commercial/feature/coupon/CouponServiceImpl.java`, `src/test/java/vn/conganh/commercial/feature/coupon/CouponServiceImplTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/CheckoutConcurrencyTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/SaleCampaignConcurrencyIntegrationTest.java`, `src/main/java/vn/conganh/commercial/feature/checkout/CONTEXT.md`, `docs/PROJECT-STATUS.md`.
+- Existing: `src/main/java/vn/conganh/commercial/feature/coupon/CouponRepository.java`, `src/main/java/vn/conganh/commercial/feature/coupon/CouponServiceImpl.java`, `src/test/java/vn/conganh/commercial/feature/coupon/CouponServiceImplTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/CheckoutConcurrencyTest.java`, `src/test/java/vn/conganh/commercial/feature/checkout/SaleCampaignConcurrencyIntegrationTest.java`, `src/main/java/vn/conganh/commercial/feature/checkout/CONTEXT.md`, `docs/PROJECT-STATUS.md`, `plans/003-serialize-coupon-counter-updates.md`, `plans/vi/003-serialize-coupon-counter-updates.vi.md`.
 - New: `src/test/java/vn/conganh/commercial/feature/coupon/CouponConcurrencyIntegrationTest.java`.
 - Không entity, migration, checkout production, hay file khác được đổi nếu chưa reconcile plan.
 
