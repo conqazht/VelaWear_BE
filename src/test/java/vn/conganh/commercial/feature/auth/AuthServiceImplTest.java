@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,7 +35,6 @@ import vn.conganh.commercial.security.TokenBlacklistService;
 import vn.conganh.commercial.config.JwtProperties;
 import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
 import vn.conganh.commercial.exception.DuplicateResourceException;
-import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ServiceUnavailableException;
 import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
 import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
@@ -44,6 +44,7 @@ import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
 import vn.conganh.commercial.feature.auth.oauth2.OAuth2LoginCodeService;
 import vn.conganh.commercial.feature.auth.otp.OtpService;
+import vn.conganh.commercial.feature.auth.otp.OtpSecurityException;
 import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
@@ -56,6 +57,11 @@ import vn.conganh.commercial.feature.user.UserHasRole;
 import vn.conganh.commercial.feature.user.UserHasRoleRepository;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
+import vn.conganh.commercial.security.monitoring.SecurityEventLogger;
+import vn.conganh.commercial.security.monitoring.SecurityMetrics;
+import vn.conganh.commercial.security.ratelimit.AuthRateLimitService;
+import vn.conganh.commercial.security.session.SessionRevocationReason;
+import vn.conganh.commercial.security.session.SessionRevocationService;
 import vn.conganh.commercial.util.constant.OtpPurpose;
 import vn.conganh.commercial.util.constant.UserGender;
 
@@ -98,6 +104,18 @@ class AuthServiceImplTest {
     @Mock
     private OAuth2LoginCodeService oauth2LoginCodeService;
 
+    @Mock
+    private AuthRateLimitService rateLimitService;
+
+    @Mock
+    private SessionRevocationService sessionRevocationService;
+
+    @Mock
+    private SecurityMetrics securityMetrics;
+
+    @Mock
+    private SecurityEventLogger securityEventLogger;
+
     private AuthServiceImpl authService;
 
     @BeforeEach
@@ -118,7 +136,11 @@ class AuthServiceImplTest {
                 jwtProperties,
                 tokenBlacklistService,
                 otpService,
-                oauth2LoginCodeService);
+                oauth2LoginCodeService,
+                rateLimitService,
+                sessionRevocationService,
+                securityMetrics,
+                securityEventLogger);
     }
 
     @Nested
@@ -217,10 +239,10 @@ class AuthServiceImplTest {
                     "Password123!",
                     LocalDate.of(2000, 1, 1),
                     null,
-                    UserGender.OTHER);
+                    UserGender.OTHER,
+                    "register-proof-token-01234567890123456789");
             Role role = role(4L, "USER");
             when(userRepository.existsByEmail("new.user@example.com")).thenReturn(false);
-            when(otpService.isOtpVerified("new.user@example.com", OtpPurpose.REGISTER)).thenReturn(true);
             when(passwordEncoder.encode("Password123!")).thenReturn("$2a$10$encoded");
             when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
                 User savedUser = invocation.getArgument(0);
@@ -235,7 +257,10 @@ class AuthServiceImplTest {
             // Assert
             assertThat(response.id()).isEqualTo(2L);
             assertThat(response.email()).isEqualTo("new.user@example.com");
-            verify(otpService).consumeOtpVerifiedMarker("new.user@example.com", OtpPurpose.REGISTER);
+            verify(otpService).consumeProof(
+                    "register-proof-token-01234567890123456789",
+                    "new.user@example.com",
+                    OtpPurpose.REGISTER);
             verify(userRepository).save(argThat(user ->
                     "$2a$10$encoded".equals(user.getPassword())
                             && !"Password123!".equals(user.getPassword())));
@@ -458,6 +483,7 @@ class AuthServiceImplTest {
                         .id("refresh-jti")
                         .subject(user.getEmail())
                         .claim("userId", user.getId())
+                        .claim("securityVersion", user.getSecurityVersion())
                         .claim("type", "refresh")
                         .issuedAt(now)
                         .expiresAt(now.plusSeconds(259200))
@@ -479,14 +505,17 @@ class AuthServiceImplTest {
     class ResetPassword {
 
         @Test
-        @DisplayName("resetPassword - resets password successfully with verified OTP")
+        @DisplayName("resetPassword - resets password successfully with a valid OTP proof")
         void resetPassword_success() {
             // Arrange
-            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest("reset@example.com", "NewPassword123!");
+            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest(
+                    "reset@example.com",
+                    "NewPassword123!",
+                    "reset-proof-token-012345678901234567890");
             User user = new User();
+            ReflectionTestUtils.setField(user, "id", 10L);
             user.setEmail("reset@example.com");
             when(userRepository.findByEmailAndDeletedAtIsNull("reset@example.com")).thenReturn(Optional.of(user));
-            when(otpService.isOtpVerified("reset@example.com", OtpPurpose.FORGOT_PASSWORD)).thenReturn(true);
             when(passwordEncoder.encode("NewPassword123!")).thenReturn("encodedNewPassword");
 
             // Act
@@ -495,22 +524,59 @@ class AuthServiceImplTest {
             // Assert
             assertThat(user.getPassword()).isEqualTo("encodedNewPassword");
             verify(userRepository).save(user);
-            verify(otpService).consumeOtpVerifiedMarker("reset@example.com", OtpPurpose.FORGOT_PASSWORD);
+            verify(otpService).consumeProof(
+                    "reset-proof-token-012345678901234567890",
+                    "reset@example.com",
+                    OtpPurpose.FORGOT_PASSWORD);
+            verify(sessionRevocationService).revokeAll(user, SessionRevocationReason.PASSWORD_RESET);
         }
 
         @Test
-        @DisplayName("resetPassword - throws InvalidRequestException if OTP not verified")
-        void resetPassword_unverifiedOtp_throwsException() {
+        @DisplayName("authenticate - IPv6 limiter dùng prefix /64 nhưng session vẫn giữ địa chỉ chuẩn hóa")
+        void authenticate_ipv6UsesNetworkPrefixForIpAccountLimit() {
+            LoginRequest request = new LoginRequest("admin@example.com", "Password123!");
+            Authentication authentication = new UsernamePasswordAuthenticationToken(
+                    "admin@example.com",
+                    null,
+                    List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+            when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                    .thenReturn(authentication);
+            when(userRepository.findByEmailAndDeletedAtIsNull("admin@example.com"))
+                    .thenReturn(Optional.of(user(1L)));
+
+            authService.authenticate(request, "Browser", "2001:db8:abcd:12::1234");
+
+            verify(rateLimitService).enforce(
+                    eq("login"),
+                    eq("AUTH_RATE_LIMITED"),
+                    argThat(subjects -> "2001:db8:abcd:12:0:0:0:0/64:admin@example.com"
+                            .equals(subjects.get("ip-account"))),
+                    eq("2001:db8:abcd:12:0:0:0:0/64"));
+            verify(refreshTokenSessionService).create(argThat(session ->
+                    "2001:db8:abcd:12::1234".equals(session.ipAddress())));
+        }
+
+        @Test
+        @DisplayName("resetPassword - rejects an invalid or expired OTP proof")
+        void resetPassword_invalidProof_throwsException() {
             // Arrange
-            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest("reset@example.com", "NewPassword123!");
-            when(otpService.isOtpVerified("reset@example.com", OtpPurpose.FORGOT_PASSWORD)).thenReturn(false);
+            String proofToken = "invalid-reset-proof-token-012345678901234";
+            ForgotPasswordResetRequest request = new ForgotPasswordResetRequest(
+                    "reset@example.com", "NewPassword123!", proofToken);
+            User user = new User();
+            user.setEmail("reset@example.com");
+            when(userRepository.findByEmailAndDeletedAtIsNull("reset@example.com"))
+                    .thenReturn(Optional.of(user));
+            doThrow(OtpSecurityException.proofInvalidOrExpired())
+                    .when(otpService)
+                    .consumeProof(proofToken, "reset@example.com", OtpPurpose.FORGOT_PASSWORD);
 
             // Act & Assert
             assertThatThrownBy(() -> authService.resetPassword(request))
-                    .isInstanceOf(InvalidRequestException.class)
-                    .hasMessageContaining("Email address has not been verified with OTP.");
-            verify(userRepository, never()).findByEmailAndDeletedAtIsNull(any());
+                    .isInstanceOf(OtpSecurityException.class)
+                    .hasMessageContaining("OTP proof is invalid");
             verify(userRepository, never()).save(any());
+            verify(sessionRevocationService, never()).revokeAll(any(), any());
         }
     }
 
@@ -519,16 +585,17 @@ class AuthServiceImplTest {
     class ChangeEmail {
 
         @Test
-        @DisplayName("changeEmail - updates email successfully with verified OTP")
+        @DisplayName("changeEmail - updates email successfully with a valid OTP proof")
         void changeEmail_success() {
             // Arrange
-            ChangeEmailRequest request = new ChangeEmailRequest("new@example.com");
+            ChangeEmailRequest request = new ChangeEmailRequest(
+                    "new@example.com", "change-email-proof-token-01234567890123");
             User user = new User();
+            ReflectionTestUtils.setField(user, "id", 11L);
             user.setEmail("current@example.com");
 
             when(userRepository.findByEmailAndDeletedAtIsNull("current@example.com")).thenReturn(Optional.of(user));
             when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
-            when(otpService.isOtpVerified("new@example.com", OtpPurpose.CHANGE_EMAIL)).thenReturn(true);
 
             // Act
             authService.changeEmail("current@example.com", request);
@@ -536,7 +603,12 @@ class AuthServiceImplTest {
             // Assert
             assertThat(user.getEmail()).isEqualTo("new@example.com");
             verify(userRepository).save(user);
-            verify(otpService).consumeOtpVerifiedMarker("new@example.com", OtpPurpose.CHANGE_EMAIL);
+            verify(otpService).consumeProof(
+                    "change-email-proof-token-01234567890123",
+                    "new@example.com",
+                    OtpPurpose.CHANGE_EMAIL,
+                    11L);
+            verify(sessionRevocationService).revokeAll(user, SessionRevocationReason.EMAIL_CHANGE);
         }
 
         @Test

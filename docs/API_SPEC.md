@@ -3,6 +3,7 @@
 > All endpoints return `ApiResponse<T>` wrapper.
 > Update this file whenever endpoints change.
 > Sale Campaign design, state machine và race-condition notes: [SALE_CAMPAIGN_BACKEND.md](./SALE_CAMPAIGN_BACKEND.md).
+> OTP/Auth hardening, Redis invariants và trusted-proxy notes: [OTP_SECURITY_FLOW_VI.md](./OTP_SECURITY_FLOW_VI.md).
 
 ---
 
@@ -36,18 +37,23 @@ Public endpoints:
 | POST | `/api/v1/auth/register` | Register customer/user account (requires REGISTER OTP) |
 | POST | `/api/v1/auth/refresh` | Rotate refresh token and issue new access token |
 | POST | `/api/v1/auth/logout` | Revoke refresh token |
-| POST | `/api/v1/auth/otp/request` | Request an OTP code via email |
-| POST | `/api/v1/auth/otp/verify` | Verify email OTP code |
-| POST | `/api/v1/auth/forgot-password/reset` | Reset password using verified OTP |
-| PUT | `/api/v1/auth/me/email` | Change email using verified OTP |
+| POST | `/api/v1/auth/otp/request` | Request OTP challenge; `CHANGE_EMAIL` requires JWT |
+| POST | `/api/v1/auth/otp/verify` | Verify challenge and receive single-use proof |
+| POST | `/api/v1/auth/forgot-password/reset` | Reset password using OTP proof |
+| GET | `/oauth2/authorization/google` | Start Google OAuth2 Login |
+| GET | `/login/oauth2/code/google` | Google OAuth2 callback managed by Spring Security |
 | GET | `/api/v1/sales` | List published, non-ended STANDARD/FLASH campaigns; phase is returned per row |
 | GET | `/api/v1/sales/{code}` | Public campaign detail and pricing |
 | GET | `/actuator/health` | Health check |
+| GET | `/actuator/info` | Build/application information |
 | GET | `/v3/api-docs/**` | OpenAPI docs |
 | GET | `/swagger-ui/**` | Swagger UI |
 
+> `PUT /api/v1/auth/me/email`, `PUT /api/v1/auth/me/password`, `GET /api/v1/auth/me`
+> and `/actuator/metrics/**` require JWT; metrics additionally require `ROLE_ADMIN`.
 > Auth endpoints are implemented. Access tokens and refresh tokens are signed with HS512.
 > Raw refresh JWTs are returned to clients, while the database stores only SHA-512 hashes for revoke/rotate.
+> Both JWT types carry `securityVersion`; a missing/stale version returns `401 SESSION_REVOKED`.
 
 Auth token configuration:
 
@@ -55,6 +61,7 @@ Auth token configuration:
 | `JWT_REFRESH_TOKEN_SECRET_KEY` | dev fallback only | HMAC signing secret for Refresh tokens. Required in production. |
 | `JWT_ACCESS_TOKEN_EXPIRATION` | `900` | Access token lifetime in seconds, 15 minutes by default. |
 | `JWT_REFRESH_TOKEN_EXPIRATION` | `259200` | Refresh token lifetime in seconds, 3 days by default. |
+| `SECURITY_HMAC_SECRET` | required in `prod`, minimum 32 bytes | Independent HMAC key for OTP/proof, limiter subjects and blacklist keys; never reuse a JWT key. |
 
 Token algorithm:
 
@@ -161,7 +168,15 @@ Common application errors:
 | `403 Forbidden` | Authenticated user lacks RBAC permission |
 | `404 Not Found` | Resource does not exist or was soft-deleted |
 | `409 Conflict` | Duplicate or invalid business state |
+| `429 Too Many Requests` | Auth/OTP quota exceeded; always includes `Retry-After` and `data.retryAfterSeconds` |
+| `503 Service Unavailable` | Security state/email provider unavailable; Auth/OTP fails closed |
 | `500 Internal Server Error` | Unexpected server error |
+
+Stable Auth/OTP codes are `OTP_INVALID_OR_EXPIRED`,
+`OTP_ATTEMPTS_EXHAUSTED`, `OTP_RATE_LIMITED`,
+`OTP_PROOF_INVALID_OR_EXPIRED`, `AUTH_RATE_LIMITED`, `SESSION_REVOKED`,
+`OTP_SERVICE_UNAVAILABLE`, and `OTP_DELIVERY_UNAVAILABLE`. A `429` response never
+exposes the internal policy/dimension or remaining attempts.
 
 ```json
 {
@@ -265,6 +280,30 @@ Set-Cookie: refresh_token=<refreshToken>; Max-Age=259200; Path=/api/v1/auth; Htt
 
 ---
 
+### GET /oauth2/authorization/google Public
+
+Starts Google OAuth2 Login. Spring Security redirects to Google after the backend
+stores an explicit authorization-request JSON document in Redis. The browser cookie
+`oauth2_auth_request` contains only a random 43-character nonce; it never contains a
+Java-serialized object.
+
+Redis state expires after `OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS` (default 180
+seconds). Starting another Google Login invalidates the previous flow for the same
+browser.
+
+### GET /login/oauth2/code/google Public callback
+
+Spring Security callback. The backend atomically consumes the Redis state with
+`GETDEL`, validates OAuth2 state/OIDC nonce/PKCE, and then redirects to the configured
+frontend success or failure URL. Concurrent callbacks and replay cannot reuse the
+same state. Missing/expired/legacy cookies and Redis failures fail closed.
+
+These routes are browser navigation endpoints, so they do not use the standard JSON
+response envelope. Frontend request/response contracts are unchanged by the
+server-side state hardening.
+
+---
+
 ### POST /api/v1/auth/register Public
 
 Register a storefront customer account.
@@ -278,7 +317,8 @@ Register a storefront customer account.
   "fullName": "Nguyen Van A",
   "birthDate": "2000-01-01",
   "avatar": null,
-  "gender": "MALE"
+  "gender": "MALE",
+  "otpProofToken": "zQ8M5gHlKcJw3tP2vYn0dSbArExUiFoN6R9W1aD7C4k"
 }
 ```
 
@@ -307,7 +347,9 @@ Register a storefront customer account.
 | Status | When |
 |--------|------|
 | 400 | Validation failed |
+| 400 `OTP_PROOF_INVALID_OR_EXPIRED` | Proof missing, expired, reused or not bound to `REGISTER + email` |
 | 409 | Email already exists |
+| 429 `AUTH_RATE_LIMITED` | Register IP/global quota exceeded |
 
 ---
 
@@ -356,6 +398,8 @@ Set-Cookie: refresh_token=<newRefreshToken>; Max-Age=259200; Path=/api/v1/auth; 
 |--------|------|
 | 401 | No refresh token provided |
 | 401 | Refresh token expired or revoked |
+| 401 `SESSION_REVOKED` | JWT/session `securityVersion` is missing or stale |
+| 429 `AUTH_RATE_LIMITED` | Refresh JTI/IP/global quota exceeded |
 
 ---
 
@@ -399,6 +443,8 @@ Get current authenticated user.
 **Error Responses:**
 
 - `401 Unauthorized` when access token is missing, expired, or invalid.
+- `401 SESSION_REVOKED` when the token has no current `securityVersion`.
+- `429 AUTH_RATE_LIMITED` when the user/IP/global auth-session quota is exceeded.
 
 **Success Response (200):**
 
@@ -430,7 +476,9 @@ Get current authenticated user.
 
 ### POST /api/v1/auth/otp/request Public
 
-Request an OTP code via email.
+Request an OTP code via email and receive an opaque challenge. `CHANGE_EMAIL`
+requires Bearer JWT and binds the challenge to the current `userId`; the other two
+purposes are public.
 
 **Request Body:**
 
@@ -448,24 +496,41 @@ Supported purpose values: `REGISTER`, `FORGOT_PASSWORD`, `CHANGE_EMAIL`.
 ```json
 {
   "statusCode": 200,
-  "data": null,
-  "message": "OTP generated and sent successfully",
-  "timestamp": "2026-06-14T21:00:00"
+  "data": {
+    "challengeId": "x7P5v6cWn0L9R3K1t2A8e4FqBzJmYuSdHiGoNcVXQ_k",
+    "expiresInSeconds": 300,
+    "cooldownSeconds": 60
+  },
+  "message": "Verification code sent successfully",
+  "timestamp": "2026-07-16T10:00:00"
 }
 ```
+
+For `FORGOT_PASSWORD`, an unknown email receives the same status/schema with a
+decoy challenge and no delivery, preventing account enumeration.
+
+**Errors:**
+
+| Status/code | When |
+|---|---|
+| 401 | `CHANGE_EMAIL` has no valid JWT |
+| 429 `OTP_RATE_LIMITED` | Cooldown or any configured OTP dimension is exceeded |
+| 503 `OTP_SERVICE_UNAVAILABLE` | Redis OTP/limiter state is unavailable; fail closed |
+| 503 `OTP_DELIVERY_UNAVAILABLE` | Resend did not accept the email; old challenge is retained |
 
 ---
 
 ### POST /api/v1/auth/otp/verify Public
 
-Verify email OTP code.
+Verify an OTP challenge and receive a short-lived, single-use proof token. Email and
+purpose are intentionally not accepted again; both come from the Redis challenge
+binding.
 
 **Request Body:**
 
 ```json
 {
-  "email": "customer@example.com",
-  "purpose": "REGISTER",
+  "challengeId": "x7P5v6cWn0L9R3K1t2A8e4FqBzJmYuSdHiGoNcVXQ_k",
   "code": "123456"
 }
 ```
@@ -475,11 +540,23 @@ Verify email OTP code.
 ```json
 {
   "statusCode": 200,
-  "data": null,
-  "message": "OTP verified successfully",
-  "timestamp": "2026-06-14T21:00:00"
+  "data": {
+    "proofToken": "zQ8M5gHlKcJw3tP2vYn0dSbArExUiFoN6R9W1aD7C4k",
+    "expiresInSeconds": 300
+  },
+  "message": "Verification code verified successfully",
+  "timestamp": "2026-07-16T10:01:00"
 }
 ```
+
+**Errors:**
+
+| Status/code | When |
+|---|---|
+| 400 `OTP_INVALID_OR_EXPIRED` | Challenge/code invalid, expired or superseded |
+| 429 `OTP_ATTEMPTS_EXHAUSTED` | Five wrong codes on the scope; locked for the returned TTL |
+| 429 `OTP_RATE_LIMITED` | Verify IP/global quota exceeded |
+| 503 `OTP_SERVICE_UNAVAILABLE` | Redis state unavailable; fail closed |
 
 ---
 
@@ -492,7 +569,8 @@ Reset password using verified OTP.
 ```json
 {
   "email": "customer@example.com",
-  "newPassword": "newPassword123"
+  "newPassword": "newPassword123",
+  "otpProofToken": "zQ8M5gHlKcJw3tP2vYn0dSbArExUiFoN6R9W1aD7C4k"
 }
 ```
 
@@ -501,11 +579,18 @@ Reset password using verified OTP.
 ```json
 {
   "statusCode": 200,
-  "data": null,
+  "data": {
+    "allSessionsRevoked": true,
+    "reauthenticationRequired": true
+  },
   "message": "Password reset successfully",
-  "timestamp": "2026-06-14T21:00:00"
+  "timestamp": "2026-07-16T10:02:00"
 }
 ```
+
+The response clears the `refresh_token` cookie. The proof must be bound to
+`FORGOT_PASSWORD + normalized email` and is atomically consumed once. All access and
+refresh sessions are revoked by incrementing `securityVersion`.
 
 ---
 
@@ -517,7 +602,8 @@ Change authenticated user's email using verified OTP (for the new email).
 
 ```json
 {
-  "newEmail": "newemail@example.com"
+  "newEmail": "newemail@example.com",
+  "otpProofToken": "zQ8M5gHlKcJw3tP2vYn0dSbArExUiFoN6R9W1aD7C4k"
 }
 ```
 
@@ -526,11 +612,58 @@ Change authenticated user's email using verified OTP (for the new email).
 ```json
 {
   "statusCode": 200,
-  "data": null,
+  "data": {
+    "allSessionsRevoked": true,
+    "reauthenticationRequired": true
+  },
   "message": "Email updated successfully",
-  "timestamp": "2026-06-14T21:00:00"
+  "timestamp": "2026-07-16T10:02:00"
 }
 ```
+
+The proof must be bound to `CHANGE_EMAIL + authenticated userId + normalized new
+email`. The response clears the refresh cookie and all sessions are revoked.
+
+**Errors for proof-protected final actions:**
+
+| Status/code | When |
+|---|---|
+| 400 `OTP_PROOF_INVALID_OR_EXPIRED` | Proof expired, reused, superseded or bound to another scope |
+| 401 `SESSION_REVOKED` | Access JWT was revoked before the authenticated action |
+| 429 `AUTH_RATE_LIMITED` | Endpoint user/IP/global quota exceeded |
+| 503 `OTP_SERVICE_UNAVAILABLE` | Proof store unavailable; action is not allowed |
+
+---
+
+### PUT /api/v1/auth/me/password Bearer Implemented
+
+Set a first password for an OAuth-only account or change an existing password.
+Existing password accounts must provide the current password.
+
+**Request Body:**
+
+```json
+{
+  "currentPassword": "oldPassword123",
+  "newPassword": "newPassword123"
+}
+```
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "allSessionsRevoked": true,
+    "reauthenticationRequired": true
+  },
+  "message": "Password updated successfully",
+  "timestamp": "2026-07-16T10:02:00"
+}
+```
+
+The response clears the refresh cookie and revokes all access/refresh sessions.
 
 ---
 
@@ -1618,6 +1751,14 @@ Flash quota.
 | POST | `/api/v1/auth/refresh` | Public | Implemented | Refresh token |
 | POST | `/api/v1/auth/logout` | Public | Implemented | Logout |
 | GET | `/api/v1/auth/me` | Bearer | Implemented | Current user |
+| POST | `/api/v1/auth/otp/request` | Public/Bearer for `CHANGE_EMAIL` | Implemented | Request OTP challenge |
+| POST | `/api/v1/auth/otp/verify` | Public/Bearer for `CHANGE_EMAIL` | Implemented | Verify challenge and issue proof |
+| POST | `/api/v1/auth/forgot-password/reset` | Public | Implemented | Reset password with proof; revoke all sessions |
+| PUT | `/api/v1/auth/me/email` | Bearer | Implemented | Change email with actor-bound proof; revoke all sessions |
+| PUT | `/api/v1/auth/me/password` | Bearer | Implemented | Set/change password; revoke all sessions |
+| GET | `/oauth2/authorization/google` | Public | Implemented | Start Google OAuth2 Login with server-side Redis state |
+| GET | `/login/oauth2/code/google` | Public callback | Implemented | Consume OAuth2 state once and redirect frontend |
+| GET | `/actuator/metrics/**` | Bearer `ROLE_ADMIN` | Implemented | In-memory Micrometer metrics |
 | GET | `/users` | Bearer | Implemented | List users |
 | GET | `/users/{id}` | Bearer | Implemented | Get user |
 | POST | `/users` | Bearer | Implemented | Create user |

@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-07-16):** Key model và verified-marker dưới đây không còn là
+> thiết kế hiện hành. Xem `../harden-otp-auth-v1/design.md` và
+> `docs/OTP_SECURITY_FLOW_VI.md` cho OTP v2/proof token.
+
 ## Context
 
 The backend already exposes public auth endpoints under `/api/v1/auth` and uses Redis for security-sensitive runtime state such as access-token blacklisting, refresh-token sessions, and RBAC cache. It does not yet have a transactional email provider or a reusable OTP flow for account-sensitive operations.

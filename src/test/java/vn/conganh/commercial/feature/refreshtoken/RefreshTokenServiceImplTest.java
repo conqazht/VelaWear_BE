@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -170,6 +171,21 @@ class RefreshTokenServiceImplTest {
                     .isInstanceOf(InvalidRequestException.class)
                     .hasMessageContaining("already revoked");
             verify(refreshTokenRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("revokeAllByUserId - revoke toàn bộ refresh-token audit row bằng bulk update")
+        void revokeAllByUserId_allAuditRows_returnsAffectedRows() {
+            // Arrange
+            when(refreshTokenRepository.revokeAllByUserId(1L))
+                    .thenReturn(3);
+
+            // Act
+            int revoked = refreshTokenService.revokeAllByUserId(1L);
+
+            // Assert
+            assertThat(revoked).isEqualTo(3);
+            verify(refreshTokenRepository).revokeAllByUserId(1L);
         }
     }
 

@@ -24,7 +24,8 @@ import vn.conganh.commercial.feature.user.dto.UserResponse;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRolesRequest;
 import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.role.RoleRepository;
-import vn.conganh.commercial.security.TokenBlacklistService;
+import vn.conganh.commercial.security.session.SessionRevocationReason;
+import vn.conganh.commercial.security.session.SessionRevocationService;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +35,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserHasRoleRepository userHasRoleRepository;
     private final RoleRepository roleRepository;
-    private final TokenBlacklistService tokenBlacklistService;
+    private final SessionRevocationService sessionRevocationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -102,8 +103,8 @@ public class UserServiceImpl implements UserService {
             userHasRoleRepository.save(uhr);
         }
 
-        // Ghi mốc đổi role để Access Token đã phát hành trước đó bị SecurityConfig từ chối.
-        tokenBlacklistService.setRoleUpdateTimestamp(id);
+        // Mọi access/refresh token cũ bị vô hiệu ngay sau khi thay đổi quyền.
+        sessionRevocationService.revokeAll(user, SessionRevocationReason.ROLE_CHANGE);
 
         List<UserResponse.RoleSummaryResponse> roles =
                 rolesByUserId(List.of(user)).getOrDefault(user.getId(), List.of());

@@ -30,7 +30,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.feature.role.RoleRepository;
-import vn.conganh.commercial.security.TokenBlacklistService;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
@@ -38,6 +37,7 @@ import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.user.dto.CreateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UpdateUserRequest;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
+import vn.conganh.commercial.security.session.SessionRevocationService;
 import vn.conganh.commercial.util.constant.UserGender;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,7 +57,7 @@ class UserServiceImplTest {
     private RoleRepository roleRepository;
 
     @Mock
-    private TokenBlacklistService tokenBlacklistService;
+    private SessionRevocationService sessionRevocationService;
 
     private UserServiceImpl userService;
 
@@ -68,7 +68,7 @@ class UserServiceImplTest {
                 passwordEncoder,
                 userHasRoleRepository,
                 roleRepository,
-                tokenBlacklistService);
+                sessionRevocationService);
     }
 
     @Nested

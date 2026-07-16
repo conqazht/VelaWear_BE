@@ -1,3 +1,27 @@
+### Hardening OTP/Auth v1: proof một lần, limiter và revoke-all
+
+- **Date/Time**: 2026-07-16 (Asia/Saigon)
+- **Summary of Changes**: Thay verified-marker bằng contract `challengeId -> proofToken`
+  dùng Redis Lua atomic; thêm limiter đa chiều Auth/OTP, client IP resolver không tin
+  forwarded header, `users.security_version` để thu hồi mọi access/refresh session,
+  correlation/security log và Micrometer metrics giới hạn cardinality. Google OAuth2
+  không còn deserialize Java object từ cookie: browser chỉ giữ nonce, request JSON
+  nằm trong Redis và callback consume một lần bằng `GETDEL`.
+- **Security/Compatibility**: `CHANGE_EMAIL` bind proof với user đang đăng nhập;
+  forgot-password email không tồn tại dùng decoy challenge. JWT/refresh session cũ
+  thiếu `securityVersion` và OTP key v1 bị từ chối, tạo một lần forced re-login có
+  chủ đích. Cookie OAuth2 kiểu Java serialization cũ cũng bị từ chối và flow đang
+  dở phải bắt đầu lại. `SECURITY_HMAC_SECRET` tối thiểu 32 byte và tách khỏi JWT
+  secret.
+- **Scope**: Chỉ dùng Redis, Resend, Spring Boot Actuator/Micrometer hiện có. Chưa có
+  Cloudflare/WAF, adaptive CAPTCHA, Prometheus/Grafana hoặc SaaS mới. Xem
+  `docs/OTP_SECURITY_FLOW_VI.md` để biết contract, Lua invariant, proxy config và
+  troubleshooting.
+- **Verification Performed**: OAuth2 focused suite pass 14/14, gồm Redis thật,
+  callback concurrency/replay, legacy cookie, JSON invalid/oversized, Redis
+  fail-closed và nonce collision. Toàn bộ `mvnw.cmd test` pass 664/664; OpenSpec
+  strict validation và `git diff --check` pass.
+
 ### Dev catalog 100 Product xác định, gallery đúng theo màu
 
 - **Date/Time**: 2026-07-16 (Asia/Saigon)
@@ -44,10 +68,12 @@
 
 ### Completed
 
-- Implemented Redis-backed OTP (One-Time Password) generation, validation, and verification markers.
+- Implemented Redis-backed OTP generation, validation, and verification markers.
+  Verified-marker contract này đã được Hardening OTP/Auth v1 ngày 2026-07-16 thay
+  bằng challenge + single-use proof token; chỉ giữ mục này làm lịch sử.
 - Integrated Resend email provider with custom, responsive HTML templates for OTP delivery.
 - Enforced OTP verification for storefront user registration (`REGISTER` purpose).
-- Implemented forgot-password reset flow (`FORGOT_PASSWORD` purpose) and authenticated email changes (`CHANGE_EMAIL` purpose), both protected and consumed via OTP verified markers.
+- Implemented forgot-password reset flow (`FORGOT_PASSWORD` purpose) and authenticated email changes (`CHANGE_EMAIL` purpose), originally consumed via OTP verified markers and now superseded by scoped proof tokens.
 - Added full suite of unit and integration tests covering OTP services, controllers, and protected auth endpoints.
 - Updated `API_SPEC.md` documentation to reflect the new public and private OTP endpoints.
 ## 2026-07-06

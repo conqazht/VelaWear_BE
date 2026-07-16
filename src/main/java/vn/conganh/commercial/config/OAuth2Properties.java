@@ -7,7 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record OAuth2Properties(
         String frontendSuccessUrl,
         String frontendFailureUrl,
-        long loginCodeTtlSeconds
+        long loginCodeTtlSeconds,
+        long authorizationRequestTtlSeconds
 ) {
 
     public OAuth2Properties {
@@ -20,9 +21,17 @@ public record OAuth2Properties(
         if (loginCodeTtlSeconds <= 0) {
             throw new IllegalArgumentException("OAuth2 login code TTL must be greater than zero");
         }
+        if (authorizationRequestTtlSeconds <= 0 || authorizationRequestTtlSeconds > 600) {
+            throw new IllegalArgumentException(
+                    "OAuth2 authorization request TTL must be between 1 and 600 seconds");
+        }
     }
 
     public Duration loginCodeTtl() {
         return Duration.ofSeconds(loginCodeTtlSeconds);
+    }
+
+    public Duration authorizationRequestTtl() {
+        return Duration.ofSeconds(authorizationRequestTtlSeconds);
     }
 }

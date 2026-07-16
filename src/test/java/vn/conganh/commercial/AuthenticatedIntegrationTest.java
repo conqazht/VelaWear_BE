@@ -30,6 +30,7 @@ public abstract class AuthenticatedIntegrationTest extends AbstractIntegrationTe
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(subject)
                 .claim("userId", userId)
+                .claim("securityVersion", 0L)
                 .claim("roles", roles)
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(900))

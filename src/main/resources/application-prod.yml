@@ -30,3 +30,10 @@ logging:
   level:
     root: info
     org.hibernate.SQL: warn
+  structured:
+    format:
+      console: logstash
+
+app:
+  security:
+    hmac-secret: ${SECURITY_HMAC_SECRET}

@@ -24,13 +24,9 @@ import vn.conganh.commercial.feature.role.RoleService;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
-import vn.conganh.commercial.security.TokenBlacklistService;
 
 @DisplayName("Redis Security and Cleanup Integration Tests")
 class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTest {
-
-    @Autowired
-    private TokenBlacklistService tokenBlacklistService;
 
     @Autowired
     private CacheManager cacheManager;
@@ -61,6 +57,11 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
                     userRepository.delete(u);
                 });
         userRepository.findByEmailAndDeletedAtIsNull("cleanup@velawear.local")
+                .ifPresent(u -> {
+                    jdbcTemplate.execute("delete from refresh_tokens where user_id = " + u.getId());
+                    userRepository.delete(u);
+                });
+        userRepository.findByEmailAndDeletedAtIsNull("revoke-all@velawear.local")
                 .ifPresent(u -> {
                     jdbcTemplate.execute("delete from refresh_tokens where user_id = " + u.getId());
                     userRepository.delete(u);
@@ -96,7 +97,7 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
         mockMvc.perform(get("/api/v1/auth/me")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Token is blacklisted"));
+                .andExpect(jsonPath("$.code").value("SESSION_REVOKED"));
     }
 
     @Test
@@ -118,14 +119,14 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
 
-        // Simulate role update timestamp setting in Redis
-        tokenBlacklistService.setRoleUpdateTimestamp(userId);
+        // Role changes now revoke every token through the PostgreSQL security version.
+        assertThat(userRepository.incrementSecurityVersion(userId)).isEqualTo(1);
 
         // Verify subsequent request is rejected due to force refresh requirement
         mockMvc.perform(get("/api/v1/auth/me")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("User roles have been updated. Please refresh token."));
+                .andExpect(jsonPath("$.code").value("SESSION_REVOKED"));
     }
 
     @Test
@@ -195,5 +196,38 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
         assertThat(refreshTokenRepository.findByToken("active_token_123")).isPresent();
         assertThat(refreshTokenRepository.findByToken("expired_token_123")).isEmpty();
         assertThat(refreshTokenRepository.findByToken("revoked_token_123")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Bulk revoke marks both active and expired refresh-token audit rows")
+    void revokeAllByUserId_marksEveryUnrevokedAuditRow() {
+        User user = new User();
+        user.setFullName("Revoke All Test User");
+        user.setEmail("revoke-all@velawear.local");
+        user.setPassword("encodedPassword");
+        user.setBirthDate(java.time.LocalDate.now());
+        user.setGender(vn.conganh.commercial.util.constant.UserGender.OTHER);
+        user = userRepository.save(user);
+
+        RefreshToken activeToken = new RefreshToken();
+        activeToken.setUser(user);
+        activeToken.setToken("revoke_all_active");
+        activeToken.setExpiresAt(Instant.now().plus(1, ChronoUnit.DAYS));
+        activeToken.setRevoked(false);
+        refreshTokenRepository.save(activeToken);
+
+        RefreshToken expiredToken = new RefreshToken();
+        expiredToken.setUser(user);
+        expiredToken.setToken("revoke_all_expired");
+        expiredToken.setExpiresAt(Instant.now().minus(1, ChronoUnit.DAYS));
+        expiredToken.setRevoked(false);
+        refreshTokenRepository.save(expiredToken);
+
+        assertThat(refreshTokenRepository.revokeAllByUserId(user.getId())).isEqualTo(2);
+        Integer remainingUnrevoked = jdbcTemplate.queryForObject(
+                "select count(*) from refresh_tokens where user_id = ? and revoked = false",
+                Integer.class,
+                user.getId());
+        assertThat(remainingUnrevoked).isZero();
     }
 }

@@ -20,6 +20,8 @@ public interface RefreshTokenService {
 
     void markRefreshTokenRevoked(String rawToken);
 
+    int revokeAllByUserId(Long userId);
+
     String hashToken(String rawToken);
 
     void deleteRefreshToken(Long id);

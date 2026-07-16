@@ -25,6 +25,10 @@ không phải benchmark tải.
 | Hai SePay IPN giống hệt | Order/payment row lock, transaction-code unique index và idempotent lifecycle | `SaleCampaignConcurrencyIntegrationTest.concurrentExactDuplicateSepayIpn_confirmsPaymentAndResourcesOnce` |
 | IPN đến lúc reservation hết hạn | Cùng tranh order row lock; release chỉ chạy một lần | `SaleCampaignConcurrencyIntegrationTest.lateIpnRacingExpiry_releasesResourcesOnceAndMarksRefundPending` |
 | Hai request dùng cùng refresh token | Redis Lua compare-and-swap thay old session bằng đúng một successor | `AuthRefreshConcurrencyIntegrationTest.refreshToken_concurrentRequests_onlyOneSucceeds` |
+| Hai request OTP cùng scope cùng reserve cooldown | Redis Lua `SET NX PX`; chỉ một reservation thắng | OTP Redis integration/concurrency test |
+| Hai verify đúng cùng challenge | Lua verify xóa active challenge và phát proof trong cùng thao tác; chỉ một proof được phát | OTP Redis integration/concurrency test |
+| Hai final action dùng cùng proof | Lua consume so scope rồi xóa proof + active pointer atomically; chỉ một consume thắng | OTP Redis integration/concurrency test |
+| Refresh chạy đồng thời với reset/change/role-change | PostgreSQL atomic increment `security_version` là nguồn sự thật; refresh successor version cũ vẫn bị từ chối | Auth session revocation integration/concurrency test |
 
 ## Quy tắc viết concurrency test
 
@@ -68,6 +72,48 @@ Thiết kế hiện tại dùng một Redis standalone. Lua script chạm hai ke
 nếu chuyển sang Redis Cluster thì phải thiết kế lại key với cùng hash slot trước khi
 bật cluster.
 
+## Atomic OTP challenge và proof
+
+OTP v2 không dùng chuỗi lệnh read/check/delete rời rạc. Bốn Lua script bảo vệ bốn
+cửa race:
+
+1. `reserve-request.lua` chỉ cho một request cùng scope đặt cooldown.
+2. `publish-challenge.lua` atomically thay challenge/proof cũ sau khi provider nhận
+   email; resend không xóa attempts.
+3. `verify-and-issue-proof.lua` so code, tăng failed attempts, xóa challenge và tạo
+   proof trong một thao tác.
+4. `consume-proof.lua` so exact scope rồi xóa proof cùng active pointer; một proof
+   không thể finalize hai mutation đồng thời.
+
+Test phải kiểm tra cả kết quả hai worker và trạng thái key sau cùng: chỉ một
+challenge/proof/final mutation tồn tại, attempts không bị reset bởi resend và proof
+cũ không còn dùng được sau khi challenge mới được publish.
+
+## Revoke-all và refresh race
+
+Reset/change/role-change tăng `users.security_version` bằng atomic update trong
+transaction PostgreSQL, bulk revoke refresh audit rows, rồi mới phát event cleanup
+Redis sau commit. PostgreSQL là nguồn sự thật: nếu cleanup Redis lỗi, JWT/refresh
+session mang version cũ vẫn bị `SESSION_REVOKED`.
+
+Concurrency test phải tạo refresh và sensitive change sát nhau, sau đó chứng minh
+không token successor nào có thể gọi API bằng version cũ. Không chỉ assert Redis key
+đã xóa vì cleanup là hậu commit và có thể fail an toàn.
+
+## Google OAuth2 callback race và replay
+
+Authorization request không còn nằm trong cookie Java serialization. Browser chỉ
+giữ nonce, còn JSON bounded nằm tại Redis key HMAC. Callback gọi `GETDEL` trước khi
+Spring Security kiểm tra state và đổi authorization code, vì vậy hai callback cùng
+nonce không thể cùng lấy request.
+
+Integration test tạo một flow rồi thả đồng thời nhiều worker gọi
+`removeAuthorizationRequest`; invariant là đúng một worker nhận request, các worker
+còn lại nhận null và Redis key biến mất. Sau đó phải thử replay lần nữa, cookie Java
+cũ, JSON hỏng/quá lớn và Redis unavailable để chứng minh không có nhánh fallback
+sang cookie/HTTP session. `loadAuthorizationRequest` được test riêng vì thao tác đọc
+không được consume state trước callback thật.
+
 ## Chạy test
 
 Docker Desktop phải hoạt động vì integration test tự khởi động PostgreSQL và Redis.
@@ -85,6 +131,7 @@ $env:RESEND_API_KEY='test-resend-api-key'
 $env:SEPAY_ENABLED='false'
 
 .\mvnw.cmd "-Dtest=AuthRefreshConcurrencyIntegrationTest" test
+.\mvnw.cmd "-Dtest=*Otp*IntegrationTest,*Session*IntegrationTest" test
 .\mvnw.cmd "-Dtest=CheckoutConcurrencyTest,SaleCampaignConcurrencyIntegrationTest" test
 ```
 

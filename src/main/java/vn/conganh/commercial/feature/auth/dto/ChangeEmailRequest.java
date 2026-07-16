@@ -8,5 +8,13 @@ public record ChangeEmailRequest(
         @NotBlank(message = "New email is required")
         @Email(message = "Invalid email format")
         @Size(max = 255, message = "Email must be at most 255 characters")
-        String newEmail
-) {}
+        String newEmail,
+
+        @NotBlank(message = "OTP proof token is required")
+        @Size(min = 32, max = 512, message = "OTP proof token is invalid")
+        String otpProofToken
+) {
+    public ChangeEmailRequest(String newEmail) {
+        this(newEmail, null);
+    }
+}

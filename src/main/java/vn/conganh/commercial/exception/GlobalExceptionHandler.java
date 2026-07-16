@@ -1,12 +1,13 @@
 package vn.conganh.commercial.exception;
 
-import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.data.core.PropertyReferenceException;
@@ -22,6 +23,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import vn.conganh.commercial.dto.ApiResponse;
+import vn.conganh.commercial.security.ratelimit.RateLimitExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -33,13 +35,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RefreshTokenSessionNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleRefreshTokenSessionNotFound(
             RefreshTokenSessionNotFoundException exception,
+            HttpServletRequest request,
             HttpServletResponse response) {
-        Cookie cookie = new Cookie(REFRESH_TOKEN_COOKIE_NAME, "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath(REFRESH_TOKEN_COOKIE_PATH);
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        response.setHeader(
+                HttpHeaders.SET_COOKIE,
+                REFRESH_TOKEN_COOKIE_NAME + "=; Max-Age=0; Path=" + REFRESH_TOKEN_COOKIE_PATH
+                        + "; HttpOnly; SameSite=Lax"
+                        + (request.isSecure() ? "; Secure" : ""));
         return ResponseEntity.status(exception.getStatus())
                 .body(ApiResponse.error(exception.getStatus().value(), exception.getMessage()));
     }
@@ -47,12 +49,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<?>> handleAppException(AppException exception) {
         if (exception instanceof CodedBusinessException coded) {
-            return ResponseEntity.status(exception.getStatus())
-                    .body(ApiResponse.error(
-                            exception.getStatus().value(),
-                            coded.getCode(),
-                            exception.getMessage(),
-                            coded.getDetails()));
+            ResponseEntity.BodyBuilder response = ResponseEntity.status(exception.getStatus());
+            Object retryAfter = coded.getDetails().get("retryAfterSeconds");
+            if (exception.getStatus() == HttpStatus.TOO_MANY_REQUESTS && retryAfter instanceof Number number) {
+                response.header("Retry-After", String.valueOf(Math.max(1, number.longValue())));
+            }
+            return response.body(ApiResponse.error(
+                    exception.getStatus().value(),
+                    coded.getCode(),
+                    exception.getMessage(),
+                    coded.getDetails()));
         }
         return ResponseEntity.status(exception.getStatus())
                 .body(ApiResponse.error(exception.getStatus().value(), exception.getMessage()));
@@ -140,5 +146,16 @@ public class GlobalExceptionHandler {
         log.error("Unexpected error: ", exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal server error"));
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiResponse<?>> handleRateLimitExceeded(RateLimitExceededException exception) {
+        return ResponseEntity.status(exception.getStatus())
+                .header("Retry-After", String.valueOf(exception.getRetryAfterSeconds()))
+                .body(ApiResponse.error(
+                        exception.getStatus().value(),
+                        exception.getCode(),
+                        exception.getMessage(),
+                        exception.getDetails()));
     }
 }
