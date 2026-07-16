@@ -13,9 +13,9 @@
 - Risk: High
 - Category: Security / RBAC
 - Priority / effort / wave: P1 / M / 1
-- Planned against: `2be2362` ngày 2026-07-16
+- Planned against: `c3b1361` ngày 2026-07-16
 - Branch: `fix/cross-account-role-user-access`
-- Dependencies: BE-001 và external FE-001 đã merge
+- Dependencies: BE-001 merge tại `c3b1361`; external FE-001 merge tại `4c2767b`
 - Reserved migration: `V22__revoke_legacy_customer_permissions.sql`
 
 ## Vì sao
@@ -26,9 +26,10 @@
 
 - `src/main/java/vn/conganh/commercial/security/PermissionAuthorizationManager.java`, `authorize(...)`, parse value `method + apiPath` đã lưu và gọi `pathMatcher.match(apiPath, requestPath)` mà không có resource ownership check.
 - `src/main/resources/db/migration/V2__seed_rbac.sql:122-137`, `V3__align_rbac_api_paths.sql:59-68`, và `V5__seed_missing_permissions.sql:106-119` cấp USER các path cart/order/address/review/wishlist tổng quát.
-- `src/main/java/vn/conganh/commercial/config/SecurityConfig.java:111-119` authenticate một số path `/me`; các self path khác được biểu diễn trong RBAC migration.
-- `src/test/java/vn/conganh/commercial/TestDataFactory.java:33-87` tạo `TEST_ROLE` rộng; đây không phải bằng chứng production `ROLE_USER` an toàn.
-- BE-001 dự kiến thêm V21 và route profile/order/address ownership-scoped; FE-001 dự kiến xóa customer call tới route tổng quát.
+- `src/main/java/vn/conganh/commercial/config/SecurityConfig.java`, `filterChain(...)`, authenticate các direct self-service path; các path `/me` khác được biểu diễn trong RBAC migration.
+- `src/test/java/vn/conganh/commercial/TestDataFactory.java:33-117` tạo `TEST_ROLE` rộng; đây không phải bằng chứng production `ROLE_USER` an toàn.
+- `src/main/resources/db/migration/V21__seed_customer_self_service_permissions.sql:4-37` thêm permission profile/order/address ownership-scoped do BE-001 bàn giao.
+- BE-001 đã merge tại `c3b1361`; external FE-001 đã merge tại `4c2767b` và xóa customer call tới các generic route được review ở đây.
 
 Việc review V22 bắt đầu từ revoke set rõ ràng sau cho `ROLE_USER` và phải xác minh từng method/path đã lưu trước khi xóa:
 
@@ -43,7 +44,7 @@ Giữ catalog read, toàn bộ grant `/me` của V21, checkout, self-cart/wishli
 Chạy drift check này trước implementation:
 
 ```powershell
-git diff --stat 2be2362..HEAD -- src/main/resources/db/migration src/main/java/vn/conganh/commercial/security src/main/java/vn/conganh/commercial/config/SecurityConfig.java src/test docs
+git diff --stat c3b1361..HEAD -- src/main/resources/db/migration src/main/java/vn/conganh/commercial/security src/main/java/vn/conganh/commercial/config/SecurityConfig.java src/test docs
 ```
 
 | Gate | Exact command | Expected result |
@@ -64,6 +65,7 @@ git diff --stat 2be2362..HEAD -- src/main/resources/db/migration src/main/java/v
 
 - New: `src/main/resources/db/migration/V22__revoke_legacy_customer_permissions.sql`.
 - Existing: `src/test/java/vn/conganh/commercial/SystemSecurityIntegrationTest.java`, `src/test/java/vn/conganh/commercial/CustomerSelfScopeIntegrationTest.java`, `docs/API_SPEC.md`, `docs/PROJECT-STATUS.md`, `src/main/java/vn/conganh/commercial/feature/permission/CONTEXT.md`, và `src/main/java/vn/conganh/commercial/feature/role/CONTEXT.md`.
+- Plan mirror đã reconcile: `plans/002-revoke-cross-account-role-user-access.md` và `plans/vi/002-revoke-cross-account-role-user-access.vi.md`.
 - Không controller/service/frontend file nào được đổi trong contract PR này; update cả hai plan mirror trước khi expand scope.
 
 ### Ngoài phạm vi

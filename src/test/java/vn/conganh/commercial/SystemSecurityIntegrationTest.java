@@ -25,8 +25,8 @@ class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    @DisplayName("V21 seed đúng 10 self-service permissions cho bốn production roles")
-    void customerSelfServicePermissions_areExactAdditiveAndGrantedToProductionRoles() {
+    @DisplayName("V21 giữ đúng 10 self-service permissions cho bốn production roles")
+    void customerSelfServicePermissions_areExactAndGrantedToProductionRoles() {
         List<PermissionExpectation> expectations = List.of(
                 new PermissionExpectation(
                         "UPDATE_MY_PROFILE", "/api/v1/users/me", "PUT", "USER"),
@@ -78,11 +78,69 @@ class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
             assertThat(roleNames).containsExactly("ADMIN", "MANAGER", "STAFF", "USER");
         }
 
-        assertThat(hasRolePermission("USER", "/api/v1/orders/{id}", "GET")).isTrue();
-        assertThat(hasRolePermission("USER", "/api/v1/orders/code/{orderCode}", "GET")).isTrue();
-        assertThat(hasRolePermission("USER", "/api/v1/user-addresses/{id}", "GET")).isTrue();
-        assertThat(hasRolePermission("USER", "/api/v1/user-addresses/{id}", "PUT")).isTrue();
-        assertThat(hasRolePermission("USER", "/api/v1/user-addresses/{id}", "DELETE")).isTrue();
+    }
+
+    @Test
+    @DisplayName("V22 thu hồi đúng legacy customer permissions khỏi USER và giữ operator mappings")
+    void legacyCustomerPermissions_v22RevokeUserOnlyAndPreserveOperators() {
+        assertProductionRoleAssignments(List.of("ADMIN"),
+                new PermissionKey("GET", "/api/v1/carts"),
+                new PermissionKey("POST", "/api/v1/carts/items"),
+                new PermissionKey("DELETE", "/api/v1/carts/items/{id}"),
+                new PermissionKey("GET", "/api/v1/wishlists"),
+                new PermissionKey("POST", "/api/v1/wishlists"),
+                new PermissionKey("POST", "/api/v1/carts"),
+                new PermissionKey("DELETE", "/api/v1/carts/{id}"),
+                new PermissionKey("GET", "/api/v1/user-addresses"),
+                new PermissionKey("GET", "/api/v1/user-addresses/{id}"),
+                new PermissionKey("POST", "/api/v1/user-addresses"),
+                new PermissionKey("PUT", "/api/v1/user-addresses/{id}"),
+                new PermissionKey("DELETE", "/api/v1/user-addresses/{id}"),
+                new PermissionKey("GET", "/api/v1/carts/{id}"),
+                new PermissionKey("GET", "/api/v1/carts/user/{userId}"),
+                new PermissionKey("GET", "/api/v1/wishlists/{id}"),
+                new PermissionKey("DELETE", "/api/v1/wishlists/{id}"));
+
+        assertProductionRoleAssignments(List.of("ADMIN", "MANAGER"),
+                new PermissionKey("POST", "/api/v1/orders"),
+                new PermissionKey("POST", "/api/v1/payments"),
+                new PermissionKey("PUT", "/api/v1/reviews/{id}"),
+                new PermissionKey("DELETE", "/api/v1/reviews/{id}"));
+
+        assertProductionRoleAssignments(List.of("ADMIN", "MANAGER", "STAFF"),
+                new PermissionKey("GET", "/api/v1/orders/{id}"),
+                new PermissionKey("GET", "/api/v1/orders/code/{orderCode}"),
+                new PermissionKey("GET", "/api/v1/orders/user/{userId}"),
+                new PermissionKey("GET", "/api/v1/orders/{id}/status-histories"),
+                new PermissionKey("GET", "/api/v1/reviews/user/{userId}"),
+                new PermissionKey("GET", "/api/v1/reviews/order/{orderId}"),
+                new PermissionKey("GET", "/api/v1/reviews/order-item/{orderItemId}"));
+    }
+
+    @Test
+    @DisplayName("V22 giữ nguyên catalog và các principal-bound permissions của USER")
+    void safeCustomerPermissions_v22RemainGrantedToUser() {
+        List<PermissionKey> permissions = List.of(
+                new PermissionKey("GET", "/api/v1/products"),
+                new PermissionKey("GET", "/api/v1/products/{id}"),
+                new PermissionKey("GET", "/api/v1/brands/{id}"),
+                new PermissionKey("GET", "/api/v1/categories/{id}"),
+                new PermissionKey("GET", "/api/v1/product-variants/{id}"),
+                new PermissionKey("GET", "/api/v1/colors/{id}"),
+                new PermissionKey("GET", "/api/v1/sizes/{id}"),
+                new PermissionKey("POST", "/api/v1/reviews"),
+                new PermissionKey("POST", "/api/v1/checkout"),
+                new PermissionKey("GET", "/api/v1/carts/me"),
+                new PermissionKey("PUT", "/api/v1/carts/me/items"),
+                new PermissionKey("GET", "/api/v1/coupons"),
+                new PermissionKey("GET", "/api/v1/coupons/me"),
+                new PermissionKey("GET", "/api/v1/wishlists/me"),
+                new PermissionKey("POST", "/api/v1/wishlists/me/{productId}"),
+                new PermissionKey("DELETE", "/api/v1/wishlists/me/{productId}"));
+
+        for (PermissionKey permission : permissions) {
+            assertThat(hasRolePermission("USER", permission.apiPath(), permission.method())).isTrue();
+        }
     }
 
     @Test
@@ -245,10 +303,30 @@ class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
         return count != null && count == 1;
     }
 
+    private void assertProductionRoleAssignments(
+            List<String> expectedRoles,
+            PermissionKey... permissions) {
+        for (PermissionKey permission : permissions) {
+            List<String> actualRoles = jdbcTemplate.queryForList("""
+                    select r.name
+                    from roles r
+                    join permission_role pr on pr.role_id = r.id
+                    join permissions p on p.id = pr.permission_id
+                    where p.api_path = ? and p.method = ?
+                      and r.name in ('ADMIN', 'MANAGER', 'STAFF', 'USER')
+                    order by r.name
+                    """, String.class, permission.apiPath(), permission.method());
+            assertThat(actualRoles).containsExactlyElementsOf(expectedRoles);
+        }
+    }
+
     private record PermissionExpectation(
             String name,
             String apiPath,
             String method,
             String module) {
+    }
+
+    private record PermissionKey(String method, String apiPath) {
     }
 }

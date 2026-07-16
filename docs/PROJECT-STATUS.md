@@ -1,3 +1,25 @@
+### BE-002: Thu hồi legacy cross-account permissions của ROLE_USER
+
+- **Date/Time**: 2026-07-16 (Asia/Saigon)
+- **Summary of Changes**: Thêm Flyway V22 để xóa đúng 27 mapping
+  `permission_role` của production role `USER` trên các generic
+  cart/order/address/payment/review/wishlist routes. Migration match bằng
+  `api_path + method` để chịu được permission name từng bị repeatable dev seed
+  đổi tên; không xóa permission, controller hoặc mapping của role khác.
+- **Security/Compatibility**: Customer tiếp tục dùng principal-bound `/me`, self
+  cart/wishlist/coupon, checkout và verified review creation. Generic route trả
+  `403` cho `ROLE_USER`; `ADMIN`, `MANAGER`, `STAFF` giữ đúng mapping riêng đã
+  seed, không mặc định có quyền như nhau.
+- **Rollout**: Chuỗi contract **BE-001 `c3b1361` → FE-001 `4c2767b` → BE-002**
+  đã hoàn tất ở source. Frontend không còn customer caller phụ thuộc route bị
+  thu hồi.
+- **Verification**: Focused Testcontainers suite pass `56/56`; full
+  `mvnw.cmd clean verify` pass `709/709` và build JAR thành công. Fresh database
+  apply đủ 29 versioned/repeatable migrations tới V22; long-lived dev database
+  upgrade từ V19 lên V22 thành công. Playwright full-stack pass `7/7`, gồm hai
+  customer account không thể đọc chéo self-service resource; production
+  `ADMIN`/`MANAGER`/`STAFF` matrix được xác nhận trong integration suite.
+
 ### BE-001: Customer self-service contract theo principal
 
 - **Date/Time**: 2026-07-16 (Asia/Saigon)
@@ -7,13 +29,13 @@
   owner ID. Self-create address không nhận `userId`; self-profile DTO chỉ có
   `fullName`, `birthDate`, `gender` và không thể thay đổi `avatar`.
 - **Security/Compatibility**: Foreign và missing order ID/code/history hoặc address
-  ID cùng trả `404`. V21 seed additive đủ 10 method/path permissions cho
-  `ADMIN`, `MANAGER`, `STAFF`, `USER`; generic customer routes/permissions vẫn được
-  giữ trong expand phase. Default address cũ được flush trước khi persist/promote
-  default mới để giữ partial unique-index invariant.
-- **Rollout**: Thứ tự bắt buộc là **BE-001 → FE-001 → BE-002**. FE-001 phải chuyển
-  toàn bộ customer caller sang `/me` trước khi BE-002 thu hồi generic `ROLE_USER`
-  permissions.
+  ID cùng trả `404`. V21 seed đủ 10 method/path permissions cho `ADMIN`,
+  `MANAGER`, `STAFF`, `USER`. Generic mappings từng được giữ tạm trong expand
+  phase và đã bị V22 supersede đối với `USER`. Default address cũ được flush trước
+  khi persist/promote default mới để giữ partial unique-index invariant.
+- **Rollout**: Đây là expand phase lịch sử của chuỗi **BE-001 → FE-001 → BE-002**;
+  contract phase BE-002 đã thu hồi generic `ROLE_USER` permissions sau khi FE-001
+  chuyển customer caller sang `/me`.
 - **Verification**: Focused Testcontainers suite pass `116/116`; Flyway áp dụng đủ
   28 versioned/repeatable migrations và schema đạt V21. `mvnw.cmd clean verify`
   pass `703/703`, không failure/error/skipped và đóng gói JAR thành công.

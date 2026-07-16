@@ -790,8 +790,8 @@ lưu. Customer avatar upload được quản lý ở contract file riêng trong 
 ### PUT /users/{id}
 
 Generic operator endpoint kept for compatibility. Email and password are not
-updated here; unlike `/api/v1/users/me`, its legacy `UpdateUserRequest` still
-contains `avatar` during the BE-001 expand phase.
+updated here; unlike `/api/v1/users/me`, its operator `UpdateUserRequest` still
+contains `avatar` until the separate customer-avatar contract is delivered.
 
 **Request Body:**
 
@@ -1554,11 +1554,11 @@ Sale Campaign; there is no standalone `salePrice` field.
 | POST | `/api/v1/user-addresses/me` | Create for the authenticated user; body has no `userId` |
 | PUT | `/api/v1/user-addresses/me/{id}` | Update an owned address; foreign/missing ID is `404` |
 | DELETE | `/api/v1/user-addresses/me/{id}` | Delete an owned address; foreign/missing ID is `404` |
-| GET | `/user-addresses` | List addresses, optionally filter by `userId` |
-| GET | `/user-addresses/{id}` | Get address |
-| POST | `/user-addresses` | Create address |
-| PUT | `/user-addresses/{id}` | Update address |
-| DELETE | `/user-addresses/{id}` | Delete address |
+| GET | `/user-addresses` | Operator-only: list addresses, optionally filter by `userId` |
+| GET | `/user-addresses/{id}` | Operator-only: get address |
+| POST | `/user-addresses` | Operator-only: create address for a selected user |
+| PUT | `/user-addresses/{id}` | Operator-only: update address by ID |
+| DELETE | `/user-addresses/{id}` | Operator-only: delete address by ID |
 
 `POST /api/v1/user-addresses/me` dùng `CreateMyUserAddressRequest`:
 
@@ -1586,15 +1586,15 @@ default cũ chỉ bị gỡ trong cùng user; invariant mỗi user tối đa m�
 | POST | `/coupons` | Create coupon |
 | PUT | `/coupons/{id}` | Update coupon |
 | DELETE | `/coupons/{id}` | Delete coupon |
-| GET | `/carts` | List carts |
-| GET | `/carts/{id}` | Get cart |
-| GET | `/carts/user/{userId}` | Get cart by user |
-| POST | `/carts` | Create cart |
-| DELETE | `/carts/{id}` | Delete cart |
-| GET | `/wishlists` | List wishlists, optionally filter by `userId` and `productId` |
-| GET | `/wishlists/{id}` | Get wishlist item |
-| POST | `/wishlists` | Create wishlist item |
-| DELETE | `/wishlists/{id}` | Delete wishlist item |
+| GET | `/carts` | Operator-only: list carts |
+| GET | `/carts/{id}` | Operator-only: get cart |
+| GET | `/carts/user/{userId}` | Operator-only: get cart by selected user |
+| POST | `/carts` | Operator-only: create cart for a selected user |
+| DELETE | `/carts/{id}` | Operator-only: delete cart by ID |
+| GET | `/wishlists` | Operator-only: list wishlists by arbitrary filters |
+| GET | `/wishlists/{id}` | Operator-only: get wishlist item by ID |
+| POST | `/wishlists` | Operator-only: create wishlist item for a selected user |
+| DELETE | `/wishlists/{id}` | Operator-only: delete wishlist item by ID |
 
 ### Orders, Payments, Reviews
 
@@ -1604,33 +1604,53 @@ default cũ chỉ bị gỡ trong cùng user; invariant mỗi user tối đa m�
 | GET | `/api/v1/orders/me/{id}` | Owned order detail; foreign/missing ID is `404` |
 | GET | `/api/v1/orders/me/code/{orderCode}` | Owned order detail by business code; foreign/missing code is `404` |
 | GET | `/api/v1/orders/me/{id}/status-histories` | History of an owned order; foreign/missing order ID is `404` |
-| GET | `/orders` | List orders |
-| GET | `/orders/{id}` | Get order by id |
-| GET | `/orders/code/{orderCode}` | Get order by business code |
-| GET | `/orders/user/{userId}` | List orders by user |
-| GET | `/orders/{id}/status-histories` | List status history of an order |
-| POST | `/orders` | Create order |
-| PUT | `/orders/{id}` | Update order |
-| DELETE | `/orders/{id}` | Delete order |
-| GET | `/payments` | List payments |
-| GET | `/payments/{id}` | Get payment |
-| POST | `/payments` | Create payment |
-| PUT | `/payments/{id}` | Update payment |
-| DELETE | `/payments/{id}` | Delete payment |
-| GET | `/reviews` | List reviews |
-| GET | `/reviews/user/{userId}` | List reviews by user |
+| GET | `/orders` | Operator-only: list orders |
+| GET | `/orders/{id}` | Operator-only: get order by ID |
+| GET | `/orders/code/{orderCode}` | Operator-only: get order by business code |
+| GET | `/orders/user/{userId}` | Operator-only: list orders by selected user |
+| GET | `/orders/{id}/status-histories` | Operator-only: list status history of an order |
+| POST | `/orders` | Operator-only legacy create; customer checkout uses `/api/v1/checkout` |
+| PUT | `/orders/{id}` | Operator-only: update order |
+| DELETE | `/orders/{id}` | Operator-only: delete order |
+| GET | `/payments` | Operator-only: list payments |
+| GET | `/payments/{id}` | Operator-only: get payment |
+| POST | `/payments` | Operator-only: create payment |
+| PUT | `/payments/{id}` | Operator-only: update payment |
+| DELETE | `/payments/{id}` | Operator-only: delete payment |
+| GET | `/reviews` | Operator-only: list reviews with arbitrary filters |
+| GET | `/reviews/user/{userId}` | Operator-only: list reviews by selected user |
 | GET | `/reviews/product/{productId}` | List public product reviews with rating/sort/page |
 | GET | `/reviews/product/{productId}/summary` | Get public rating summary |
 | GET | `/reviews/me` | List current principal reviews, optional `orderId` |
-| GET | `/reviews/order/{orderId}` | List reviews by order |
-| GET | `/reviews/order-item/{orderItemId}` | List reviews by order item |
+| GET | `/reviews/order/{orderId}` | Operator-only: list reviews by order |
+| GET | `/reviews/order-item/{orderItemId}` | Operator-only: list reviews by order item |
 | POST | `/reviews` | Create verified review using multipart JSON and optional images |
 
 Các customer route `/orders/me/**` và `/user-addresses/me/**` bind ownership ở
 service/repository bằng principal + identifier, không load unscoped rồi authorize ở
-controller. BE-001 giữ các generic route/permission để tương thích migration window.
-Thứ tự rollout bắt buộc là **BE-001 → FE-001 → BE-002**; chỉ BE-002 mới thu hồi
-generic `ROLE_USER` permissions sau khi frontend đã chuyển hết sang `/me`.
+controller. Rollout **BE-001 → FE-001 → BE-002** đã hoàn tất: customer client phải
+dùng route `/me` và không được quay lại generic ID/user route. Request không có token
+trả `401`; `ROLE_USER` gọi một route generic đã contract trả `403`; foreign hoặc
+missing resource qua `/me` trả `404` để không lộ ownership.
+
+V22 chỉ thu hồi 27 mapping dưới đây khỏi production role `USER`; permission row,
+controller và mapping của role khác vẫn tồn tại. “Operator-only” nghĩa là access phụ
+thuộc exact RBAC mapping của từng `ADMIN`, `MANAGER` hoặc `STAFF`, không có nghĩa mọi
+operator role đều được gọi mọi route.
+
+| Module | Method/path bị thu hồi khỏi `ROLE_USER` |
+|--------|------------------------------------------|
+| Cart | `GET /api/v1/carts`; `POST /api/v1/carts/items`; `DELETE /api/v1/carts/items/{id}`; `POST /api/v1/carts`; `DELETE /api/v1/carts/{id}`; `GET /api/v1/carts/{id}`; `GET /api/v1/carts/user/{userId}` |
+| User address | `GET /api/v1/user-addresses`; `POST /api/v1/user-addresses`; `GET`, `PUT`, `DELETE /api/v1/user-addresses/{id}` |
+| Order | `POST /api/v1/orders`; `GET /api/v1/orders/{id}`; `GET /api/v1/orders/code/{orderCode}`; `GET /api/v1/orders/user/{userId}`; `GET /api/v1/orders/{id}/status-histories` |
+| Payment | `POST /api/v1/payments` |
+| Review | `PUT`, `DELETE /api/v1/reviews/{id}`; `GET /api/v1/reviews/user/{userId}`; `GET /api/v1/reviews/order/{orderId}`; `GET /api/v1/reviews/order-item/{orderItemId}` |
+| Wishlist | `GET`, `POST /api/v1/wishlists`; `GET`, `DELETE /api/v1/wishlists/{id}` |
+
+V22 giữ nguyên catalog reads, `/api/v1/checkout`, `POST /api/v1/reviews`, self cart,
+self wishlist, self coupon và toàn bộ permission `/me` của V21. Migration match bằng
+`api_path + method`, không dựa riêng vào permission name, nên vẫn thu hồi đúng mapping
+trên database development đã từng rename permission bằng repeatable seed.
 
 ### Sale Campaign Admin
 
@@ -1881,6 +1901,10 @@ Flash quota.
 ---
 
 ## Endpoint Summary
+
+Giá trị `Bearer` chỉ cho biết endpoint cần access token; authorization thực tế vẫn
+theo exact method/path RBAC. Với generic customer-resource route đã contract ở V22,
+`ROLE_USER` nhận `403`, còn operator access phụ thuộc mapping của từng production role.
 
 | Method | Endpoint | Auth | Status | Description |
 |--------|----------|------|--------|-------------|
