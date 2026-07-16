@@ -25,7 +25,7 @@ public class ResendEmailProvider implements EmailProvider {
 
     @Override
     public void sendEmail(String to, String subject, String contentHtml) {
-        log.info("[ResendEmailProvider] Sending email to: {}, subject: {}", to, subject);
+        log.info("[ResendEmailProvider] Sending verification email");
 
         CreateEmailOptions params = CreateEmailOptions.builder()
                 .from(fromEmail)
@@ -37,17 +37,19 @@ public class ResendEmailProvider implements EmailProvider {
         try {
             CreateEmailResponse response = resend.emails().send(params);
             if (response == null || response.getId() == null) {
-                log.error("[ResendEmailProvider] Failed to send email to {}, empty response", to);
+                log.error("[ResendEmailProvider] Verification email provider returned an empty response");
                 throw new ServiceUnavailableException("Failed to send verification email");
             }
-            log.info("[ResendEmailProvider] Email sent successfully to {}, message ID: {}", to, response.getId());
+            log.info("[ResendEmailProvider] Verification email accepted by provider");
         } catch (ResendException e) {
-            log.error("[ResendEmailProvider] Resend error sending email to {}: {}", to, e.getMessage(), e);
+            log.error("[ResendEmailProvider] Verification email provider rejected the request; errorType={}",
+                    e.getClass().getSimpleName());
             throw new ServiceUnavailableException("Verification email provider is currently unavailable");
         } catch (ServiceUnavailableException e) {
             throw e;
         } catch (RuntimeException e) {
-            log.error("[ResendEmailProvider] Unexpected error sending email to {}: {}", to, e.getMessage(), e);
+            log.error("[ResendEmailProvider] Unexpected verification email failure; errorType={}",
+                    e.getClass().getSimpleName());
             throw new ServiceUnavailableException("Verification email provider is currently unavailable");
         }
     }

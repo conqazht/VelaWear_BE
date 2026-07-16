@@ -5,11 +5,12 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
@@ -31,6 +32,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.filter.CorsFilter;
 import tools.jackson.databind.ObjectMapper;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.feature.auth.oauth2.CookieOAuth2AuthorizationRequestRepository;
@@ -38,6 +40,8 @@ import vn.conganh.commercial.feature.auth.oauth2.OAuth2AuthenticationFailureHand
 import vn.conganh.commercial.feature.auth.oauth2.OAuth2AuthenticationSuccessHandler;
 import vn.conganh.commercial.security.PermissionAuthorizationManager;
 import vn.conganh.commercial.security.TokenBlacklistService;
+import vn.conganh.commercial.security.ratelimit.AuthRateLimitFilter;
+import vn.conganh.commercial.feature.user.UserRepository;
 
 @Configuration
 @EnableWebSecurity
@@ -58,8 +62,6 @@ public class SecurityConfig {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
-            "/actuator/health",
-            "/actuator/info",
             "/api/v1/payments/sepay/ipn",
             "/uploads/**"
     };
@@ -71,6 +73,8 @@ public class SecurityConfig {
             AuthenticationEntryPoint authenticationEntryPoint,
             AccessDeniedHandler accessDeniedHandler,
             TokenBlacklistService tokenBlacklistService,
+            UserRepository userRepository,
+            AuthRateLimitFilter authRateLimitFilter,
             ObjectMapper objectMapper,
             CookieOAuth2AuthorizationRequestRepository cookieOAuth2AuthorizationRequestRepository,
             OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
@@ -79,9 +83,15 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Limiter chạy sau CORS nhưng trước controller/body binding.
+                .addFilterAfter(authRateLimitFilter, CorsFilter.class)
                 // Chạy sau bước xác thực JWT đã đưa dữ liệu vào SecurityContext, trước khi phân quyền.
-                .addFilterBefore(new JwtBlacklistFilter(tokenBlacklistService, objectMapper), AuthorizationFilter.class)
+                .addFilterBefore(
+                        new JwtSessionValidationFilter(tokenBlacklistService, userRepository, objectMapper),
+                        AuthorizationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(EndpointRequest.to("health", "info")).permitAll()
+                        .requestMatchers(EndpointRequest.to("metrics")).hasRole("ADMIN")
                         .requestMatchers(WHITELIST).permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/products",
@@ -119,12 +129,25 @@ public class SecurityConfig {
                 .build();
     }
 
-    private static class JwtBlacklistFilter extends OncePerRequestFilter {
+    @Bean
+    public FilterRegistrationBean<AuthRateLimitFilter> disableContainerRateLimitFilterRegistration(
+            AuthRateLimitFilter filter) {
+        FilterRegistrationBean<AuthRateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    private static class JwtSessionValidationFilter extends OncePerRequestFilter {
         private final TokenBlacklistService tokenBlacklistService;
+        private final UserRepository userRepository;
         private final ObjectMapper objectMapper;
 
-        public JwtBlacklistFilter(TokenBlacklistService tokenBlacklistService, ObjectMapper objectMapper) {
+        public JwtSessionValidationFilter(
+                TokenBlacklistService tokenBlacklistService,
+                UserRepository userRepository,
+                ObjectMapper objectMapper) {
             this.tokenBlacklistService = tokenBlacklistService;
+            this.userRepository = userRepository;
             this.objectMapper = objectMapper;
         }
 
@@ -138,42 +161,40 @@ public class SecurityConfig {
                 String token = jwtAuth.getToken().getTokenValue();
                 // Logout đưa Access Token vào blacklist; đoạn này chuyển trạng thái Redis đó thành phản hồi 401.
                 if (tokenBlacklistService.isBlacklisted(token)) {
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-
-                    ApiResponse<Void> apiResponse = new ApiResponse<>(
-                            HttpStatus.UNAUTHORIZED.value(),
-                            null,
-                            "Token is blacklisted",
-                            LocalDateTime.now()
-                    );
-
-                    objectMapper.writeValue(response.getOutputStream(), apiResponse);
+                    writeSessionRevoked(response);
                     return;
                 }
 
-                Long userId = jwtAuth.getToken().getClaim("userId");
-                Instant issuedAt = jwtAuth.getToken().getIssuedAt();
-                if (userId != null && issuedAt != null) {
-                    Long roleUpdateTimestamp = tokenBlacklistService.getRoleUpdateTimestamp(userId);
-                    // Nếu role đổi sau lúc JWT được phát hành, bắt client refresh để nhận quyền mới.
-                    if (roleUpdateTimestamp != null && issuedAt.toEpochMilli() < roleUpdateTimestamp) {
-                        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                Object userIdClaim = jwtAuth.getToken().getClaim("userId");
+                Object securityVersionClaim = jwtAuth.getToken().getClaim("securityVersion");
+                if (!(userIdClaim instanceof Number userIdNumber)
+                        || !(securityVersionClaim instanceof Number versionNumber)
+                        || versionNumber.longValue() < 0) {
+                    writeSessionRevoked(response);
+                    return;
+                }
 
-                        ApiResponse<Void> apiResponse = new ApiResponse<>(
-                                HttpStatus.UNAUTHORIZED.value(),
-                                null,
-                                "User roles have been updated. Please refresh token.",
-                                LocalDateTime.now()
-                        );
-
-                        objectMapper.writeValue(response.getOutputStream(), apiResponse);
-                        return;
-                    }
+                boolean current = userRepository.findSecurityVersionByIdAndDeletedAtIsNull(
+                                userIdNumber.longValue())
+                        .map(version -> version == versionNumber.longValue())
+                        .orElse(false);
+                if (!current) {
+                    writeSessionRevoked(response);
+                    return;
                 }
             }
             filterChain.doFilter(request, response);
+        }
+
+        private void writeSessionRevoked(HttpServletResponse response) throws IOException {
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            objectMapper.writeValue(response.getOutputStream(), new ApiResponse<>(
+                    HttpStatus.UNAUTHORIZED.value(),
+                    null,
+                    "Your session has been revoked. Please sign in again.",
+                    LocalDateTime.now(),
+                    "SESSION_REVOKED"));
         }
     }
 

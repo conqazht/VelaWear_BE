@@ -65,6 +65,9 @@ public class User {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "security_version", nullable = false)
+    private long securityVersion;
+
     @OneToMany(mappedBy = "user")
     private Set<UserHasRole> userHasRoles = new HashSet<>();
 }

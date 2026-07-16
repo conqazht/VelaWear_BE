@@ -12,5 +12,13 @@ public record ForgotPasswordResetRequest(
 
         @NotBlank(message = "New password is required")
         @Size(min = 8, max = 100, message = "Password must be 8-100 characters")
-        String newPassword
-) {}
+        String newPassword,
+
+        @NotBlank(message = "OTP proof token is required")
+        @Size(min = 32, max = 512, message = "OTP proof token is invalid")
+        String otpProofToken
+) {
+    public ForgotPasswordResetRequest(String email, String newPassword) {
+        this(email, newPassword, null);
+    }
+}

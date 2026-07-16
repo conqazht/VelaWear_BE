@@ -3,219 +3,213 @@ package vn.conganh.commercial.feature.auth.otp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.http.HttpStatus;
-import org.springframework.test.util.ReflectionTestUtils;
-import vn.conganh.commercial.exception.AppException;
-import vn.conganh.commercial.exception.DuplicateResourceException;
-import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.feature.auth.email.EmailProvider;
+import vn.conganh.commercial.feature.auth.otp.OtpRedisStore.ChallengeBinding;
+import vn.conganh.commercial.feature.auth.otp.OtpRedisStore.VerifyOutcome;
 import vn.conganh.commercial.feature.auth.otp.dto.OtpRequest;
+import vn.conganh.commercial.feature.auth.otp.dto.OtpRequestResponse;
 import vn.conganh.commercial.feature.auth.otp.dto.OtpVerifyRequest;
+import vn.conganh.commercial.feature.auth.otp.dto.OtpVerifyResponse;
 import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.security.SecurityHmacService;
+import vn.conganh.commercial.security.monitoring.SecurityMetrics;
+import vn.conganh.commercial.security.ratelimit.OtpRateLimitProperties;
 import vn.conganh.commercial.util.constant.OtpPurpose;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("OtpServiceImpl Test")
+@DisplayName("OtpServiceImpl")
 class OtpServiceImplTest {
+
+    private static final String CHALLENGE = "A".repeat(43);
+    private static final String PROOF = "B".repeat(43);
+    private static final String SCOPE = "scope-digest";
 
     @Mock
     private UserRepository userRepository;
 
     @Mock
-    private StringRedisTemplate redisTemplate;
-
-    @Mock
-    private ValueOperations<String, String> valueOperations;
-
-    @Mock
     private EmailProvider emailProvider;
+
+    @Mock
+    private OtpRedisStore redisStore;
+
+    @Mock
+    private SecurityHmacService hmacService;
+
+    @Mock
+    private SecurityMetrics securityMetrics;
 
     private OtpServiceImpl otpService;
 
     @BeforeEach
     void setUp() {
-        org.mockito.Mockito.lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        otpService = new OtpServiceImpl(userRepository, redisTemplate, emailProvider);
-        ReflectionTestUtils.setField(otpService, "otpTtlSeconds", 300);
-        ReflectionTestUtils.setField(otpService, "otpCooldownSeconds", 60);
-        ReflectionTestUtils.setField(otpService, "otpMaxAttempts", 5);
-        ReflectionTestUtils.setField(otpService, "otpVerifiedTtlSeconds", 300);
+        OtpProperties properties = new OtpProperties();
+        OtpRateLimitProperties otpRateLimitProperties = new OtpRateLimitProperties();
+        otpService = new OtpServiceImpl(
+                userRepository,
+                emailProvider,
+                redisStore,
+                hmacService,
+                properties,
+                otpRateLimitProperties,
+                securityMetrics);
     }
 
     @Test
-    @DisplayName("Should successfully request OTP for registration")
-    void shouldSuccessfullyRequestOtpForRegister() {
-        // Arrange
-        String email = "test@example.com";
-        OtpRequest request = new OtpRequest(email, OtpPurpose.REGISTER);
+    @DisplayName("request returns an opaque challenge and publishes only after delivery")
+    void requestPublishesChallengeAfterDelivery() {
+        OtpRequest request = new OtpRequest(" Test@Example.com ", OtpPurpose.REGISTER);
         when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+        when(hmacService.hash("otp-scope", "REGISTER\ntest@example.com\n-"))
+                .thenReturn(SCOPE);
+        when(hmacService.randomToken()).thenReturn(CHALLENGE);
+        when(hmacService.hash(eq("otp-code"), anyString())).thenReturn("code-digest");
+        when(redisStore.reserveRequest(SCOPE, Duration.ofSeconds(60))).thenReturn(0L);
 
-        // Act
-        otpService.requestOtp(request);
+        OtpRequestResponse response = otpService.requestOtp(request);
 
-        // Assert
-        verify(valueOperations).set(eq("auth:otp:REGISTER:test@example.com"), anyString(), eq(300L), eq(TimeUnit.SECONDS));
-        verify(valueOperations).set(eq("auth:otp:attempts:REGISTER:test@example.com"), eq("0"), eq(300L), eq(TimeUnit.SECONDS));
-        verify(valueOperations).set(eq("auth:otp:cooldown:REGISTER:test@example.com"), eq("true"), eq(60L), eq(TimeUnit.SECONDS));
+        assertThat(response.challengeId()).isEqualTo(CHALLENGE);
+        assertThat(response.expiresInSeconds()).isEqualTo(300);
+        assertThat(response.cooldownSeconds()).isEqualTo(60);
         verify(emailProvider).sendEmail(eq("test@example.com"), anyString(), anyString());
+        verify(redisStore).publishChallenge(
+                eq(CHALLENGE),
+                eq("code-digest"),
+                eq(SCOPE),
+                eq("REGISTER"),
+                eq("-"),
+                eq(Duration.ofSeconds(300)));
     }
 
     @Test
-    @DisplayName("Should clean up OTP state when email delivery fails")
-    void shouldCleanUpOtpStateWhenEmailDeliveryFails() {
-        // Arrange
+    @DisplayName("delivery failure preserves the previous active challenge")
+    void deliveryFailureDoesNotPublishNewChallenge() {
         OtpRequest request = new OtpRequest("test@example.com", OtpPurpose.REGISTER);
         when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-        when(redisTemplate.hasKey("auth:otp:cooldown:REGISTER:test@example.com")).thenReturn(false);
+        when(hmacService.hash("otp-scope", "REGISTER\ntest@example.com\n-"))
+                .thenReturn(SCOPE);
+        when(hmacService.randomToken()).thenReturn(CHALLENGE);
+        when(hmacService.hash(eq("otp-code"), anyString())).thenReturn("code-digest");
+        when(redisStore.reserveRequest(SCOPE, Duration.ofSeconds(60))).thenReturn(0L);
         org.mockito.Mockito.doThrow(new RuntimeException("provider down"))
                 .when(emailProvider)
                 .sendEmail(eq("test@example.com"), anyString(), anyString());
 
-        // Act & Assert
         assertThatThrownBy(() -> otpService.requestOtp(request))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("provider down");
-        verify(redisTemplate).delete("auth:otp:REGISTER:test@example.com");
-        verify(redisTemplate).delete("auth:otp:attempts:REGISTER:test@example.com");
-        verify(redisTemplate).delete("auth:otp:cooldown:REGISTER:test@example.com");
+                .isInstanceOf(OtpSecurityException.class)
+                .extracting(exception -> ((OtpSecurityException) exception).getCode())
+                .isEqualTo("OTP_DELIVERY_UNAVAILABLE");
+        verify(redisStore, never()).publishChallenge(
+                anyString(), anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
-    @DisplayName("Should throw DuplicateResourceException on request OTP for REGISTER if email exists")
-    void shouldThrowExceptionWhenRegisterEmailExists() {
-        // Arrange
-        String email = "test@example.com";
-        OtpRequest request = new OtpRequest(email, OtpPurpose.REGISTER);
-        when(userRepository.existsByEmail("test@example.com")).thenReturn(true);
+    @DisplayName("forgot-password for an unknown email returns a decoy challenge without delivery")
+    void forgotUnknownEmailPublishesDecoy() {
+        OtpRequest request = new OtpRequest("missing@example.com", OtpPurpose.FORGOT_PASSWORD);
+        when(userRepository.existsByEmail("missing@example.com")).thenReturn(false);
+        when(hmacService.hash("otp-scope", "FORGOT_PASSWORD\nmissing@example.com\n-"))
+                .thenReturn(SCOPE);
+        when(hmacService.randomToken()).thenReturn(CHALLENGE);
+        when(hmacService.hash(eq("otp-code"), anyString())).thenReturn("code-digest");
+        when(redisStore.reserveRequest(SCOPE, Duration.ofSeconds(60))).thenReturn(0L);
 
-        // Act & Assert
-        assertThatThrownBy(() -> otpService.requestOtp(request))
-                .isInstanceOf(DuplicateResourceException.class);
+        OtpRequestResponse response = otpService.requestOtp(request);
+
+        assertThat(response.challengeId()).isEqualTo(CHALLENGE);
         verify(emailProvider, never()).sendEmail(anyString(), anyString(), anyString());
+        verify(redisStore).publishChallenge(
+                eq(CHALLENGE), anyString(), eq(SCOPE), eq("FORGOT_PASSWORD"), eq("-"), any());
     }
 
     @Test
-    @DisplayName("Should throw 429 Too Many Requests if cooldown active")
-    void shouldThrowExceptionIfCooldownActive() {
-        // Arrange
-        String email = "test@example.com";
-        OtpRequest request = new OtpRequest(email, OtpPurpose.REGISTER);
-        when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-        when(redisTemplate.hasKey("auth:otp:cooldown:REGISTER:test@example.com")).thenReturn(true);
+    @DisplayName("verify returns a proof token after the atomic Redis operation succeeds")
+    void verifyReturnsProof() {
+        OtpVerifyRequest request = new OtpVerifyRequest(CHALLENGE, "123456");
+        when(redisStore.findChallengeBinding(CHALLENGE))
+                .thenReturn(java.util.Optional.of(new ChallengeBinding(SCOPE, "REGISTER", "-")));
+        when(hmacService.randomToken()).thenReturn(PROOF);
+        when(hmacService.hash("otp-proof", PROOF)).thenReturn("proof-digest");
+        when(hmacService.hash("otp-code", CHALLENGE + ":123456")).thenReturn("code-digest");
+        when(redisStore.verifyAndIssueProof(
+                CHALLENGE,
+                "code-digest",
+                SCOPE,
+                "proof-digest",
+                Duration.ofSeconds(300),
+                5,
+                Duration.ofSeconds(600)))
+                .thenReturn(VerifyOutcome.successful());
 
-        // Act & Assert
-        assertThatThrownBy(() -> otpService.requestOtp(request))
-                .isInstanceOf(AppException.class)
-                .satisfies(ex -> {
-                    AppException appEx = (AppException) ex;
-                    assertThat(appEx.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        OtpVerifyResponse response = otpService.verifyOtp(request);
+
+        assertThat(response.proofToken()).isEqualTo(PROOF);
+        assertThat(response.expiresInSeconds()).isEqualTo(300);
+    }
+
+    @Test
+    @DisplayName("attempt exhaustion exposes only retry timing, not remaining attempts")
+    void verifyRejectsExhaustedAttempts() {
+        OtpVerifyRequest request = new OtpVerifyRequest(CHALLENGE, "123456");
+        when(redisStore.findChallengeBinding(CHALLENGE))
+                .thenReturn(java.util.Optional.of(new ChallengeBinding(SCOPE, "REGISTER", "-")));
+        when(hmacService.randomToken()).thenReturn(PROOF);
+        when(hmacService.hash("otp-proof", PROOF)).thenReturn("proof-digest");
+        when(hmacService.hash("otp-code", CHALLENGE + ":123456")).thenReturn("code-digest");
+        when(redisStore.verifyAndIssueProof(
+                anyString(), anyString(), anyString(), anyString(), any(), eq(5), any()))
+                .thenReturn(VerifyOutcome.exhausted(599));
+
+        assertThatThrownBy(() -> otpService.verifyOtp(request))
+                .isInstanceOf(OtpSecurityException.class)
+                .satisfies(exception -> {
+                    OtpSecurityException otpException = (OtpSecurityException) exception;
+                    assertThat(otpException.getCode()).isEqualTo("OTP_ATTEMPTS_EXHAUSTED");
+                    assertThat(otpException.getDetails()).containsEntry("retryAfterSeconds", 599L);
                 });
-        verify(emailProvider, never()).sendEmail(anyString(), anyString(), anyString());
     }
 
     @Test
-    @DisplayName("Should verify correct OTP successfully")
-    void shouldVerifyOtpSuccessfully() {
-        // Arrange
-        String email = "test@example.com";
-        String code = "123456";
-        String hashedOtp = hashOtp(code);
-        OtpVerifyRequest request = new OtpVerifyRequest(email, OtpPurpose.REGISTER, code);
+    @DisplayName("change-email challenge is bound to the authenticated user")
+    void changeEmailIsActorBound() {
+        OtpVerifyRequest request = new OtpVerifyRequest(CHALLENGE, "123456");
+        when(redisStore.findChallengeBinding(CHALLENGE))
+                .thenReturn(java.util.Optional.of(new ChallengeBinding(SCOPE, "CHANGE_EMAIL", "actor-1")));
+        when(hmacService.hash("otp-actor", "2")).thenReturn("actor-2");
 
-        when(valueOperations.get("auth:otp:REGISTER:test@example.com")).thenReturn(hashedOtp);
-        when(valueOperations.get("auth:otp:attempts:REGISTER:test@example.com")).thenReturn("0");
-
-        // Act
-        otpService.verifyOtp(request);
-
-        // Assert
-        verify(redisTemplate).delete("auth:otp:REGISTER:test@example.com");
-        verify(redisTemplate).delete("auth:otp:attempts:REGISTER:test@example.com");
-        verify(valueOperations).set("auth:otp:verified:REGISTER:test@example.com", "true", 300L, TimeUnit.SECONDS);
+        assertThatThrownBy(() -> otpService.verifyOtp(request, 2L))
+                .isInstanceOf(OtpSecurityException.class)
+                .extracting(exception -> ((OtpSecurityException) exception).getCode())
+                .isEqualTo("OTP_INVALID_OR_EXPIRED");
     }
 
     @Test
-    @DisplayName("Should throw InvalidRequestException when verifying non-existent OTP")
-    void shouldThrowExceptionIfOtpNotFound() {
-        // Arrange
-        OtpVerifyRequest request = new OtpVerifyRequest("test@example.com", OtpPurpose.REGISTER, "123456");
-        when(valueOperations.get("auth:otp:REGISTER:test@example.com")).thenReturn(null);
+    @DisplayName("proof consumption delegates to the atomic scope-bound operation")
+    void consumesProofOnceForExpectedScope() {
+        when(hmacService.hash("otp-scope", "REGISTER\ntest@example.com\n-"))
+                .thenReturn(SCOPE);
+        when(hmacService.hash("otp-proof", PROOF)).thenReturn("proof-digest");
+        when(redisStore.consumeProof("proof-digest", SCOPE)).thenReturn(true, false);
 
-        // Act & Assert
-        assertThatThrownBy(() -> otpService.verifyOtp(request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("Verification code has expired or is invalid");
-    }
+        otpService.consumeProof(PROOF, "TEST@example.com", OtpPurpose.REGISTER);
 
-    @Test
-    @DisplayName("Should throw InvalidRequestException and increment attempts on wrong code")
-    void shouldIncrementAttemptsAndThrowOnWrongCode() {
-        // Arrange
-        String email = "test@example.com";
-        OtpVerifyRequest request = new OtpVerifyRequest(email, OtpPurpose.REGISTER, "111111");
-
-        when(valueOperations.get("auth:otp:REGISTER:test@example.com")).thenReturn("someHashedOtp");
-        when(valueOperations.get("auth:otp:attempts:REGISTER:test@example.com")).thenReturn("1");
-        when(valueOperations.increment("auth:otp:attempts:REGISTER:test@example.com")).thenReturn(2L);
-
-        // Act & Assert
-        assertThatThrownBy(() -> otpService.verifyOtp(request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("Invalid verification code. Remaining attempts: 3");
-    }
-
-    @Test
-    @DisplayName("Should throw InvalidRequestException and clean up when attempts exceeded")
-    void shouldCleanUpAndThrowWhenAttemptsExceeded() {
-        // Arrange
-        String email = "test@example.com";
-        OtpVerifyRequest request = new OtpVerifyRequest(email, OtpPurpose.REGISTER, "111111");
-
-        when(valueOperations.get("auth:otp:REGISTER:test@example.com")).thenReturn("someHashedOtp");
-        when(valueOperations.get("auth:otp:attempts:REGISTER:test@example.com")).thenReturn("4");
-        when(valueOperations.increment("auth:otp:attempts:REGISTER:test@example.com")).thenReturn(5L);
-
-        // Act & Assert
-        assertThatThrownBy(() -> otpService.verifyOtp(request))
-                .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("Too many failed verification attempts. Please request a new code.");
-
-        verify(redisTemplate).delete("auth:otp:REGISTER:test@example.com");
-        verify(redisTemplate).delete("auth:otp:attempts:REGISTER:test@example.com");
-    }
-
-    private String hashOtp(String code) {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] encodedHash = digest.digest(code.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder(2 * encodedHash.length);
-            for (byte b : encodedHash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
-        }
+        assertThatThrownBy(() -> otpService.consumeProof(
+                PROOF, "test@example.com", OtpPurpose.REGISTER))
+                .isInstanceOf(OtpSecurityException.class)
+                .extracting(exception -> ((OtpSecurityException) exception).getCode())
+                .isEqualTo("OTP_PROOF_INVALID_OR_EXPIRED");
     }
 }

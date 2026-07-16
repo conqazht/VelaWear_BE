@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.auth;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -25,11 +26,18 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.security.TokenBlacklistService;
+import vn.conganh.commercial.security.ClientIpResolver;
+import vn.conganh.commercial.security.monitoring.SecurityEventLogger;
+import vn.conganh.commercial.security.monitoring.SecurityMetrics;
+import vn.conganh.commercial.security.ratelimit.AuthRateLimitService;
+import vn.conganh.commercial.security.session.SessionRevocationReason;
+import vn.conganh.commercial.security.session.SessionRevocationService;
 import vn.conganh.commercial.config.JwtProperties;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.exception.SessionRevokedException;
 import vn.conganh.commercial.exception.UnauthorizedException;
 import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
 import vn.conganh.commercial.feature.auth.dto.ChangePasswordRequest;
@@ -76,6 +84,10 @@ public class AuthServiceImpl implements AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final OtpService otpService;
     private final OAuth2LoginCodeService oauth2LoginCodeService;
+    private final AuthRateLimitService rateLimitService;
+    private final SessionRevocationService sessionRevocationService;
+    private final SecurityMetrics securityMetrics;
+    private final SecurityEventLogger securityEventLogger;
 
     public AuthServiceImpl(
             AuthenticationManager authenticationManager,
@@ -91,7 +103,11 @@ public class AuthServiceImpl implements AuthService {
             JwtProperties jwtProperties,
             TokenBlacklistService tokenBlacklistService,
             OtpService otpService,
-            OAuth2LoginCodeService oauth2LoginCodeService) {
+            OAuth2LoginCodeService oauth2LoginCodeService,
+            AuthRateLimitService rateLimitService,
+            SessionRevocationService sessionRevocationService,
+            SecurityMetrics securityMetrics,
+            SecurityEventLogger securityEventLogger) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -106,6 +122,10 @@ public class AuthServiceImpl implements AuthService {
         this.tokenBlacklistService = tokenBlacklistService;
         this.otpService = otpService;
         this.oauth2LoginCodeService = oauth2LoginCodeService;
+        this.rateLimitService = rateLimitService;
+        this.sessionRevocationService = sessionRevocationService;
+        this.securityMetrics = securityMetrics;
+        this.securityEventLogger = securityEventLogger;
     }
 
     @Override
@@ -118,27 +138,45 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public TokenResponse authenticate(LoginRequest request, String deviceInfo, String ipAddress) {
         String normalizedEmail = normalizeEmail(request.email());
-        userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
-                .filter(user -> user.getPassword() == null || user.getPassword().isBlank())
-                .ifPresent(user -> {
-                    throw new UnauthorizedException("This account uses Google login. Please continue with Google.");
-                });
+        String normalizedIp = ipAddress == null || ipAddress.isBlank() ? "unknown" : ipAddress;
+        String ipRateLimitPrefix = ClientIpResolver.fromAddress(normalizedIp).rateLimitPrefix();
+        Map<String, String> identityLimits = Map.of(
+                "account", normalizedEmail,
+                "ip-account", ipRateLimitPrefix + ':' + normalizedEmail);
+        rateLimitService.enforce("login", "AUTH_RATE_LIMITED", identityLimits, ipRateLimitPrefix);
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(normalizedEmail, request.password()));
+        try {
+            userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+                    .filter(user -> user.getPassword() == null || user.getPassword().isBlank())
+                    .ifPresent(user -> {
+                        throw new UnauthorizedException("This account uses Google login. Please continue with Google.");
+                    });
 
-        String email = authentication.getName();
-        User user = userRepository.findByEmailAndDeletedAtIsNull(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(normalizedEmail, request.password()));
 
-        List<String> roles = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .toList();
-        TokenResponse response = issueTokens(user, roles, deviceInfo, ipAddress);
+            String email = authentication.getName();
+            User user = userRepository.findByEmailAndDeletedAtIsNull(email)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
 
-        log.info("[VelaWear/Auth] - LOGIN: userId: {}, email: {}", user.getId(), email);
+            List<String> roles = authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .toList();
+            TokenResponse response = issueTokens(user, roles, deviceInfo, ipAddress);
 
-        return response;
+            rateLimitService.clear("login", identityLimits);
+            securityMetrics.authAttempt("login", "success");
+            securityEventLogger.event(
+                    "auth_login", "success", "authenticated", user.getId(), null,
+                    rateLimitService.subjectHash("client-ip", normalizedIp));
+            return response;
+        } catch (RuntimeException exception) {
+            securityMetrics.authAttempt("login", "failure");
+            securityEventLogger.event(
+                    "auth_login", "failure", "invalid_credentials", null, null,
+                    rateLimitService.subjectHash("client-ip", normalizedIp));
+            throw exception;
+        }
     }
 
     @Override
@@ -149,9 +187,10 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("User", "email", normalizedEmail);
         }
 
-        if (!otpService.isOtpVerified(normalizedEmail, OtpPurpose.REGISTER)) {
-            throw new InvalidRequestException("Email address has not been verified with OTP.");
-        }
+        Role userRole = roleRepository.findByName("USER")
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "USER"));
+        otpService.consumeProof(request.otpProofToken(), normalizedEmail, OtpPurpose.REGISTER);
+
         User user = new User();
         user.setFullName(request.fullName());
         user.setEmail(normalizedEmail);
@@ -161,15 +200,13 @@ public class AuthServiceImpl implements AuthService {
         user.setGender(request.gender());
         User savedUser = userRepository.save(user);
 
-        Role userRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "USER"));
         UserHasRole userHasRole = new UserHasRole();
         userHasRole.setUser(savedUser);
         userHasRole.setRole(userRole);
         userHasRoleRepository.save(userHasRole);
 
-        otpService.consumeOtpVerifiedMarker(normalizedEmail, OtpPurpose.REGISTER);
         log.info("[VelaWear/Auth] - REGISTER: userId: {}", savedUser.getId());
+        securityMetrics.authAttempt("register", "success");
         return UserResponse.fromEntity(savedUser);
     }
 
@@ -183,7 +220,8 @@ public class AuthServiceImpl implements AuthService {
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
         TokenResponse response = issueTokens(user, roles, deviceInfo, ipAddress);
-        log.info("[VelaWear/Auth] - OAUTH2_EXCHANGE: userId: {}, email: {}", user.getId(), user.getEmail());
+        log.info("[VelaWear/Auth] - OAUTH2_EXCHANGE: userId: {}", user.getId());
+        securityMetrics.authAttempt("oauth_exchange", "success");
         return response;
     }
 
@@ -192,6 +230,12 @@ public class AuthServiceImpl implements AuthService {
     public TokenResponse refreshToken(RefreshTokenRequest request) {
         Jwt currentRefreshJwt = validateRefreshJwt(request.refreshToken());
         String currentJti = requireJti(currentRefreshJwt);
+        long tokenSecurityVersion = requireSecurityVersion(currentRefreshJwt);
+        rateLimitService.enforce(
+                "refresh",
+                "AUTH_RATE_LIMITED",
+                Map.of("session", currentJti));
+
         RefreshTokenSession currentSession = refreshTokenSessionService.find(currentJti)
                 .orElseThrow(() -> {
                     refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
@@ -199,21 +243,30 @@ public class AuthServiceImpl implements AuthService {
                 });
 
         String currentTokenHash = refreshTokenService.hashToken(request.refreshToken());
-        if (!currentTokenHash.equals(currentSession.tokenHash())) {
+        if (!currentTokenHash.equals(currentSession.tokenHash())
+                || currentSession.securityVersion() != tokenSecurityVersion) {
             refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
             throw new RefreshTokenSessionNotFoundException("Refresh session is expired or revoked");
         }
 
         User user = userRepository.findByIdAndDeletedAtIsNull(currentSession.userId())
                 .orElseThrow(() -> new UnauthorizedException("Refresh token user is invalid"));
+        if (user.getSecurityVersion() != tokenSecurityVersion) {
+            refreshTokenSessionService.delete(currentJti);
+            refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
+            securityMetrics.authAttempt("refresh", "session_revoked");
+            throw new SessionRevokedException();
+        }
 
         List<String> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
         String refreshToken = rotateRefreshToken(request.refreshToken(), user, currentSession);
-        String accessToken = generateAccessToken(user.getEmail(), user.getId(), roles);
+        String accessToken = generateAccessToken(
+                user.getEmail(), user.getId(), user.getSecurityVersion(), roles);
 
         log.info("[VelaWear/Auth] - REFRESH_TOKEN: userId: {}", user.getId());
+        securityMetrics.authAttempt("refresh", "success");
 
         return new TokenResponse(accessToken, refreshToken, jwtProperties.accessTokenExpiration());
     }
@@ -224,6 +277,13 @@ public class AuthServiceImpl implements AuthService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication instanceof JwtAuthenticationToken jwtAuth) {
             Jwt jwt = jwtAuth.getToken();
+            Object userIdClaim = jwt.getClaim("userId");
+            if (userIdClaim instanceof Number number) {
+                rateLimitService.enforce(
+                        "auth-session",
+                        "AUTH_RATE_LIMITED",
+                        Map.of("user", String.valueOf(number.longValue())));
+            }
             if (jwt.getExpiresAt() != null) {
                 long remainingSeconds = jwt.getExpiresAt().getEpochSecond() - Instant.now().getEpochSecond();
                 if (remainingSeconds > 0) {
@@ -234,7 +294,12 @@ public class AuthServiceImpl implements AuthService {
         }
         if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
             Jwt refreshJwt = validateRefreshJwt(request.refreshToken());
-            refreshTokenSessionService.delete(requireJti(refreshJwt));
+            String refreshJti = requireJti(refreshJwt);
+            rateLimitService.enforce(
+                    "auth-session",
+                    "AUTH_RATE_LIMITED",
+                    Map.of("session", refreshJti));
+            refreshTokenSessionService.delete(refreshJti);
             refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
         }
     }
@@ -244,6 +309,10 @@ public class AuthServiceImpl implements AuthService {
     public UserResponse getMe(String email) {
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+        rateLimitService.enforce(
+                "auth-session",
+                "AUTH_RATE_LIMITED",
+                Map.of("user", String.valueOf(user.getId())));
 
         List<UserResponse.RoleSummaryResponse> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(UserResponse.RoleSummaryResponse::fromEntity)
@@ -252,16 +321,22 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private TokenResponse issueTokens(User user, List<String> roles, String deviceInfo, String ipAddress) {
-        String accessToken = generateAccessToken(user.getEmail(), user.getId(), roles);
+        String accessToken = generateAccessToken(
+                user.getEmail(), user.getId(), user.getSecurityVersion(), roles);
         String refreshToken = createRefreshToken(user, deviceInfo, ipAddress);
         return new TokenResponse(accessToken, refreshToken, jwtProperties.accessTokenExpiration());
     }
 
-    private String generateAccessToken(String email, Long userId, List<String> roles) {
+    private String generateAccessToken(
+            String email,
+            Long userId,
+            long securityVersion,
+            List<String> roles) {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(email)
                 .claim("userId", userId)
+                .claim("securityVersion", securityVersion)
                 .claim("roles", roles)
                 .issuedAt(now)
                 .expiresAt(now.plus(jwtProperties.accessTokenExpiration(), ChronoUnit.SECONDS))
@@ -286,6 +361,7 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenSessionService.create(new RefreshTokenSession(
                 jti,
                 user.getId(),
+                user.getSecurityVersion(),
                 refreshTokenService.hashToken(refreshToken),
                 deviceInfo,
                 ipAddress,
@@ -313,6 +389,7 @@ public class AuthServiceImpl implements AuthService {
         RefreshTokenSession replacementSession = new RefreshTokenSession(
                 newJti,
                 user.getId(),
+                currentSession.securityVersion(),
                 refreshTokenService.hashToken(newRefreshToken),
                 currentSession.deviceInfo(),
                 currentSession.ipAddress(),
@@ -329,6 +406,7 @@ public class AuthServiceImpl implements AuthService {
                 .id(jti)
                 .subject(user.getEmail())
                 .claim("userId", user.getId())
+                .claim("securityVersion", user.getSecurityVersion())
                 .claim("type", REFRESH_TOKEN_TYPE)
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
@@ -357,6 +435,14 @@ public class AuthServiceImpl implements AuthService {
         return jwt.getId();
     }
 
+    private long requireSecurityVersion(Jwt jwt) {
+        Object claim = jwt.getClaim("securityVersion");
+        if (claim instanceof Number number && number.longValue() >= 0) {
+            return number.longValue();
+        }
+        throw new SessionRevokedException();
+    }
+
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
@@ -365,19 +451,17 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void resetPassword(ForgotPasswordResetRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
-
-        if (!otpService.isOtpVerified(normalizedEmail, OtpPurpose.FORGOT_PASSWORD)) {
-            throw new InvalidRequestException("Email address has not been verified with OTP.");
-        }
-
         User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedEmail));
 
+        otpService.consumeProof(
+                request.otpProofToken(), normalizedEmail, OtpPurpose.FORGOT_PASSWORD);
         user.setPassword(passwordEncoder.encode(request.newPassword()));
+        sessionRevocationService.revokeAll(user, SessionRevocationReason.PASSWORD_RESET);
         userRepository.save(user);
 
-        otpService.consumeOtpVerifiedMarker(normalizedEmail, OtpPurpose.FORGOT_PASSWORD);
-        log.info("[VelaWear/Auth] - PASSWORD_RESET: email: {}", normalizedEmail);
+        log.info("[VelaWear/Auth] - PASSWORD_RESET: userId: {}", user.getId());
+        securityMetrics.authAttempt("password_reset", "success");
     }
 
     @Override
@@ -388,20 +472,23 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedCurrent)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedCurrent));
+        rateLimitService.enforce(
+                "sensitive-change",
+                "AUTH_RATE_LIMITED",
+                Map.of("user", String.valueOf(user.getId())));
 
         if (userRepository.existsByEmail(normalizedNew)) {
             throw new DuplicateResourceException("User", "email", normalizedNew);
         }
 
-        if (!otpService.isOtpVerified(normalizedNew, OtpPurpose.CHANGE_EMAIL)) {
-            throw new InvalidRequestException("New email address has not been verified with OTP.");
-        }
-
+        otpService.consumeProof(
+                request.otpProofToken(), normalizedNew, OtpPurpose.CHANGE_EMAIL, user.getId());
         user.setEmail(normalizedNew);
+        sessionRevocationService.revokeAll(user, SessionRevocationReason.EMAIL_CHANGE);
         userRepository.save(user);
 
-        otpService.consumeOtpVerifiedMarker(normalizedNew, OtpPurpose.CHANGE_EMAIL);
-        log.info("[VelaWear/Auth] - CHANGE_EMAIL: from: {}, to: {}", normalizedCurrent, normalizedNew);
+        log.info("[VelaWear/Auth] - CHANGE_EMAIL: userId: {}", user.getId());
+        securityMetrics.authAttempt("email_change", "success");
     }
 
     @Override
@@ -411,6 +498,10 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedEmail));
+        rateLimitService.enforce(
+                "sensitive-change",
+                "AUTH_RATE_LIMITED",
+                Map.of("user", String.valueOf(user.getId())));
 
         boolean hasPassword = user.getPassword() != null && !user.getPassword().isBlank();
         if (hasPassword) {
@@ -424,8 +515,10 @@ public class AuthServiceImpl implements AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
+        sessionRevocationService.revokeAll(user, SessionRevocationReason.PASSWORD_CHANGE);
         userRepository.save(user);
 
-        log.info("[VelaWear/Auth] - CHANGE_PASSWORD: email: {}, hadPassword: {}", normalizedEmail, hasPassword);
+        log.info("[VelaWear/Auth] - CHANGE_PASSWORD: userId: {}, hadPassword: {}", user.getId(), hasPassword);
+        securityMetrics.authAttempt("password_change", "success");
     }
 }

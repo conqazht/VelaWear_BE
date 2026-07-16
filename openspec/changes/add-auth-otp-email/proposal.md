@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-07-16):** Contract verified-marker của change này đã được thay
+> bởi `harden-otp-auth-v1`: request trả `challengeId`, verify trả single-use
+> `proofToken`, final action gửi `otpProofToken`. File này chỉ giữ lại lịch sử.
+
 ## Why
 
 VelaWear currently supports password-based registration and login but does not have a reusable email verification flow for account-sensitive actions. Adding OTP email first gives the auth module a secure notification foundation for registration, password recovery, and email changes before payment notifications are introduced.
