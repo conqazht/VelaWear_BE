@@ -96,6 +96,30 @@ MUST expose security metrics only to ADMIN without unbounded metric tags.
 - **WHEN** a non-admin requests `/actuator/metrics/**`
 - **THEN** access is denied while health/info remain public
 
+### Requirement: Server-Side Google OAuth2 Authorization State
+
+The system MUST keep only an opaque nonce in the OAuth2 browser cookie, MUST store
+an explicit bounded JSON authorization request under an HMAC-derived Redis key, and
+MUST consume callback state exactly once without Java native deserialization.
+
+#### Scenario: Concurrent or replayed callback
+
+- **WHEN** multiple callbacks submit the same valid OAuth2 nonce
+- **THEN** Redis `GETDEL` returns the authorization request to exactly one callback
+  and all later callbacks fail without exchanging the authorization code
+
+#### Scenario: Legacy serialized cookie
+
+- **WHEN** a client submits the former Java-serialized OAuth2 cookie
+- **THEN** the system rejects it without deserializing client-controlled bytes and
+  requires the user to start Google Login again
+
+#### Scenario: OAuth2 state store unavailable
+
+- **WHEN** Redis is unavailable during OAuth2 initiation or callback
+- **THEN** the system fails closed without redirecting/continuing authentication or
+  falling back to a client-side Java object or HTTP session
+
 ## MODIFIED Requirements
 
 ### Requirement: OTP Email Request and Verification

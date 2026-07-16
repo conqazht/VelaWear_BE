@@ -77,6 +77,22 @@ multiple instances.
   `ROLE_ADMIN`. Production security logs are structured and must not contain OTP,
   proof, token, password, email or raw IP.
 
+## Google OAuth2 Authorization State
+
+- The browser cookie `oauth2_auth_request` contains only a random 32-byte Base64URL
+  nonce. It never contains a Java-serialized `OAuth2AuthorizationRequest`.
+- The request is stored as an explicit, bounded JSON DTO in Redis under
+  `auth:oauth2:v2:request:{hmac(nonce)}`. Its default TTL and cookie `Max-Age` are
+  180 seconds and are configured by `OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS`.
+- Starting another Google login deletes the previous request. The callback uses
+  Redis `GETDEL`, so state/OIDC nonce/PKCE data can be consumed only once even when
+  callbacks race or are replayed.
+- Missing, expired and legacy serialized cookies are rejected. Invalid JSON is
+  consumed before rejection. Redis failures fail closed; there is no fallback to a
+  client-side Java object or HTTP session.
+- All backend instances must share Redis and the same `SECURITY_HMAC_SECRET`. Never
+  log the browser nonce, OAuth state, raw OIDC nonce, PKCE verifier or Redis payload.
+
 See [`docs/RACE_CONDITION_TESTING_VI.md`](../../../../../../../../docs/RACE_CONDITION_TESTING_VI.md)
 for the real Redis/PostgreSQL concurrency tests.
 

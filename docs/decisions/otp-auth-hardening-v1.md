@@ -63,6 +63,14 @@ Server sinh `X-Request-ID`, security log dùng field hữu hạn và không ghi 
 Micrometer cung cấp counter/timer Auth/OTP/limiter/revocation/delivery. Metrics chỉ
 ADMIN đọc; dữ liệu hiện in-memory, chưa có collector hoặc alert ngoài.
 
+### Google OAuth2 authorization state
+
+Không deserialize `OAuth2AuthorizationRequest` Java từ cookie do client gửi. Cookie
+chỉ giữ nonce ngẫu nhiên 32 byte; backend lưu DTO JSON bounded trong Redis tại key
+HMAC với TTL 180 giây. Callback dùng `GETDEL` để consume đúng một lần trước khi
+Spring kiểm tra state/OIDC nonce/PKCE. Redis lỗi fail closed, không fallback về Java
+cookie hoặc HTTP session. Bắt đầu Google Login mới vô hiệu state cũ của browser.
+
 ## Hệ quả
 
 Tích cực:
@@ -72,6 +80,8 @@ Tích cực:
 - forged forwarded header không né limiter;
 - một atomic DB version vô hiệu mọi token, kể cả Redis cleanup lỗi;
 - có request correlation và metric hữu hạn để tinh chỉnh policy.
+- dữ liệu OAuth2 từ biên HTTP không còn đi qua Java native deserialization; callback
+  đồng thời/replay chỉ một request có thể lấy state.
 
 Đánh đổi:
 
@@ -80,6 +90,8 @@ Tích cực:
 - không có transaction nguyên tử xuyên Redis/PostgreSQL;
 - backend/frontend phải rollout cùng lúc và token/OTP v1 bị vô hiệu;
 - metric mất khi process restart và chưa tổng hợp multi-instance.
+- Google OAuth2 Login phụ thuộc Redis; cookie cũ đang giữa flow phải bắt đầu lại sau
+  rollout.
 
 ## Phương án không chọn
 
@@ -94,10 +106,15 @@ Tích cực:
   tốn key; version counter đơn giản hơn, có nguồn sự thật DB.
 - **Thêm Cloudflare/CAPTCHA ngay v1**: mở rộng vận hành và contract ngoài phạm vi;
   để đợt edge/adaptive protection sau.
+- **Ký/MAC rồi tiếp tục Java deserialize cookie**: ngăn sửa payload nếu key an toàn
+  nhưng vẫn giữ native serialization ở HTTP boundary, payload lớn và khó kiểm soát
+  type; server-side JSON DTO rõ schema và dễ giới hạn hơn.
 
 ## Rollout
 
 Backend/frontend phát hành đồng thời. OTP prefix chuyển sang `auth:otp:v2:*`; JWT
-thiếu `securityVersion` và refresh serialization cũ bị từ chối. Đây là forced
-re-login một lần có chủ đích. Chi tiết vận hành nằm tại
+thiếu `securityVersion`, refresh serialization cũ và cookie OAuth2 Java cũ bị từ
+chối. Đây là forced re-login một lần có chủ đích; flow Google đang dang dở chỉ cần
+bắt đầu lại. Mọi backend instance phải dùng chung Redis và
+`SECURITY_HMAC_SECRET`. Chi tiết vận hành nằm tại
 [`../OTP_SECURITY_FLOW_VI.md`](../OTP_SECURITY_FLOW_VI.md).

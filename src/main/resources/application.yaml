@@ -188,6 +188,7 @@ app:
     frontend-success-url: ${OAUTH2_FRONTEND_SUCCESS_URL:http://localhost:3000/auth/oauth2/callback}
     frontend-failure-url: ${OAUTH2_FRONTEND_FAILURE_URL:http://localhost:3000/sign-in}
     login-code-ttl-seconds: ${OAUTH2_LOGIN_CODE_TTL_SECONDS:120}
+    authorization-request-ttl-seconds: ${OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS:180}
   otp:
     ttl-seconds: 300
     proof-ttl-seconds: 300

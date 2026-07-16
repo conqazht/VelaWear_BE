@@ -100,6 +100,20 @@ Concurrency test phải tạo refresh và sensitive change sát nhau, sau đó c
 không token successor nào có thể gọi API bằng version cũ. Không chỉ assert Redis key
 đã xóa vì cleanup là hậu commit và có thể fail an toàn.
 
+## Google OAuth2 callback race và replay
+
+Authorization request không còn nằm trong cookie Java serialization. Browser chỉ
+giữ nonce, còn JSON bounded nằm tại Redis key HMAC. Callback gọi `GETDEL` trước khi
+Spring Security kiểm tra state và đổi authorization code, vì vậy hai callback cùng
+nonce không thể cùng lấy request.
+
+Integration test tạo một flow rồi thả đồng thời nhiều worker gọi
+`removeAuthorizationRequest`; invariant là đúng một worker nhận request, các worker
+còn lại nhận null và Redis key biến mất. Sau đó phải thử replay lần nữa, cookie Java
+cũ, JSON hỏng/quá lớn và Redis unavailable để chứng minh không có nhánh fallback
+sang cookie/HTTP session. `loadAuthorizationRequest` được test riêng vì thao tác đọc
+không được consume state trước callback thật.
+
 ## Chạy test
 
 Docker Desktop phải hoạt động vì integration test tự khởi động PostgreSQL và Redis.

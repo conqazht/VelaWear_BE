@@ -35,3 +35,10 @@
 - [x] 5.2 Verify Redis/PostgreSQL concurrency, fail-closed and proxy/session cases
 - [x] 5.3 Run full backend and frontend verification suites
 - [x] 5.4 Publish Vietnamese operations documentation, ADR and API/context updates
+
+## 6. Google OAuth2 Authorization State
+
+- [x] 6.1 Replace Java-serialized browser cookie with an opaque nonce
+- [x] 6.2 Store bounded authorization-request JSON under an HMAC Redis key
+- [x] 6.3 Consume callback state atomically with `GETDEL` and fail closed on Redis errors
+- [x] 6.4 Cover round-trip, replay, concurrency, legacy cookie and failure cases

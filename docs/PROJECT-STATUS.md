@@ -4,15 +4,23 @@
 - **Summary of Changes**: Thay verified-marker bằng contract `challengeId -> proofToken`
   dùng Redis Lua atomic; thêm limiter đa chiều Auth/OTP, client IP resolver không tin
   forwarded header, `users.security_version` để thu hồi mọi access/refresh session,
-  correlation/security log và Micrometer metrics giới hạn cardinality.
+  correlation/security log và Micrometer metrics giới hạn cardinality. Google OAuth2
+  không còn deserialize Java object từ cookie: browser chỉ giữ nonce, request JSON
+  nằm trong Redis và callback consume một lần bằng `GETDEL`.
 - **Security/Compatibility**: `CHANGE_EMAIL` bind proof với user đang đăng nhập;
   forgot-password email không tồn tại dùng decoy challenge. JWT/refresh session cũ
   thiếu `securityVersion` và OTP key v1 bị từ chối, tạo một lần forced re-login có
-  chủ đích. `SECURITY_HMAC_SECRET` tối thiểu 32 byte và tách khỏi JWT secret.
+  chủ đích. Cookie OAuth2 kiểu Java serialization cũ cũng bị từ chối và flow đang
+  dở phải bắt đầu lại. `SECURITY_HMAC_SECRET` tối thiểu 32 byte và tách khỏi JWT
+  secret.
 - **Scope**: Chỉ dùng Redis, Resend, Spring Boot Actuator/Micrometer hiện có. Chưa có
   Cloudflare/WAF, adaptive CAPTCHA, Prometheus/Grafana hoặc SaaS mới. Xem
   `docs/OTP_SECURITY_FLOW_VI.md` để biết contract, Lua invariant, proxy config và
   troubleshooting.
+- **Verification Performed**: OAuth2 focused suite pass 14/14, gồm Redis thật,
+  callback concurrency/replay, legacy cookie, JSON invalid/oversized, Redis
+  fail-closed và nonce collision. Toàn bộ `mvnw.cmd test` pass 664/664; OpenSpec
+  strict validation và `git diff --check` pass.
 
 ### Dev catalog 100 Product xác định, gallery đúng theo màu
 

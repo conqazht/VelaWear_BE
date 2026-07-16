@@ -40,6 +40,8 @@ Public endpoints:
 | POST | `/api/v1/auth/otp/request` | Request OTP challenge; `CHANGE_EMAIL` requires JWT |
 | POST | `/api/v1/auth/otp/verify` | Verify challenge and receive single-use proof |
 | POST | `/api/v1/auth/forgot-password/reset` | Reset password using OTP proof |
+| GET | `/oauth2/authorization/google` | Start Google OAuth2 Login |
+| GET | `/login/oauth2/code/google` | Google OAuth2 callback managed by Spring Security |
 | GET | `/api/v1/sales` | List published, non-ended STANDARD/FLASH campaigns; phase is returned per row |
 | GET | `/api/v1/sales/{code}` | Public campaign detail and pricing |
 | GET | `/actuator/health` | Health check |
@@ -275,6 +277,30 @@ Set-Cookie: refresh_token=<refreshToken>; Max-Age=259200; Path=/api/v1/auth; Htt
 | 400 | Missing email or password |
 | 401 | Invalid credentials |
 | 401 | Soft-deleted user |
+
+---
+
+### GET /oauth2/authorization/google Public
+
+Starts Google OAuth2 Login. Spring Security redirects to Google after the backend
+stores an explicit authorization-request JSON document in Redis. The browser cookie
+`oauth2_auth_request` contains only a random 43-character nonce; it never contains a
+Java-serialized object.
+
+Redis state expires after `OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS` (default 180
+seconds). Starting another Google Login invalidates the previous flow for the same
+browser.
+
+### GET /login/oauth2/code/google Public callback
+
+Spring Security callback. The backend atomically consumes the Redis state with
+`GETDEL`, validates OAuth2 state/OIDC nonce/PKCE, and then redirects to the configured
+frontend success or failure URL. Concurrent callbacks and replay cannot reuse the
+same state. Missing/expired/legacy cookies and Redis failures fail closed.
+
+These routes are browser navigation endpoints, so they do not use the standard JSON
+response envelope. Frontend request/response contracts are unchanged by the
+server-side state hardening.
 
 ---
 
@@ -1730,6 +1756,8 @@ Flash quota.
 | POST | `/api/v1/auth/forgot-password/reset` | Public | Implemented | Reset password with proof; revoke all sessions |
 | PUT | `/api/v1/auth/me/email` | Bearer | Implemented | Change email with actor-bound proof; revoke all sessions |
 | PUT | `/api/v1/auth/me/password` | Bearer | Implemented | Set/change password; revoke all sessions |
+| GET | `/oauth2/authorization/google` | Public | Implemented | Start Google OAuth2 Login with server-side Redis state |
+| GET | `/login/oauth2/code/google` | Public callback | Implemented | Consume OAuth2 state once and redirect frontend |
 | GET | `/actuator/metrics/**` | Bearer `ROLE_ADMIN` | Implemented | In-memory Micrometer metrics |
 | GET | `/users` | Bearer | Implemented | List users |
 | GET | `/users/{id}` | Bearer | Implemented | Get user |

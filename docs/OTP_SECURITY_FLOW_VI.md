@@ -599,6 +599,7 @@ AUTH_RATE_LIMIT_ENABLED=true
 OTP_REQUEST_COOLDOWN=60s
 OTP_MAX_ATTEMPTS=5
 OTP_ATTEMPTS_LOCK=10m
+OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS=180
 ```
 
 Profile `prod` không khởi động nếu thiếu `SECURITY_HMAC_SECRET`; secret ngắn hơn 32
@@ -637,6 +638,8 @@ Backend và frontend phải phát hành cùng lúc vì contract verify và final
 - verified-marker cũ không thay thế được proof token;
 - JWT thiếu `securityVersion` bị `SESSION_REVOKED`;
 - refresh session/token serialization cũ không đủ claim version để refresh;
+- cookie Google OAuth2 chứa Java serialization cũ bị từ chối; người đang ở giữa
+  luồng chỉ cần bấm đăng nhập Google lại;
 - người dùng phải đăng nhập lại một lần có chủ đích.
 
 Không duy trì song song contract `{email,purpose,code}` cũ vì nó kéo dài cửa replay
@@ -661,6 +664,11 @@ invariant sau:
 - reset/change/role-change revoke access và mọi refresh session, kể cả race với
   refresh;
 - metrics chỉ ADMIN đọc được; security log không chứa secret/PII.
+- cookie Google OAuth2 chỉ chứa nonce 43 ký tự; Redis key không chứa nonce thô;
+- Google OAuth2 state/OIDC nonce/PKCE round-trip đúng, callback đồng thời chỉ một
+  request thắng, replay/cookie Java cũ/JSON hỏng đều bị từ chối;
+- Redis lỗi ở lúc bắt đầu hoặc callback Google OAuth2 đều fail closed và không có
+  fallback sang Java serialization/HTTP session.
 
 Frontend Vitest phải chứng minh challenge được thay khi resend, proof chỉ sống trong
 callback memory, final payload có đúng `otpProofToken`, error code/Retry-After được
@@ -723,7 +731,69 @@ Deployment có proxy nhưng vẫn để `NONE`, hoặc origin chưa dùng truste
 Không sửa bằng cách đọc phần tử đầu của XFF trong application. Cấu hình `NATIVE`,
 regex proxy cụ thể và chặn client đi thẳng origin.
 
-## 14. Ngoài phạm vi và backlog
+### Google Login thất bại ngay sau deploy
+
+Cookie `oauth2_auth_request` tạo bởi phiên bản cũ chứa Java serialization và cố ý
+không tương thích với phiên bản mới. Xóa cookie hoặc bấm lại “Đăng nhập bằng Google”.
+Nếu lỗi tiếp diễn, kiểm tra Redis dùng chung giữa các instance,
+`SECURITY_HMAC_SECRET` có giống nhau và TTL 180 giây có đủ cho callback. Không bật
+lại deserialize cookie để xử lý tương thích.
+
+## 14. Phụ lục: state đăng nhập Google OAuth2
+
+### 14.1 Vấn đề của cách cũ
+
+Cách cũ serialize toàn bộ `OAuth2AuthorizationRequest` thành Java object, Base64 rồi
+đặt trực tiếp vào cookie. Base64 chỉ là encoding, không phải chữ ký hay mã hóa. Vì
+cookie do trình duyệt gửi lại nên backend đang deserialize dữ liệu nằm dưới quyền
+kiểm soát của client. Đây là ranh giới tin cậy không an toàn: payload có thể bị sửa,
+gây lỗi parser/deserialization, và về nguyên tắc có thể mở đường cho gadget-chain
+nếu classpath sau này xuất hiện type nguy hiểm. Dù chưa chứng minh được exploit cụ
+thể trong dependency hiện tại, không nên giữ native Java deserialization ở biên HTTP.
+
+### 14.2 Luồng mới
+
+```text
+/oauth2/authorization/google
+  -> backend tạo nonce ngẫu nhiên 32 byte (Base64URL 43 ký tự)
+  -> cookie HttpOnly/SameSite=Lax chỉ giữ nonce
+  -> Redis giữ JSON giới hạn kích thước tại auth:oauth2:v2:request:{HMAC(nonce)}
+  -> redirect sang Google
+
+/login/oauth2/code/google
+  -> lấy nonce từ cookie và HMAC để tìm Redis key
+  -> GETDEL atomically trước khi Spring kiểm tra state/đổi authorization code
+  -> dựng lại authorization request từ DTO field allowlist
+  -> xóa cookie; callback thứ hai/replay không còn state để dùng
+```
+
+Redis JSON chỉ chứa các field Spring Security cần để hoàn tất flow:
+`authorizationUri`, `clientId`, `redirectUri`, `scopes`, `state`,
+`authorizationRequestUri`, `registration_id`, OIDC nonce và dữ liệu PKCE. DTO chỉ
+nhận string/boolean/number/list/map có giới hạn độ sâu, số phần tử và tổng payload;
+không có polymorphic type metadata và không gọi Java native deserialization.
+
+### 14.3 Invariant và failure behavior
+
+- Redis key dùng HMAC domain riêng, không đặt nonce thô vào key; secret dùng chung
+  `SECURITY_HMAC_SECRET` nhưng domain tách khỏi OTP/proof/IP digest.
+- Lưu bằng `SET NX` với TTL, retry nonce mới nếu collision; không ghi đè request đã
+  tồn tại. Bắt đầu login mới chủ động xóa request cũ của cùng browser.
+- `load` chỉ đọc để Spring có thể inspect; callback `remove` dùng `GETDEL`, vì vậy
+  nhiều callback đồng thời chỉ một callback nhận state.
+- Nonce thiếu/sai format/hết TTL trả null; JSON hỏng/quá lớn bị consume rồi trả lỗi
+  generic. Redis lỗi fail closed; backend không redirect hoặc không tiếp tục login.
+- Cookie `Secure` chỉ theo `request.isSecure()` sau trusted-proxy policy, không đọc
+  trực tiếp `X-Forwarded-Proto`.
+- Không log nonce, OAuth state, raw OIDC nonce, PKCE verifier, payload Redis hay
+  Google authorization code.
+
+TTL mặc định là 180 giây qua `OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS`, giới hạn
+1–600 giây. Mọi backend instance phải dùng cùng Redis và cùng HMAC secret. Frontend
+không đổi API contract; khác biệt duy nhất khi rollout là flow Google đang dang dở
+phải bắt đầu lại.
+
+## 15. Ngoài phạm vi và backlog
 
 - Cloudflare/WAF/CDN, adaptive CAPTCHA và DDoS network/volumetric.
 - Rate limit API nghiệp vụ: upload quota, Gemini quota/concurrency, checkout theo
