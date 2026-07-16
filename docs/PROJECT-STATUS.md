@@ -1,3 +1,10 @@
+### Dev catalog 100 Product xác định, gallery đúng theo màu
+
+- **Date/Time**: 2026-07-16 (Asia/Saigon)
+- **Summary of Changes**: `R__3_dev_catalog_products.sql` quản lý đúng 100 design family; màu nằm ở Variant nên không làm tăng số Product. Toàn bộ ảnh cũ trong `uploads/products` được phân loại lại theo hình thực tế và ảnh còn thiếu được tạo thành bộ front/back/detail, bảo đảm mỗi product-color có tối thiểu 3 ảnh đúng thiết kế.
+- **Compatibility**: Product/Variant seed dùng slug, natural key và SKU ổn định. Seed cũ ngoài manifest được `INACTIVE`/`DISCONTINUED` kèm soft-delete để endpoint Collection không trả lại; sáu SKU core vẫn được giữ cho Order/Sale fixture. Apparel, giày và phụ kiện dùng riêng hệ size phù hợp.
+- **Verification Coverage**: `DevSeedDataIntegrationTest` kiểm tra đúng 100 Product visible/ACTIVE, tên và slug không trùng, đủ VI/EN, gallery theo màu, không dùng chéo ảnh, dùng hết asset vật lý và chạy lại repeatable seed không làm phình dữ liệu.
+
 ### Gợi ý nội dung English bằng Gemini
 
 - **Date/Time**: 2026-07-15 (Asia/Saigon)
@@ -47,7 +54,7 @@
 
 ### Completed
 
-- **Database Seed Data Redesign (historical)**: `R__3_dev_large_mock_data.sql` từng chứa bộ sinh ngẫu nhiên 100 Product nhưng phần đó hiện đã bị vô hiệu hóa. Active development catalog hiện có 10 Brand, 14 Category, 6 Product và 13 Variant ổn định; `R__5` chịu trách nhiệm reconcile đủ VI/EN, còn `R__6` tạo Sale fixture. Không dùng con số 100 Product cũ làm contract hiện tại.
+- **Database Seed Data Redesign**: Bộ sinh `RANDOM()` cũ đã được thay bằng manifest đúng 100 Product. `R__3_dev_catalog_products.sql` quản lý product/color/size/gallery; `R__3_dev_large_mock_data.sql` chỉ tạo dữ liệu feature dựa trên `SeedOwner`; `R__5` reconcile VI/EN và `R__6` tạo Sale fixture.
 - **UTF-8 Encoding for Flyway**: Added `encoding: UTF-8` to `spring.flyway` in `application.yaml` to prevent Vietnamese character corruption on Windows systems during db migration/seeding.
 - **Enhanced Product DTO Mappings**: Updated `ProductResponse` and `ProductServiceImpl` to batch-load and include `image`, `thumbnail`, `images` list, `categoryName`, and `categorySlug` in product detail/list API responses.
 - Verified backend compilability via `./mvnw compile`.

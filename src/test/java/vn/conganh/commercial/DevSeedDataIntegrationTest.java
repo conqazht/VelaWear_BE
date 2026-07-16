@@ -2,8 +2,14 @@ package vn.conganh.commercial;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Set;
+import java.util.stream.Collectors;
 import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +29,9 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private DataSource dataSource;
 
+    @Autowired
+    private Flyway flyway;
+
     @DynamicPropertySource
     static void enableDevSeedData(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.locations", () -> "classpath:db/migration,classpath:db/dev");
@@ -37,7 +46,9 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
         Integer userCount = jdbcTemplate.queryForObject(
                 "select count(*) from users where email like '%@velawear.local'",
                 Integer.class);
-        Integer productCount = jdbcTemplate.queryForObject("select count(*) from products", Integer.class);
+        Integer visibleProductCount = jdbcTemplate.queryForObject(
+                "select count(*) from products where deleted_at is null",
+                Integer.class);
         Integer orderCount = jdbcTemplate.queryForObject(
                 "select count(*) from orders where order_code like 'VW-DEV-%'",
                 Integer.class);
@@ -46,7 +57,7 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
 
         // Assert
         assertThat(userCount).isNotNull().isGreaterThanOrEqualTo(6);
-        assertThat(productCount).isNotNull().isGreaterThanOrEqualTo(4);
+        assertThat(visibleProductCount).isEqualTo(100);
         assertThat(orderCount).isNotNull().isGreaterThanOrEqualTo(3);
         assertThat(reviewCount).isNotNull().isGreaterThanOrEqualTo(2);
         assertThat(couponUsageCount).isNotNull().isGreaterThanOrEqualTo(2);
@@ -75,8 +86,12 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
                 from (
                     select pv.product_id
                     from product_variants pv
+                    join products p on p.id = pv.product_id
                     join sizes s on s.id = pv.size_id
                     where pv.deleted_at is null
+                      and pv.status = 'ACTIVE'
+                      and p.deleted_at is null
+                      and p.status = 'ACTIVE'
                     group by pv.product_id
                     having count(distinct case
                         when s.name ~ '^[0-9]+$' then 'NUMERIC'
@@ -92,10 +107,15 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
                 join categories c on c.id = p.category_id
                 join sizes s on s.id = pv.size_id
                 where pv.deleted_at is null
+                  and pv.status = 'ACTIVE'
+                  and p.deleted_at is null
+                  and p.status = 'ACTIVE'
                   and (
                       (c.slug in ('t-shirts', 'dresses', 'jackets', 'ao', 'quan', 'vay', 'dam', 'ao-khoac')
                           and s.name not in ('XS', 'S', 'M', 'L', 'XL', 'XXL'))
-                      or (c.slug = 'giay' and s.name !~ '^[0-9]+$')
+                      or (c.slug = 'giay'
+                          and s.name not in ('35', '36', '37', '38', '39', '40',
+                                             '41', '42', '43', '44', '45', '46'))
                       or (c.slug in ('accessories', 'phu-kien')
                           and s.name not in ('ONE SIZE', 'ADJUSTABLE', 'REGULAR', 'LARGE'))
                   )
@@ -105,14 +125,23 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
                 from (
                     select pv.product_id, pv.color_id
                     from product_variants pv
+                    join products p on p.id = pv.product_id
                     where pv.deleted_at is null
+                      and pv.status = 'ACTIVE'
+                      and p.deleted_at is null
+                      and p.status = 'ACTIVE'
                       and pv.color_id is not null
                     group by pv.product_id, pv.color_id
                     except
                     select pi.product_id, image_variant.color_id
                     from product_images pi
                     join product_variants image_variant on image_variant.id = pi.variant_id
-                    where image_variant.color_id is not null
+                    join products p on p.id = pi.product_id
+                    where image_variant.deleted_at is null
+                      and image_variant.status = 'ACTIVE'
+                      and p.deleted_at is null
+                      and p.status = 'ACTIVE'
+                      and image_variant.color_id is not null
                     group by pi.product_id, image_variant.color_id
                 ) missing
                 """, Integer.class);
@@ -122,7 +151,12 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
                     select pi.product_id, image_variant.color_id, pi.image
                     from product_images pi
                     join product_variants image_variant on image_variant.id = pi.variant_id
-                    where image_variant.color_id is not null
+                    join products p on p.id = pi.product_id
+                    where image_variant.deleted_at is null
+                      and image_variant.status = 'ACTIVE'
+                      and p.deleted_at is null
+                      and p.status = 'ACTIVE'
+                      and image_variant.color_id is not null
                     group by pi.product_id, image_variant.color_id, pi.image
                     having count(*) > 1
                 ) duplicates
@@ -132,7 +166,11 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
                 from (
                     select pv.product_id, pv.color_id
                     from product_variants pv
+                    join products p on p.id = pv.product_id
                     where pv.deleted_at is null
+                      and pv.status = 'ACTIVE'
+                      and p.deleted_at is null
+                      and p.status = 'ACTIVE'
                       and pv.color_id is not null
                     group by pv.product_id, pv.color_id
                 ) product_colors
@@ -140,12 +178,77 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
                     select pi.product_id, image_variant.color_id, count(distinct pi.image) as image_count
                     from product_images pi
                     join product_variants image_variant on image_variant.id = pi.variant_id
-                    where image_variant.color_id is not null
+                    join products p on p.id = pi.product_id
+                    where image_variant.deleted_at is null
+                      and image_variant.status = 'ACTIVE'
+                      and p.deleted_at is null
+                      and p.status = 'ACTIVE'
+                      and image_variant.color_id is not null
                     group by pi.product_id, image_variant.color_id
                 ) galleries
                   on galleries.product_id = product_colors.product_id
                  and galleries.color_id = product_colors.color_id
                 where coalesce(galleries.image_count, 0) < 3
+                """, Integer.class);
+        Integer productsWithoutActiveVariants = jdbcTemplate.queryForObject("""
+                select count(*)
+                from products product
+                where product.deleted_at is null
+                  and product.status = 'ACTIVE'
+                  and not exists (
+                      select 1
+                      from product_variants variant
+                      where variant.product_id = product.id
+                        and variant.deleted_at is null
+                        and variant.status = 'ACTIVE'
+                  )
+                """, Integer.class);
+        Integer variantsWithoutColorOrSize = jdbcTemplate.queryForObject("""
+                select count(*)
+                from product_variants variant
+                join products product on product.id = variant.product_id
+                where product.deleted_at is null
+                  and product.status = 'ACTIVE'
+                  and variant.deleted_at is null
+                  and variant.status = 'ACTIVE'
+                  and (variant.color_id is null or variant.size_id is null)
+                """, Integer.class);
+        Integer crossProductImages = jdbcTemplate.queryForObject("""
+                select count(*)
+                from product_images image
+                join product_variants variant on variant.id = image.variant_id
+                join products product on product.id = image.product_id
+                where product.deleted_at is null
+                  and product.status = 'ACTIVE'
+                  and variant.product_id <> image.product_id
+                """, Integer.class);
+        Integer reusedImagesAcrossProducts = jdbcTemplate.queryForObject("""
+                select count(*)
+                from (
+                    select image.image
+                    from product_images image
+                    join products product on product.id = image.product_id
+                    where product.deleted_at is null
+                      and product.status = 'ACTIVE'
+                    group by image.image
+                    having count(distinct image.product_id) > 1
+                ) reused
+                """, Integer.class);
+        Integer colorThumbnailMismatches = jdbcTemplate.queryForObject("""
+                select count(*)
+                from (
+                    select variant.product_id, variant.color_id,
+                           count(*) filter (where image.is_thumbnail) as thumbnail_count
+                    from product_variants variant
+                    join products product on product.id = variant.product_id
+                    left join product_images image on image.variant_id = variant.id
+                    where product.deleted_at is null
+                      and product.status = 'ACTIVE'
+                      and variant.deleted_at is null
+                      and variant.status = 'ACTIVE'
+                    group by variant.product_id, variant.color_id
+                    having count(*) filter (where image.is_thumbnail) <> 1
+                ) mismatch
                 """, Integer.class);
 
         assertThat(mixedSizeSystems).isZero();
@@ -153,12 +256,61 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
         assertThat(colorsWithoutImages).isZero();
         assertThat(duplicateColorImageUrls).isZero();
         assertThat(colorsWithSparseGalleries).isZero();
+        assertThat(productsWithoutActiveVariants).isZero();
+        assertThat(variantsWithoutColorOrSize).isZero();
+        assertThat(crossProductImages).isZero();
+        assertThat(reusedImagesAcrossProducts).isZero();
+        assertThat(colorThumbnailMismatches).isZero();
+    }
+
+    @Test
+    @DisplayName("Product seed - collection có đúng 100 mẫu và dùng hết asset product")
+    void devSeedData_collectionHasOneHundredDistinctProductsAndUsesEveryAsset() throws IOException {
+        Integer visibleProducts = jdbcTemplate.queryForObject(
+                "select count(*) from products where deleted_at is null",
+                Integer.class);
+        Integer activeProducts = jdbcTemplate.queryForObject(
+                "select count(*) from products where deleted_at is null and status = 'ACTIVE'",
+                Integer.class);
+        Integer distinctSlugs = jdbcTemplate.queryForObject(
+                "select count(distinct slug) from products where deleted_at is null",
+                Integer.class);
+        Integer distinctNames = jdbcTemplate.queryForObject(
+                "select count(distinct lower(trim(name))) from products where deleted_at is null",
+                Integer.class);
+
+        Set<String> databaseAssets = Set.copyOf(jdbcTemplate.queryForList("""
+                select distinct image.image
+                from product_images image
+                join products product on product.id = image.product_id
+                where product.deleted_at is null
+                  and product.status = 'ACTIVE'
+                  and image.image like '/uploads/products/%'
+                """, String.class));
+        try (var files = Files.list(Path.of("uploads", "products"))) {
+            Set<String> diskAssets = files
+                    .filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .filter(name -> name.toLowerCase().endsWith(".png"))
+                    .map(name -> "/uploads/products/" + name)
+                    .collect(Collectors.toSet());
+
+            assertThat(databaseAssets).isEqualTo(diskAssets);
+        }
+
+        assertThat(visibleProducts).isEqualTo(100);
+        assertThat(activeProducts).isEqualTo(100);
+        assertThat(distinctSlugs).isEqualTo(100);
+        assertThat(distinctNames).isEqualTo(100);
     }
 
     @Test
     @DisplayName("Catalog i18n seed - mọi sản phẩm và danh mục có đủ VI/EN, slug không trùng")
     void devSeedData_catalogTranslationsCoverAllSeededContent() {
-        Integer productCount = jdbcTemplate.queryForObject("select count(*) from products", Integer.class);
+        Integer visibleProductCount = jdbcTemplate.queryForObject(
+                "select count(*) from products where deleted_at is null",
+                Integer.class);
+        Integer activeManagedProductCount = activeManagedProductCount();
         Integer categoryCount = jdbcTemplate.queryForObject("select count(*) from categories", Integer.class);
         Integer enabledLocaleCount = jdbcTemplate.queryForObject("""
                 select count(*)
@@ -215,7 +367,8 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
                 ) duplicate_slug
                 """, Integer.class);
 
-        assertThat(productCount).isEqualTo(6);
+        assertThat(visibleProductCount).isEqualTo(100);
+        assertThat(activeManagedProductCount).isEqualTo(100);
         assertThat(categoryCount).isEqualTo(14);
         assertThat(enabledLocaleCount).isEqualTo(2);
         assertThat(vietnameseIsDefault).isTrue();
@@ -382,6 +535,76 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Large dev seed - chạy lại toàn file không làm phình catalog hay dữ liệu feature")
+    void devSeedData_largeSeedIsIdempotent() {
+        String snapshotBefore = largeSeedCountSnapshot();
+
+        rerunCatalogSeedsThroughFlyway();
+
+        assertThat(largeSeedCountSnapshot()).isEqualTo(snapshotBefore);
+        assertThat(activeManagedProductCount()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("Large dev seed - ngừng hiển thị Product/Variant do generator random cũ tạo")
+    void devSeedData_largeSeedRetiresLegacyRandomProducts() {
+        Long legacyProductId = jdbcTemplate.queryForObject("""
+                insert into products (name, slug, description, category_id, brand_id, status)
+                select
+                    'Legacy Random Test Shirt',
+                    'legacy-random-test-shirt',
+                    'Premium Legacy Random Test Shirt with fine stitching and sustainable design.',
+                    category.id,
+                    brand.id,
+                    'ACTIVE'
+                from categories category
+                cross join brands brand
+                where category.slug = 'ao'
+                  and brand.slug = 'velawear'
+                returning id
+                """, Long.class);
+
+        try {
+            jdbcTemplate.update("""
+                    insert into product_variants (
+                        product_id, sku, price, stock_quantity, color_id, size_id, status
+                    )
+                    select ?, 'SKU-LEGACY-RANDOM-1-123', 499000, 25, color.id, size.id, 'ACTIVE'
+                    from colors color
+                    cross join sizes size
+                    where color.name = 'Black'
+                      and size.name = 'M'
+                    """, legacyProductId);
+
+            rerunCatalogSeedsThroughFlyway();
+
+            assertThat(jdbcTemplate.queryForObject(
+                    "select status from products where id = ?", String.class, legacyProductId))
+                    .isEqualTo("INACTIVE");
+            assertThat(jdbcTemplate.queryForObject(
+                    "select status from product_variants where product_id = ?",
+                    String.class,
+                    legacyProductId))
+                    .isEqualTo("DISCONTINUED");
+            assertThat(jdbcTemplate.queryForObject(
+                    "select deleted_at is not null from products where id = ?",
+                    Boolean.class,
+                    legacyProductId)).isTrue();
+            assertThat(jdbcTemplate.queryForObject(
+                    "select deleted_at is not null from product_variants where product_id = ?",
+                    Boolean.class,
+                    legacyProductId)).isTrue();
+            assertThat(activeManagedProductCount()).isEqualTo(100);
+        } finally {
+            jdbcTemplate.update("delete from product_images where product_id = ?", legacyProductId);
+            jdbcTemplate.update("delete from product_attributes where product_id = ?", legacyProductId);
+            jdbcTemplate.update("delete from product_translations where product_id = ?", legacyProductId);
+            jdbcTemplate.update("delete from product_variants where product_id = ?", legacyProductId);
+            jdbcTemplate.update("delete from products where id = ?", legacyProductId);
+        }
+    }
+
+    @Test
     @DisplayName("Catalog i18n seed - tự phục hồi khi core dùng slug VI và EN từng là default")
     void devSeedData_catalogSeedRecoversFromLocalizedCoreSlugsAndDefaultDrift() {
         Long productId = jdbcTemplate.queryForObject("""
@@ -434,6 +657,53 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
         } finally {
             jdbcTemplate.update("update products set slug = 'essential-cotton-tee' where id = ?", productId);
             jdbcTemplate.update("update categories set slug = 'men' where id = ?", categoryId);
+            runSeeds("db/dev/R__5_dev_catalog_i18n_data.sql");
+        }
+    }
+
+    @Test
+    @DisplayName("Catalog i18n seed - giải phóng slug VI legacy trước khi gán cho category mới")
+    void devSeedData_catalogSeedReassignsLegacyVietnameseSlugsWithoutDuplicates() {
+        Integer categoryCountBefore = jdbcTemplate.queryForObject("select count(*) from categories", Integer.class);
+        Integer translationCountBefore = jdbcTemplate.queryForObject(
+                "select count(*) from category_translations",
+                Integer.class);
+
+        try {
+            jdbcTemplate.update("""
+                    delete from category_translations translation
+                    using categories category
+                    where translation.category_id = category.id
+                      and translation.locale_code = 'vi'
+                      and category.slug in ('dam', 'ao-khoac', 'phu-kien')
+                    """);
+            jdbcTemplate.update("""
+                    update category_translations translation
+                    set slug = case category.slug
+                        when 'dresses' then 'dam'
+                        when 'jackets' then 'ao-khoac'
+                        when 'accessories' then 'phu-kien'
+                    end
+                    from categories category
+                    where translation.category_id = category.id
+                      and translation.locale_code = 'vi'
+                      and category.slug in ('dresses', 'jackets', 'accessories')
+                    """);
+
+            runSeeds("db/dev/R__5_dev_catalog_i18n_data.sql");
+
+            assertThat(knownCategoryLocaleSlugCount()).isEqualTo(6);
+            assertThat(jdbcTemplate.queryForObject("select count(*) from categories", Integer.class))
+                    .isEqualTo(categoryCountBefore);
+            assertThat(jdbcTemplate.queryForObject("select count(*) from category_translations", Integer.class))
+                    .isEqualTo(translationCountBefore);
+
+            runSeeds("db/dev/R__5_dev_catalog_i18n_data.sql");
+
+            assertThat(knownCategoryLocaleSlugCount()).isEqualTo(6);
+            assertThat(jdbcTemplate.queryForObject("select count(*) from category_translations", Integer.class))
+                    .isEqualTo(translationCountBefore);
+        } finally {
             runSeeds("db/dev/R__5_dev_catalog_i18n_data.sql");
         }
     }
@@ -648,11 +918,75 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
         populator.execute(dataSource);
     }
 
+    private void rerunCatalogSeedsThroughFlyway() {
+        jdbcTemplate.update("""
+                delete from flyway_schema_history
+                where script in ('R__3_dev_catalog_products.sql', 'R__3_dev_large_mock_data.sql')
+                """);
+        flyway.migrate();
+    }
+
+    private String largeSeedCountSnapshot() {
+        return jdbcTemplate.queryForObject("""
+                select concat_ws(':',
+                    (select count(*) from products),
+                    (select count(*) from product_variants),
+                    (select count(*) from product_images),
+                    (select count(*) from product_attributes),
+                    (select count(*) from orders where order_code ~ '^VW-MOCK-[0-9]+$'),
+                    (select count(*)
+                     from order_items item
+                     join orders customer_order on customer_order.id = item.order_id
+                     where customer_order.order_code ~ '^VW-MOCK-[0-9]+$'),
+                    (select count(*)
+                     from payments payment
+                     join orders customer_order on customer_order.id = payment.order_id
+                     where customer_order.order_code ~ '^VW-MOCK-[0-9]+$'),
+                    (select count(*) from coupons where code ~ '^COUPON([1-9]|[1-9][0-9]|100)$'),
+                    (select count(*) from reviews where comment like 'Deterministic mock review for VW-MOCK-%')
+                )
+                """, String.class);
+    }
+
     private Long campaignVersion(String code) {
         return jdbcTemplate.queryForObject(
                 "select version from sale_campaigns where code = ?",
                 Long.class,
                 code);
+    }
+
+    private Integer activeManagedProductCount() {
+        return jdbcTemplate.queryForObject("""
+                select count(*)
+                from products product
+                join product_attributes owner
+                  on owner.product_id = product.id
+                 and owner.name = 'SeedOwner'
+                 and owner.value = 'R3_PRODUCT_CATALOG_100'
+                where product.status = 'ACTIVE'
+                  and product.deleted_at is null
+                """, Integer.class);
+    }
+
+    private Integer knownCategoryLocaleSlugCount() {
+        return jdbcTemplate.queryForObject("""
+                with expected(base_slug, localized_slug) as (
+                    values
+                        ('dresses', 'dam-nu'),
+                        ('jackets', 'ao-khoac-nam'),
+                        ('accessories', 'phu-kien-co-ban'),
+                        ('dam', 'dam'),
+                        ('ao-khoac', 'ao-khoac'),
+                        ('phu-kien', 'phu-kien')
+                )
+                select count(*)
+                from expected
+                join categories category on category.slug = expected.base_slug
+                join category_translations translation
+                  on translation.category_id = category.id
+                 and translation.locale_code = 'vi'
+                 and translation.slug = expected.localized_slug
+                """, Integer.class);
     }
 
     private Long campaignCreatedAtEpoch(String code) {

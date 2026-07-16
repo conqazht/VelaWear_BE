@@ -21,6 +21,23 @@ SET
     is_default = EXCLUDED.is_default,
     is_enabled = EXCLUDED.is_enabled;
 
+-- Older dev seeds assigned these Vietnamese slugs to the English-core
+-- categories. Move only those known legacy rows first so the bulk upsert below
+-- can assign the canonical slugs without a transient unique-key collision.
+UPDATE category_translations AS translation
+SET slug = legacy.replacement_slug
+FROM (
+    VALUES
+        ('dresses', 'vi', 'dam', 'dam-nu'),
+        ('jackets', 'vi', 'ao-khoac', 'ao-khoac-nam'),
+        ('accessories', 'vi', 'phu-kien', 'phu-kien-co-ban')
+) AS legacy(base_slug, locale_code, legacy_slug, replacement_slug)
+JOIN categories AS category
+  ON category.slug = legacy.base_slug
+WHERE translation.category_id = category.id
+  AND translation.locale_code = legacy.locale_code
+  AND translation.slug = legacy.legacy_slug;
+
 WITH category_fixture (
     base_slug,
     locale_code,

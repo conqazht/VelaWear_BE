@@ -1,4 +1,9 @@
--- Remove variants left by older random dev seeds from the four stable fixtures.
+/*
+ * Catalog reconciliation moved to R__3_dev_catalog_products.sql. Keeping this
+ * historical cleanup disabled prevents the large feature seed from deleting
+ * the complete size runs created for the four original storefront products.
+ *
+ * Remove variants left by older random dev seeds from the four stable fixtures.
 -- Keeping only the declared SKUs prevents one product from retaining a mixture
 -- of apparel, numeric shoe, and accessory size systems after a repeatable rerun.
 DELETE FROM product_images WHERE variant_id IN (
@@ -30,6 +35,7 @@ USING products p
 WHERE p.id = pv.product_id
   AND p.slug IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
   AND pv.sku NOT IN ('VW-TEE-BLK-M', 'VW-TEE-RED-L', 'UT-DRESS-YLW-S', 'NS-JACKET-PUR-M', 'SV-TOTE-ORG-OS');
+*/
 
 -- Do not broadly delete rows that are not part of this fixture. Repeatable dev
 -- migrations may run after an Admin has created content or after Sale/order
@@ -158,12 +164,13 @@ CROSS JOIN sizes s
 WHERE p.slug = 'tailored-black-trousers'
   AND c.name = 'Black'
   AND s.name IN ('S', 'M', 'L', 'XL')
-ON CONFLICT (sku) DO UPDATE
-SET price = EXCLUDED.price,
+ON CONFLICT (product_id, color_id, size_id) DO UPDATE
+SET sku = EXCLUDED.sku,
+    price = EXCLUDED.price,
     stock_quantity = EXCLUDED.stock_quantity,
-    color_id = EXCLUDED.color_id,
-    size_id = EXCLUDED.size_id,
-    status = EXCLUDED.status;
+    status = EXCLUDED.status,
+    deleted_at = NULL,
+    updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
 SELECT p.id,
@@ -179,12 +186,13 @@ CROSS JOIN sizes s
 WHERE p.slug = 'minimal-white-leather-sneakers'
   AND c.name = 'White'
   AND s.name IN ('39', '40', '41', '42')
-ON CONFLICT (sku) DO UPDATE
-SET price = EXCLUDED.price,
+ON CONFLICT (product_id, color_id, size_id) DO UPDATE
+SET sku = EXCLUDED.sku,
+    price = EXCLUDED.price,
     stock_quantity = EXCLUDED.stock_quantity,
-    color_id = EXCLUDED.color_id,
-    size_id = EXCLUDED.size_id,
-    status = EXCLUDED.status;
+    status = EXCLUDED.status,
+    deleted_at = NULL,
+    updated_at = CURRENT_TIMESTAMP;
 
 DELETE FROM product_images WHERE product_id IN (
     SELECT id FROM products WHERE slug IN ('tailored-black-trousers', 'minimal-white-leather-sneakers')
@@ -232,558 +240,181 @@ FROM products p
 JOIN product_variants pv ON pv.product_id = p.id AND pv.sku = 'VW-SNK-WHT-39'
 WHERE p.slug = 'minimal-white-leather-sneakers';
 
-/*
- * Legacy random product generator intentionally disabled. It remains below
- * temporarily as migration history, but Flyway ignores it inside this block.
- * The deterministic catalog above is the active implementation.
- */
-/*
--- 3. Products Seeding (100 products distributed across categories)
-DO $$
-DECLARE
-    ao_names TEXT[] := ARRAY[
-        'Classic Linen Shirt', 'Oversized Cotton Tee', 'Silk Button-down Blouse', 
-        'Ribbed Cotton Tank', 'Merino Wool Sweater', 'Hemp Pocket Tee', 
-        'Striped Oxford Shirt', 'Knit Polo Shirt', 'Cropped Linen Top', 
-        'Waffle Knit Henley', 'Chambray Work Shirt', 'V-Neck Silk Camisole', 
-        'French Terry Sweatshirt', 'Mock Neck Long Sleeve', 'Artisan Band Collar Shirt'
-    ];
-    quan_names TEXT[] := ARRAY[
-        'Pleated Wool Trousers', 'Relaxed Linen Pants', 'Slim Fit Chinos', 
-        'Raw Denim Jeans', 'Wide Leg Linen Trousers', 'Drawstring Sweatpants', 
-        'Tailored City Shorts', 'Cargo Utility Pants', 'Culotte Linen Pants', 
-        'Straight Leg Corduroys', 'Structured Ponte Pants', 'Linen Drawstring Shorts', 
-        'Tapered Ankle Pants', 'Wool Flannel Trousers', 'Artisan Crop Pants'
-    ];
-    vay_names TEXT[] := ARRAY[
-        'Pleated Midi Skirt', 'Silk Slip Skirt', 'Linen Wrap Skirt', 
-        'Denim Mini Skirt', 'A-Line Wool Skirt', 'Tiered Cotton Maxi Skirt', 
-        'Knit Pencil Skirt', 'Utility Cargo Skirt', 'Satin Bias-Cut Skirt', 
-        'Artisan Button-Front Skirt'
-    ];
-    dam_names TEXT[] := ARRAY[
-        'Linen Slip Dress', 'Knit Midi Dress', 'Silk Wrap Maxi Dress', 
-        'Cotton Tiered Sundress', 'Structured Shift Dress', 'Velvet Evening Gown', 
-        'Ribbed Sweater Dress', 'Floral Georgette Dress', 'Minimalist T-Shirt Dress', 
-        'Artisan Kaftan Dress', 'Utility Shirt Dress', 'Sleeveless Column Dress', 
-        'French Linen Apron Dress', 'Asymmetrical Drape Dress', 'Long Sleeve Silk Dress'
-    ];
-    ao_khoac_names TEXT[] := ARRAY[
-        'Classic Double-Breasted Blazer', 'Organic Cotton Denim Jacket', 'Wool Trench Coat', 
-        'Nylon Bomber Jacket', 'Merino Cardigan Overcoat', 'Water-Resistant Parka', 
-        'Suede Utility Jacket', 'Chunky Knit Cardigan', 'Minimalist Coach Jacket', 
-        'Tailored Linen Blazer', 'Puffer Down Jacket', 'Mac Coat', 
-        'Leather Biker Jacket', 'Shearling Aviator Jacket', 'Cropped Tweed Jacket'
-    ];
-    giay_names TEXT[] := ARRAY[
-        'Air Force Leather Sneakers', 'Minimalist White Court Shoes', 'Leather Loafers', 
-        'Chelsea Boots', 'Canvas Low-Top Sneakers', 'Suede Derby Shoes', 
-        'Leather Monk Strap Shoes', 'Knit Running Shoes', 'Leather Ankle Boots', 
-        'Minimalist Leather Sandals', 'Runner Knit Trail Shoes', 'Slip-on Canvas Mules', 
-        'Velvet Loafers', 'Classic Wingtip Oxfords', 'Platform Leather Brogues'
-    ];
-    phu_kien_names TEXT[] := ARRAY[
-        'Structured Leather Belt', 'Silk Scarf', 'Wool Beanie', 
-        'Canvas Tote Bag', 'Classic Sunglasses', 'Silver Signet Ring', 
-        'Leather Card Holder', 'Ribbed Cotton Socks', 'Minimalist Wristwatch', 
-        'Linen Market Bag', 'Silver Chain Necklace', 'Cashmere Travel Wrap', 
-        'Leather Backpack', 'Brass Key Hook', 'Wool Fedora Hat'
-    ];
-    
-    cat_id BIGINT;
-    br_id BIGINT;
-    prod_name VARCHAR(150);
-    prod_slug VARCHAR(150);
-    i INT;
-BEGIN
-    -- Insert Áo products
-    SELECT id INTO cat_id FROM categories WHERE slug = 'ao';
-    FOR i IN 1..cardinality(ao_names) LOOP
-        prod_name := ao_names[i];
-        prod_slug := lower(replace(prod_name, ' ', '-'));
-        SELECT id INTO br_id FROM brands ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO products (name, slug, description, category_id, brand_id, status)
-        VALUES (prod_name, prod_slug, 'Premium ' || prod_name || ' with fine stitching and sustainable design.', cat_id, br_id, 'ACTIVE')
-        ON CONFLICT (slug) DO NOTHING;
-    END LOOP;
+-- The former RANDOM()-based 100-product generator was removed. Product data
+-- now comes exclusively from R__3_dev_catalog_products.sql.
 
-    -- Insert Quần products
-    SELECT id INTO cat_id FROM categories WHERE slug = 'quan';
-    FOR i IN 1..cardinality(quan_names) LOOP
-        prod_name := quan_names[i];
-        prod_slug := lower(replace(prod_name, ' ', '-'));
-        SELECT id INTO br_id FROM brands ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO products (name, slug, description, category_id, brand_id, status)
-        VALUES (prod_name, prod_slug, 'Premium ' || prod_name || ' with fine stitching and sustainable design.', cat_id, br_id, 'ACTIVE')
-        ON CONFLICT (slug) DO NOTHING;
-    END LOOP;
+-- The deterministic catalog is owned by R__3_dev_catalog_products.sql.
 
-    -- Insert Váy products
-    SELECT id INTO cat_id FROM categories WHERE slug = 'vay';
-    FOR i IN 1..cardinality(vay_names) LOOP
-        prod_name := vay_names[i];
-        prod_slug := lower(replace(prod_name, ' ', '-'));
-        SELECT id INTO br_id FROM brands ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO products (name, slug, description, category_id, brand_id, status)
-        VALUES (prod_name, prod_slug, 'Premium ' || prod_name || ' with fine stitching and sustainable design.', cat_id, br_id, 'ACTIVE')
-        ON CONFLICT (slug) DO NOTHING;
-    END LOOP;
+-- Product scope shared by the deterministic feature fixtures below. Resolve it
+-- from ownership metadata so the catalog can grow without repeating 100 slugs.
+DROP TABLE IF EXISTS dev_managed_product_scope;
+CREATE TEMP TABLE dev_managed_product_scope (
+    slug VARCHAR(280) PRIMARY KEY
+);
 
-    -- Insert Đầm products
-    SELECT id INTO cat_id FROM categories WHERE slug = 'dam';
-    FOR i IN 1..cardinality(dam_names) LOOP
-        prod_name := dam_names[i];
-        prod_slug := lower(replace(prod_name, ' ', '-'));
-        SELECT id INTO br_id FROM brands ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO products (name, slug, description, category_id, brand_id, status)
-        VALUES (prod_name, prod_slug, 'Premium ' || prod_name || ' with fine stitching and sustainable design.', cat_id, br_id, 'ACTIVE')
-        ON CONFLICT (slug) DO NOTHING;
-    END LOOP;
+INSERT INTO dev_managed_product_scope (slug)
+SELECT product.slug
+FROM products product
+JOIN product_attributes owner
+  ON owner.product_id = product.id
+ AND owner.name = 'SeedOwner'
+ AND owner.value = 'R3_PRODUCT_CATALOG_100'
+WHERE product.status = 'ACTIVE'
+  AND product.deleted_at IS NULL;
 
-    -- Insert Áo khoác products
-    SELECT id INTO cat_id FROM categories WHERE slug = 'ao-khoac';
-    FOR i IN 1..cardinality(ao_khoac_names) LOOP
-        prod_name := ao_khoac_names[i];
-        prod_slug := lower(replace(prod_name, ' ', '-'));
-        SELECT id INTO br_id FROM brands ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO products (name, slug, description, category_id, brand_id, status)
-        VALUES (prod_name, prod_slug, 'Premium ' || prod_name || ' with fine stitching and sustainable design.', cat_id, br_id, 'ACTIVE')
-        ON CONFLICT (slug) DO NOTHING;
-    END LOOP;
+-- 8. User Addresses (deterministic fixture addresses)
+-- These exact patterns came only from the disabled random seed. Removing them
+-- does not touch normal addresses, even when they belong to a fixture account.
+DELETE FROM user_addresses address
+WHERE address.is_default = FALSE
+  AND address.receiver_name ~ '^Receiver [0-9]+$'
+  AND address.phone ~ '^09[0-9]{8}$'
+  AND address.province ~ '^Province [0-9]+$'
+  AND address.ward ~ '^Ward [0-9]+$'
+  AND address.address_detail ~ '^Address Detail [0-9]+$';
 
-    -- Insert Giày products
-    SELECT id INTO cat_id FROM categories WHERE slug = 'giay';
-    FOR i IN 1..cardinality(giay_names) LOOP
-        prod_name := giay_names[i];
-        prod_slug := lower(replace(prod_name, ' ', '-'));
-        SELECT id INTO br_id FROM brands ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO products (name, slug, description, category_id, brand_id, status)
-        VALUES (prod_name, prod_slug, 'Premium ' || prod_name || ' with fine stitching and sustainable design.', cat_id, br_id, 'ACTIVE')
-        ON CONFLICT (slug) DO NOTHING;
-    END LOOP;
-
-    -- Insert Phụ kiện products
-    SELECT id INTO cat_id FROM categories WHERE slug = 'phu-kien';
-    FOR i IN 1..cardinality(phu_kien_names) LOOP
-        prod_name := phu_kien_names[i];
-        prod_slug := lower(replace(prod_name, ' ', '-'));
-        SELECT id INTO br_id FROM brands ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO products (name, slug, description, category_id, brand_id, status)
-        VALUES (prod_name, prod_slug, 'Premium ' || prod_name || ' with fine stitching and sustainable design.', cat_id, br_id, 'ACTIVE')
-        ON CONFLICT (slug) DO NOTHING;
-    END LOOP;
-END $$;
-
--- 4. Product Translations Seeding (Vietnamese translated names matching categories)
-INSERT INTO product_translations (
-    product_id, locale_code, name, slug, short_description, description, material, care_instruction, seo_title, seo_description
+WITH address_fixture (
+    email,
+    receiver_name,
+    phone,
+    province,
+    ward,
+    address_detail
+) AS (
+    VALUES
+        ('user@velawear.local', 'Công Anh', '0930000001', 'Ho Chi Minh', 'Thao Dien', '21 Xuan Thuy'),
+        ('linh@velawear.local', 'Linh Nguyen', '0930000002', 'Ha Noi', 'Dich Vong', '18 Cau Giay'),
+        ('minh@velawear.local', 'Minh Tran', '0930000003', 'Da Nang', 'Hai Chau', '86 Tran Phu')
+)
+INSERT INTO user_addresses (
+    user_id,
+    receiver_name,
+    phone,
+    province,
+    ward,
+    address_detail,
+    is_default
 )
 SELECT
-    id,
-    'vi',
-    CASE name
-        -- Áo (Shirts/Tops)
-        WHEN 'Classic Linen Shirt' THEN 'Áo sơ mi linen cổ điển'
-        WHEN 'Oversized Cotton Tee' THEN 'Áo thun cotton dáng rộng'
-        WHEN 'Silk Button-down Blouse' THEN 'Áo sơ mi lụa cao cấp'
-        WHEN 'Ribbed Cotton Tank' THEN 'Áo ba lỗ cotton gân'
-        WHEN 'Merino Wool Sweater' THEN 'Áo len Merino tự nhiên'
-        WHEN 'Hemp Pocket Tee' THEN 'Áo thun vải gai túi ngực'
-        WHEN 'Striped Oxford Shirt' THEN 'Áo sơ mi kẻ sọc Oxford'
-        WHEN 'Knit Polo Shirt' THEN 'Áo thun Polo dệt kim'
-        WHEN 'Cropped Linen Top' THEN 'Áo croptop linen tinh tế'
-        WHEN 'Waffle Knit Henley' THEN 'Áo thun cổ nút Waffle'
-        WHEN 'Chambray Work Shirt' THEN 'Áo sơ mi vải Chambray'
-        WHEN 'V-Neck Silk Camisole' THEN 'Áo hai dây lụa cổ V'
-        WHEN 'French Terry Sweatshirt' THEN 'Áo nỉ French Terry'
-        WHEN 'Mock Neck Long Sleeve' THEN 'Áo tay dài cổ lọ thấp'
-        WHEN 'Artisan Band Collar Shirt' THEN 'Áo sơ mi cổ tàu thủ công'
-        -- Quần (Pants/Trousers)
-        WHEN 'Pleated Wool Trousers' THEN 'Quần tây xếp ly vải len'
-        WHEN 'Relaxed Linen Pants' THEN 'Quần linen phom rộng'
-        WHEN 'Slim Fit Chinos' THEN 'Quần Chino phom ôm nhẹ'
-        WHEN 'Raw Denim Jeans' THEN 'Quần jeans raw denim cổ điển'
-        WHEN 'Wide Leg Linen Trousers' THEN 'Quần linen ống rộng rủ'
-        WHEN 'Drawstring Sweatpants' THEN 'Quần nỉ bo gấu dây rút'
-        WHEN 'Tailored City Shorts' THEN 'Quần short tây thanh lịch'
-        WHEN 'Cargo Utility Pants' THEN 'Quần túi hộp tiện ích'
-        WHEN 'Culotte Linen Pants' THEN 'Quần lửng culottes linen'
-        WHEN 'Straight Leg Corduroys' THEN 'Quần nhung tăm ống đứng'
-        WHEN 'Structured Ponte Pants' THEN 'Quần ôm Ponte định hình'
-        WHEN 'Linen Drawstring Shorts' THEN 'Quần short linen dây rút'
-        WHEN 'Tapered Ankle Pants' THEN 'Quần tây ống côn thời thượng'
-        WHEN 'Wool Flannel Trousers' THEN 'Quần dạ flannel ấm áp'
-        WHEN 'Artisan Crop Pants' THEN 'Quần lửng dệt thủ công'
-        -- Váy (Skirts)
-        WHEN 'Pleated Midi Skirt' THEN 'Chân váy xếp ly dáng lửng'
-        WHEN 'Silk Slip Skirt' THEN 'Chân váy lụa suông mềm'
-        WHEN 'Linen Wrap Skirt' THEN 'Chân váy linen đắp chéo'
-        WHEN 'Denim Mini Skirt' THEN 'Chân váy jeans ngắn'
-        WHEN 'A-Line Wool Skirt' THEN 'Chân váy dạ chữ A'
-        WHEN 'Tiered Cotton Maxi Skirt' THEN 'Chân váy maxi cotton nhiều tầng'
-        WHEN 'Knit Pencil Skirt' THEN 'Chân váy bút chì dệt kim'
-        WHEN 'Utility Cargo Skirt' THEN 'Chân váy túi hộp tiện dụng'
-        WHEN 'Satin Bias-Cut Skirt' THEN 'Chân váy satin cắt xéo rủ'
-        WHEN 'Artisan Button-Front Skirt' THEN 'Chân váy nút trước thủ công'
-        -- Đầm (Dresses)
-        WHEN 'Linen Slip Dress' THEN 'Đầm hai dây linen dáng suông'
-        WHEN 'Knit Midi Dress' THEN 'Đầm dệt kim ôm nhẹ'
-        WHEN 'Silk Wrap Maxi Dress' THEN 'Đầm lụa đắp chéo dáng dài'
-        WHEN 'Cotton Tiered Sundress' THEN 'Đầm hai dây cotton nhiều tầng'
-        WHEN 'Structured Shift Dress' THEN 'Đầm suông phom đứng'
-        WHEN 'Velvet Evening Gown' THEN 'Đầm dạ hội nhung sang trọng'
-        WHEN 'Ribbed Sweater Dress' THEN 'Đầm len gân ấm áp'
-        WHEN 'Floral Georgette Dress' THEN 'Đầm voan hoa Georgette'
-        WHEN 'Minimalist T-Shirt Dress' THEN 'Đầm thun suông tối giản'
-        WHEN 'Artisan Kaftan Dress' THEN 'Đầm Kaftan dệt thủ công'
-        WHEN 'Utility Shirt Dress' THEN 'Đầm sơ mi tiện dụng'
-        WHEN 'Sleeveless Column Dress' THEN 'Đầm ôm không tay dáng cột'
-        WHEN 'French Linen Apron Dress' THEN 'Đầm yếm French Linen'
-        WHEN 'Asymmetrical Drape Dress' THEN 'Đầm rủ bất đối xứng'
-        WHEN 'Long Sleeve Silk Dress' THEN 'Đầm lụa tay dài thanh lịch'
-        -- Áo khoác (Jackets/Coats)
-        WHEN 'Classic Double-Breasted Blazer' THEN 'Áo blazer hai hàng khuy cổ điển'
-        WHEN 'Organic Cotton Denim Jacket' THEN 'Áo khoác jeans cotton hữu cơ'
-        WHEN 'Wool Trench Coat' THEN 'Áo măng tô len dáng dài'
-        WHEN 'Nylon Bomber Jacket' THEN 'Áo khoác bomber nylon'
-        WHEN 'Merino Cardigan Overcoat' THEN 'Áo khoác cardigan len Merino'
-        WHEN 'Water-Resistant Parka' THEN 'Áo khoác phao chống nước'
-        WHEN 'Suede Utility Jacket' THEN 'Áo khoác da lộn tiện ích'
-        WHEN 'Chunky Knit Cardigan' THEN 'Áo khoác cardigan len dày'
-        WHEN 'Minimalist Coach Jacket' THEN 'Áo khoác gió tối giản'
-        WHEN 'Tailored Linen Blazer' THEN 'Áo blazer linen may đo tinh tế'
-        WHEN 'Puffer Down Jacket' THEN 'Áo khoác phao lông vũ'
-        WHEN 'Mac Coat' THEN 'Áo khoác dáng dài Mac'
-        WHEN 'Leather Biker Jacket' THEN 'Áo khoác da biker cá tính'
-        WHEN 'Shearling Aviator Jacket' THEN 'Áo khoác da lót lông phi công'
-        WHEN 'Cropped Tweed Jacket' THEN 'Áo khoác tweed dáng ngắn'
-        -- Giày (Shoes)
-        WHEN 'Air Force Leather Sneakers' THEN 'Giày thể thao da Air Force'
-        WHEN 'Minimalist White Court Shoes' THEN 'Giày thể thao trắng tối giản'
-        WHEN 'Leather Loafers' THEN 'Giày lười da cao cấp'
-        WHEN 'Chelsea Boots' THEN 'Giày boot Chelsea thanh lịch'
-        WHEN 'Canvas Low-Top Sneakers' THEN 'Giày thể thao vải cổ thấp'
-        WHEN 'Suede Derby Shoes' THEN 'Giày tây da lộn Derby'
-        WHEN 'Leather Monk Strap Shoes' THEN 'Giày tây khóa quai da'
-        WHEN 'Knit Running Shoes' THEN 'Giày chạy bộ dệt kim thoáng khí'
-        WHEN 'Leather Ankle Boots' THEN 'Giày boot da cổ ngắn'
-        WHEN 'Minimalist Leather Sandals' THEN 'Sandal da tối giản'
-        WHEN 'Runner Knit Trail Shoes' THEN 'Giày chạy bộ dã ngoại dệt kim'
-        WHEN 'Slip-on Canvas Mules' THEN 'Giày sục vải canvas'
-        WHEN 'Velvet Loafers' THEN 'Giày lười nhung sang trọng'
-        WHEN 'Classic Wingtip Oxfords' THEN 'Giày tây Oxfords cổ điển'
-        WHEN 'Platform Leather Brogues' THEN 'Giày đế xuồng da Brogues'
-        -- Phụ kiện (Accessories)
-        WHEN 'Structured Leather Belt' THEN 'Thắt lưng da thật phom đứng'
-        WHEN 'Silk Scarf' THEN 'Khăn quàng lụa cao cấp'
-        WHEN 'Wool Beanie' THEN 'Mũ len Merino ấm áp'
-        WHEN 'Canvas Tote Bag' THEN 'Túi tote vải canvas bền bỉ'
-        WHEN 'Classic Sunglasses' THEN 'Kính mát cổ điển chống UV'
-        WHEN 'Silver Signet Ring' THEN 'Nhẫn bạc Signet nguyên chất'
-        WHEN 'Leather Card Holder' THEN 'Ví đựng thẻ da thật'
-        WHEN 'Ribbed Cotton Socks' THEN 'Vớ cotton tăm thoáng khí'
-        WHEN 'Minimalist Wristwatch' THEN 'Đồng hồ đeo tay tối giản'
-        WHEN 'Linen Market Bag' THEN 'Túi đi chợ linen mộc mạc'
-        WHEN 'Silver Chain Necklace' THEN 'Dây chuyền xích bạc'
-        WHEN 'Cashmere Travel Wrap' THEN 'Khăn choàng du lịch Cashmere'
-        WHEN 'Leather Backpack' THEN 'Balo da thật cao cấp'
-        WHEN 'Brass Key Hook' THEN 'Móc chìa khóa bằng đồng'
-        WHEN 'Wool Fedora Hat' THEN 'Mũ dạ Fedora cổ điển'
-        ELSE name
-    END,
-    slug,
-    'Thiết kế tối giản, chất liệu cao cấp cho phong cách thời thượng.',
-    'Sản phẩm được chế tạo tỉ mỉ từ những sợi vải tự nhiên, thân thiện với môi trường, phom dáng rủ tự nhiên tôn lên nét quyến rũ tĩnh lặng.',
-    CASE
-        WHEN category_id = (SELECT id FROM categories WHERE slug = 'giay') THEN 'Da / Cao su'
-        WHEN category_id = (SELECT id FROM categories WHERE slug = 'phu-kien') THEN 'Da / Kim loại / Cotton'
-        ELSE 'Linen / Cotton hữu cơ / Len'
-    END,
-    'Giặt nhẹ hoặc giặt khô để giữ sản phẩm bền lâu.',
-    name,
-    'Thiết kế tinh tế từ Vela Wear.'
-FROM products
-ON CONFLICT (product_id, locale_code) DO UPDATE
-SET
-    name = EXCLUDED.name,
-    slug = EXCLUDED.slug,
-    short_description = EXCLUDED.short_description,
-    description = EXCLUDED.description,
-    material = EXCLUDED.material,
-    care_instruction = EXCLUDED.care_instruction,
-    seo_title = EXCLUDED.seo_title,
-    seo_description = EXCLUDED.seo_description;
+    customer.id,
+    fixture.receiver_name,
+    fixture.phone,
+    fixture.province,
+    fixture.ward,
+    fixture.address_detail,
+    FALSE
+FROM address_fixture fixture
+JOIN users customer ON customer.email = fixture.email
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM user_addresses existing
+    WHERE existing.user_id = customer.id
+      AND existing.phone = fixture.phone
+      AND existing.address_detail = fixture.address_detail
+);
 
--- 5. Product Variants (Seeding variants matching sizes rules)
-DO $$
-DECLARE
-    prod_rec RECORD;
-    col_id BIGINT;
-    sz_id BIGINT;
-    i INT;
-    var_count INT := 0;
-BEGIN
-    FOR prod_rec IN (
-        SELECT id, category_id FROM products 
-        WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-    ) LOOP
-        -- Generate 2-3 variants for each product
-        FOR i IN 1..(2 + (FLOOR(RANDOM() * 2))::INT) LOOP
-            SELECT id INTO col_id FROM colors ORDER BY RANDOM() LIMIT 1;
-            SELECT s.id INTO sz_id
-            FROM sizes s
-            WHERE CASE
-                WHEN EXISTS (
-                    SELECT 1 FROM categories c
-                    WHERE c.id = prod_rec.category_id AND c.slug = 'phu-kien'
-                ) THEN s.name IN ('ONE SIZE', 'ADJUSTABLE', 'REGULAR', 'LARGE')
-                WHEN EXISTS (
-                    SELECT 1 FROM categories c
-                    WHERE c.id = prod_rec.category_id AND c.slug = 'giay'
-                ) THEN s.name IN ('38', '39', '40', '41', '42', '43', '44')
-                ELSE s.name IN ('XS', 'S', 'M', 'L', 'XL', 'XXL')
-            END
-            ORDER BY RANDOM()
-            LIMIT 1;
-            
-            var_count := var_count + 1;
-            
-            INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
-            VALUES (
-                prod_rec.id, 
-                'SKU-' || prod_rec.id || '-' || var_count || '-' || FLOOR(RANDOM() * 1000)::INT, 
-                150000.00 + (FLOOR(RANDOM() * 1000000)::INT), 
-                10 + (FLOOR(RANDOM() * 90))::INT, 
-                col_id, 
-                sz_id, 
-                'ACTIVE'
-            )
-            ON CONFLICT DO NOTHING;
-        END LOOP;
-    END LOOP;
-END $$;
-
--- 6. Product Images (Assigning category-aware premium images to products)
-DO $$
-DECLARE
-    prod_rec RECORD;
-    idx INT;
-    
-    ao_imgs TEXT[] := ARRAY[
-        '/uploads/products/detail_shot_of_the_ribbed_hem_and_stitching_on_a_charcoal_gray_808080_cashmere.png',
-        '/uploads/products/extreme_macro_close_up_shot_of_the_charcoal_gray_808080_soft_cashmere_knit.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_charcoal_gray_808080_cashmere.png',
-        '/uploads/products/high_resolution_individual_product_shot_of_a_charcoal_gray_808080_cashmere.png',
-        '/uploads/products/individual_product_shot_of_the_back_view_of_a_charcoal_gray_808080_cashmere.png',
-        '/uploads/products/side_profile_shot_of_a_male_model_wearing_a_charcoal_gray_808080_cashmere.png',
-        '/uploads/products/individual_product_shot_of_a_luxury_olive_green_556b2f_cashmere_sweater_front.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_olive_green_556b2f_cashmere.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_luxury_olive_green_556b2f_cashmere.png',
-        '/uploads/products/product_detail_gallery_set_for_an_olive_green_556b2f_cashmere_sweater._4.png',
-        '/uploads/products/macro_shot_of_the_olive_green_556b2f_soft_cashmere_knit_weave._high_end.png',
-        '/uploads/products/premium_fashion_product_shot_of_a_high_quality_tailored_piece_in_olive_green.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_crisp_white_ffffff_linen_shirt_and.png',
-        '/uploads/products/artisanal_fashion_product_shot_for_vela_wear._a_premium_garment_in_crisp_white.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_artisanal_crisp_white_ffffff_linen.png'
-    ];
-    
-    quan_imgs TEXT[] := ARRAY[
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_luxury_minimalist_black_000000.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_minimalist_terracotta_b5573a_linen.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_premium_terracotta_b5573a_linen.png',
-        '/uploads/products/macro_shot_of_the_terracotta_b5573a_linen_fabric_texture_and_v_neckline_on_a.png'
-    ];
-    
-    vay_imgs TEXT[] := ARRAY[
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_charcoal_gray_808080_silk_midi.png',
-        '/uploads/products/high_resolution_individual_product_shot_of_a_charcoal_gray_808080_silk_midi.png',
-        '/uploads/products/individual_product_shot_of_the_back_view_of_a_charcoal_gray_808080_silk_midi.png',
-        '/uploads/products/macro_close_up_shot_of_charcoal_gray_808080_silk_fabric_texture_showing_the.png',
-        '/uploads/products/product_detail_gallery_set_for_a_charcoal_gray_808080_silk_midi_dress._4.png',
-        '/uploads/products/detail_shot_of_the_hemline_and_flowing_silhouette_of_a_charcoal_gray_808080.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_sand_beige_d8cab8_artisanal_dress.png',
-        '/uploads/products/individual_product_shot_of_a_premium_terracotta_b5573a_linen_jumpsuit_front.png'
-    ];
-    
-    ao_khoac_imgs TEXT[] := ARRAY[
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_structured_deep_navy_1f3a5f_blazer.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_structured_deep_navy_1f3a5f_suit_1.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_structured_deep_navy_1f3a5f_suit_2.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_structured_deep_navy_1f3a5f_wool.png',
-        '/uploads/products/high_resolution_individual_product_shot_of_a_structured_deep_navy_1f3a5f_wool.png',
-        '/uploads/products/individual_product_shot_of_a_male_model_wearing_a_structured_deep_navy_1f3a5f.png',
-        '/uploads/products/individual_product_shot_of_a_structured_deep_navy_1f3a5f_linen_wool_blazer_on_a.png',
-        '/uploads/products/individual_product_shot_of_the_back_view_of_a_structured_deep_navy_1f3a5f_wool.png',
-        '/uploads/products/macro_detail_shot_of_the_waist_belt_and_stitching_on_a_structured_deep_navy.png',
-        '/uploads/products/macro_shot_of_the_deep_navy_1f3a5f_linen_wool_blend_fabric_texture_on_a_blazer_.png',
-        '/uploads/products/product_detail_gallery_set_for_a_structured_deep_navy_1f3a5f_wool_jumpsuit._4.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_luxury_olive_green_556b2f_tailored.png',
-        '/uploads/products/individual_product_shot_of_a_luxury_minimalist_sand_beige_d8cab8_linen_blazer.png',
-        '/uploads/products/product_detail_gallery_set_for_a_luxury_minimalist_sand_beige_d8cab8_linen.png',
-        '/uploads/products/professional_studio_photography_of_an_artisanal_garment_in_warm_sand_beige.png'
-    ];
-    
-    giay_imgs TEXT[] := ARRAY[
-        '/uploads/products/sneaker_af_1.png',
-        '/uploads/products/sneaker_af_2.png',
-        '/uploads/products/sneaker_af_3.png',
-        '/uploads/products/sneaker_af_4.png',
-        '/uploads/products/individual_product_shot_of_a_luxury_minimalist_black_000000_leather_loafer_side.png'
-    ];
-    
-    phu_kien_imgs TEXT[] := ARRAY[
-        '/uploads/products/key_hook_1.png',
-        '/uploads/products/key_hook_2.png',
-        '/uploads/products/key_hook_3.png',
-        '/uploads/products/key_hook_4.png',
-        '/uploads/products/luxury_accessory_product_shot_for_vela_wear._a_minimalist_bag_in_sand_beige.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_premium_black_000000_leather_bag.png',
-        '/uploads/products/full_product_detail_gallery_set_for_a_single_premium_black_000000_leather_tote.png',
-        '/uploads/products/individual_product_shot_of_a_premium_black_000000_leather_tote_bag_perspective.png',
-        '/uploads/products/macro_close_up_shot_of_the_black_000000_pebbled_leather_texture_and_embossed.png',
-        '/uploads/products/product_detail_gallery_set_for_a_premium_black_000000_leather_tote_bag._4.png',
-        '/uploads/products/professional_studio_product_photography_for_vela_wear._a_minimalist_leather.png',
-        '/uploads/products/professional_studio_product_photography_for_vela_wear._minimalist_leather.png',
-        '/uploads/products/professional_studio_product_photography_of_a_luxury_minimalist_accessory_in.png'
-    ];
-
-    selected_imgs TEXT[];
-    img_count INT;
-BEGIN
-    idx := 0;
-    FOR prod_rec IN (
-        SELECT id, slug, (SELECT slug FROM categories WHERE id = category_id) as cat_slug 
-        FROM products 
-        WHERE slug NOT IN ('essential-cotton-tee', 'urban-linen-dress', 'north-utility-jacket', 'studio-canvas-tote')
-    ) LOOP
-        idx := idx + 1;
-        
-        -- Select image array based on category slug
-        IF prod_rec.cat_slug = 'shirts-tops' THEN
-            selected_imgs := ao_imgs;
-        ELSIF prod_rec.cat_slug = 'pants-trousers' THEN
-            selected_imgs := quan_imgs;
-        ELSIF prod_rec.cat_slug = 'skirts' THEN
-            selected_imgs := vay_imgs;
-        ELSIF prod_rec.cat_slug = 'dresses' THEN
-            selected_imgs := vay_imgs; -- reuse vay/dam
-        ELSIF prod_rec.cat_slug = 'jackets-coats' THEN
-            selected_imgs := ao_khoac_imgs;
-        ELSIF prod_rec.cat_slug = 'shoes' THEN
-            selected_imgs := giay_imgs;
-        ELSE
-            selected_imgs := phu_kien_imgs;
-        END IF;
-
-        -- Specific matches for perfect accuracy
-        IF prod_rec.slug = 'air-force-leather-sneakers' THEN
-            selected_imgs := ARRAY[
-                '/uploads/products/sneaker_af_1.png',
-                '/uploads/products/sneaker_af_2.png',
-                '/uploads/products/sneaker_af_3.png',
-                '/uploads/products/sneaker_af_4.png'
-            ];
-        ELSIF prod_rec.slug = 'brass-key-hook' THEN
-            selected_imgs := ARRAY[
-                '/uploads/products/key_hook_1.png',
-                '/uploads/products/key_hook_2.png',
-                '/uploads/products/key_hook_3.png',
-                '/uploads/products/key_hook_4.png'
-            ];
-        END IF;
-
-        img_count := array_length(selected_imgs, 1);
-        
-        -- Seed 4 detail images for this product
-        -- Image 1: Thumbnail
-        INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-        VALUES (prod_rec.id, NULL, selected_imgs[((idx * 4 - 3) % img_count) + 1], TRUE, 1)
-        ON CONFLICT DO NOTHING;
-        
-        -- Image 2
-        INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-        VALUES (prod_rec.id, NULL, selected_imgs[((idx * 4 - 2) % img_count) + 1], FALSE, 2)
-        ON CONFLICT DO NOTHING;
-        
-        -- Image 3
-        INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-        VALUES (prod_rec.id, NULL, selected_imgs[((idx * 4 - 1) % img_count) + 1], FALSE, 3)
-        ON CONFLICT DO NOTHING;
-        
-        -- Image 4
-        INSERT INTO product_images (product_id, variant_id, image, is_thumbnail, sort_order)
-        VALUES (prod_rec.id, NULL, selected_imgs[((idx * 4) % img_count) + 1], FALSE, 4)
-        ON CONFLICT DO NOTHING;
-    END LOOP;
-END $$;
-*/
-
--- 7. Product Attributes (100 records)
-DO $$
-DECLARE
-    i INT;
-    prod_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO prod_id FROM products ORDER BY RANDOM() LIMIT 1;
-        INSERT INTO product_attributes (product_id, name, value)
-        VALUES (prod_id, 'Attribute ' || i, 'Value ' || i)
-        ON CONFLICT (product_id, name) DO NOTHING;
-    END LOOP;
-END $$;
-
--- 8. User Addresses (100 records)
-DO $$
-DECLARE
-    i INT;
-    u_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO u_id FROM users ORDER BY RANDOM() LIMIT 1;
-        IF u_id IS NOT NULL THEN
-            INSERT INTO user_addresses (user_id, receiver_name, phone, province, ward, address_detail, is_default)
-            VALUES (u_id, 'Receiver ' || i, '09' || LPAD(i::text, 8, '0'), 'Province ' || i, 'Ward ' || i, 'Address Detail ' || i, FALSE)
-            ON CONFLICT DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
-
--- 9. Carts (Ensure all users have a cart)
+-- 9. Carts (Ensure fixture customers have a cart)
 INSERT INTO carts (user_id)
-SELECT id FROM users
+SELECT customer.id
+FROM users customer
+WHERE customer.email IN (
+    'user@velawear.local',
+    'linh@velawear.local',
+    'minh@velawear.local'
+)
 ON CONFLICT (user_id) DO NOTHING;
 
--- 10. Cart Items (100 records)
-DO $$
-DECLARE
-    i INT;
-    c_id BIGINT;
-    v_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO c_id FROM carts ORDER BY RANDOM() LIMIT 1;
-        SELECT id INTO v_id FROM product_variants ORDER BY RANDOM() LIMIT 1;
-        IF c_id IS NOT NULL AND v_id IS NOT NULL THEN
-            INSERT INTO cart_items (cart_id, variant_id, quantity)
-            VALUES (c_id, v_id, (i % 5) + 1)
-            ON CONFLICT (cart_id, variant_id) DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+-- 10. Cart Items (three stable managed variants per fixture customer)
+WITH fixture_customers (email, variant_offset) AS (
+    VALUES
+        ('user@velawear.local', 0),
+        ('linh@velawear.local', 7),
+        ('minh@velawear.local', 14)
+), managed_variants AS (
+    SELECT
+        variant.id,
+        ROW_NUMBER() OVER (ORDER BY variant.sku) - 1 AS fixture_index,
+        COUNT(*) OVER () AS fixture_count
+    FROM product_variants variant
+    JOIN products product ON product.id = variant.product_id
+    JOIN dev_managed_product_scope managed ON managed.slug = product.slug
+    WHERE variant.deleted_at IS NULL
+      AND variant.status = 'ACTIVE'
+), selected_items AS (
+    SELECT
+        cart.id AS cart_id,
+        variant.id AS variant_id,
+        slot.slot_number + 1 AS quantity
+    FROM fixture_customers fixture
+    JOIN users customer ON customer.email = fixture.email
+    JOIN carts cart ON cart.user_id = customer.id
+    CROSS JOIN generate_series(0, 2) AS slot(slot_number)
+    JOIN managed_variants variant
+      ON variant.fixture_index = MOD(
+          (fixture.variant_offset + slot.slot_number)::BIGINT,
+          variant.fixture_count
+      )
+)
+INSERT INTO cart_items (cart_id, variant_id, quantity)
+SELECT selected.cart_id, selected.variant_id, selected.quantity
+FROM selected_items selected
+ON CONFLICT (cart_id, variant_id) DO UPDATE
+SET quantity = EXCLUDED.quantity;
 
--- 11. Coupons (100 records)
-DO $$
-DECLARE
-    i INT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        INSERT INTO coupons (code, type, value, min_order_amount, max_discount, usage_limit, used_count, start_date, end_date, status)
-        VALUES ('COUPON' || i, 'PERCENTAGE', 10.00, 100000.00, 50000.00, 100, 0, CURRENT_TIMESTAMP - INTERVAL '1 day', CURRENT_TIMESTAMP + INTERVAL '30 days', 'ACTIVE')
-        ON CONFLICT (code) DO NOTHING;
-    END LOOP;
-END $$;
+-- 11. Coupons (100 stable pagination fixtures)
+INSERT INTO coupons (
+    code,
+    type,
+    value,
+    min_order_amount,
+    max_discount,
+    usage_limit,
+    used_count,
+    start_date,
+    end_date,
+    status
+)
+SELECT
+    'COUPON' || fixture.fixture_number,
+    'PERCENTAGE',
+    10.00,
+    100000.00,
+    50000.00,
+    100,
+    0,
+    TIMESTAMPTZ '2025-01-01 00:00:00+07',
+    TIMESTAMPTZ '2099-12-31 23:59:59+07',
+    'ACTIVE'
+FROM generate_series(1, 100) AS fixture(fixture_number)
+ON CONFLICT (code) DO UPDATE
+SET
+    type = EXCLUDED.type,
+    value = EXCLUDED.value,
+    min_order_amount = EXCLUDED.min_order_amount,
+    max_discount = EXCLUDED.max_discount,
+    usage_limit = EXCLUDED.usage_limit,
+    start_date = EXCLUDED.start_date,
+    end_date = EXCLUDED.end_date,
+    status = EXCLUDED.status;
 
 -- 12. Orders (100 records)
+-- This section is deliberately self-contained. DevSeedDataIntegrationTest
+-- extracts markers 12..16 and executes them again to verify idempotency.
+DROP TABLE IF EXISTS dev_managed_product_scope;
+CREATE TEMP TABLE dev_managed_product_scope (
+    slug VARCHAR(280) PRIMARY KEY
+);
+
+INSERT INTO dev_managed_product_scope (slug)
+SELECT product.slug
+FROM products product
+JOIN product_attributes owner
+  ON owner.product_id = product.id
+ AND owner.name = 'SeedOwner'
+ AND owner.value = 'R3_PRODUCT_CATALOG_100'
+WHERE product.status = 'ACTIVE'
+  AND product.deleted_at IS NULL;
+
 WITH mock_customer AS (
     SELECT id
     FROM users
@@ -803,7 +434,9 @@ INSERT INTO orders (
     receiver_phone,
     receiver_address,
     payment_method,
-    payment_status
+    payment_status,
+    created_at,
+    updated_at
 )
 SELECT
     mock_customer.id,
@@ -817,7 +450,11 @@ SELECT
     '09' || LPAD(fixture.fixture_number::TEXT, 8, '0'),
     'Mock Address ' || fixture.fixture_number,
     'COD',
-    'PAID'
+    'PAID',
+    TIMESTAMPTZ '2025-02-01 08:00:00+07'
+        + ((fixture.fixture_number - 1) * INTERVAL '1 hour'),
+    TIMESTAMPTZ '2025-02-01 09:00:00+07'
+        + ((fixture.fixture_number - 1) * INTERVAL '1 hour')
 FROM mock_order_fixture fixture
 CROSS JOIN mock_customer
 ON CONFLICT (order_code) DO UPDATE
@@ -825,19 +462,24 @@ SET
     user_id = EXCLUDED.user_id,
     status = EXCLUDED.status,
     shipping_fee = EXCLUDED.shipping_fee,
-    discount_amount = EXCLUDED.discount_amount,
     receiver_name = EXCLUDED.receiver_name,
     receiver_phone = EXCLUDED.receiver_phone,
     receiver_address = EXCLUDED.receiver_address,
     payment_method = EXCLUDED.payment_method,
-    payment_status = EXCLUDED.payment_status;
+    payment_status = EXCLUDED.payment_status,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
 
 -- 13. Order Items (exactly one deterministic BASE item per VW-MOCK order)
+DROP TABLE IF EXISTS dev_mock_order_item_fixture;
+CREATE TEMP TABLE dev_mock_order_item_fixture AS
 WITH mock_orders AS (
     SELECT
         customer_order.id,
         customer_order.order_code,
-        ROW_NUMBER() OVER (ORDER BY customer_order.order_code) - 1 AS fixture_index
+        ROW_NUMBER() OVER (
+            ORDER BY SUBSTRING(customer_order.order_code FROM '([0-9]+)$')::INTEGER
+        ) - 1 AS fixture_index
     FROM orders customer_order
     WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
 ), available_variants AS (
@@ -846,30 +488,106 @@ WITH mock_orders AS (
         variant.sku,
         variant.price,
         product.name AS product_name,
+        product.slug AS product_slug,
         NULLIF(CONCAT_WS(' / ', color.name, size.name), '') AS variant_name,
+        variant_image.image,
         ROW_NUMBER() OVER (ORDER BY variant.sku) - 1 AS fixture_index,
         COUNT(*) OVER () AS fixture_count
     FROM product_variants variant
     JOIN products product ON product.id = variant.product_id
+    JOIN dev_managed_product_scope managed ON managed.slug = product.slug
     LEFT JOIN colors color ON color.id = variant.color_id
     LEFT JOIN sizes size ON size.id = variant.size_id
+    JOIN LATERAL (
+        SELECT product_image.image
+        FROM product_images product_image
+        LEFT JOIN product_variants image_variant
+          ON image_variant.id = product_image.variant_id
+        WHERE product_image.product_id = product.id
+          AND (
+              product_image.variant_id = variant.id
+              OR image_variant.color_id IS NOT DISTINCT FROM variant.color_id
+              OR product_image.variant_id IS NULL
+          )
+        ORDER BY
+            CASE WHEN product_image.variant_id = variant.id THEN 0 ELSE 1 END,
+            CASE WHEN product_image.is_thumbnail THEN 0 ELSE 1 END,
+            product_image.sort_order,
+            product_image.id
+        LIMIT 1
+    ) variant_image ON TRUE
     WHERE variant.deleted_at IS NULL
+      AND variant.status = 'ACTIVE'
+      AND product.deleted_at IS NULL
+      AND product.status = 'ACTIVE'
 ), selected_items AS (
     SELECT
         mock_order.id AS order_id,
         variant.id AS variant_id,
         variant.product_name,
+        variant.product_slug,
         variant.variant_name,
         variant.sku,
+        variant.image,
         variant.price
     FROM mock_orders mock_order
     JOIN available_variants variant
       ON variant.fixture_index = MOD(mock_order.fixture_index, variant.fixture_count)
 )
+SELECT
+    selected.order_id,
+    selected.variant_id,
+    selected.product_name,
+    selected.product_slug,
+    selected.variant_name,
+    selected.sku,
+    selected.image,
+    selected.price AS list_price,
+    selected.price,
+    1 AS quantity,
+    selected.price AS subtotal,
+    'CONFIRMED'::VARCHAR AS status,
+    'BASE'::VARCHAR AS price_source
+FROM selected_items selected;
+
+-- Preserve the existing order-item ID so seeded reviews and audit references
+-- stay attached when the managed catalog changes.
+WITH primary_item AS (
+    SELECT DISTINCT ON (existing.order_id)
+        existing.id,
+        existing.order_id
+    FROM order_items existing
+    JOIN dev_mock_order_item_fixture fixture
+      ON fixture.order_id = existing.order_id
+    ORDER BY existing.order_id, existing.id
+)
+UPDATE order_items existing
+SET
+    variant_id = fixture.variant_id,
+    product_name = fixture.product_name,
+    product_slug = fixture.product_slug,
+    variant_name = fixture.variant_name,
+    sku = fixture.sku,
+    image = fixture.image,
+    list_price = fixture.list_price,
+    price = fixture.price,
+    quantity = fixture.quantity,
+    subtotal = fixture.subtotal,
+    status = fixture.status,
+    price_source = fixture.price_source,
+    sale_campaign_item_id = NULL,
+    sale_campaign_code = NULL,
+    sale_campaign_name = NULL
+FROM primary_item primary_fixture
+JOIN dev_mock_order_item_fixture fixture
+  ON fixture.order_id = primary_fixture.order_id
+WHERE existing.id = primary_fixture.id;
+
 INSERT INTO order_items (
     order_id,
     variant_id,
     product_name,
+    product_slug,
     variant_name,
     sku,
     image,
@@ -881,23 +599,24 @@ INSERT INTO order_items (
     price_source
 )
 SELECT
-    selected.order_id,
-    selected.variant_id,
-    selected.product_name,
-    selected.variant_name,
-    selected.sku,
-    '/images/dev/product.jpg',
-    selected.price,
-    selected.price,
-    1,
-    selected.price,
-    'CONFIRMED',
-    'BASE'
-FROM selected_items selected
+    fixture.order_id,
+    fixture.variant_id,
+    fixture.product_name,
+    fixture.product_slug,
+    fixture.variant_name,
+    fixture.sku,
+    fixture.image,
+    fixture.list_price,
+    fixture.price,
+    fixture.quantity,
+    fixture.subtotal,
+    fixture.status,
+    fixture.price_source
+FROM dev_mock_order_item_fixture fixture
 WHERE NOT EXISTS (
     SELECT 1
     FROM order_items existing
-    WHERE existing.order_id = selected.order_id
+    WHERE existing.order_id = fixture.order_id
 );
 
 -- Order header totals are always derived from their item snapshots.
@@ -923,7 +642,7 @@ SET
     provider = 'COD',
     amount = customer_order.final_amount,
     status = 'SUCCESS',
-    paid_at = COALESCE(payment.paid_at, CURRENT_TIMESTAMP)
+    paid_at = customer_order.updated_at
 FROM orders customer_order
 WHERE payment.order_id = customer_order.id
   AND customer_order.order_code ~ '^VW-MOCK-[0-9]+$';
@@ -935,7 +654,7 @@ SELECT
     'MOCK-COD-' || customer_order.order_code,
     customer_order.final_amount,
     'SUCCESS',
-    CURRENT_TIMESTAMP
+    customer_order.updated_at
 FROM orders customer_order
 WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
   AND NOT EXISTS (
@@ -975,108 +694,354 @@ SET
     status = EXCLUDED.status,
     gateway_response = EXCLUDED.gateway_response;
 
+DROP TABLE IF EXISTS dev_mock_order_item_fixture;
+DROP TABLE IF EXISTS dev_managed_product_scope;
+
 -- 16. Coupon Usages (100 records)
-DO $$
-DECLARE
-    i INT;
-    cp_id BIGINT;
-    u_id BIGINT;
-    ord_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO cp_id FROM coupons ORDER BY RANDOM() LIMIT 1;
-        SELECT id INTO u_id FROM users ORDER BY RANDOM() LIMIT 1;
-        SELECT id INTO ord_id FROM orders o WHERE NOT EXISTS (SELECT 1 FROM coupon_usages cu WHERE cu.order_id = o.id) ORDER BY RANDOM() LIMIT 1;
-        IF cp_id IS NOT NULL AND u_id IS NOT NULL AND ord_id IS NOT NULL THEN
-            INSERT INTO coupon_usages (coupon_id, user_id, order_id, discount_amount)
-            VALUES (cp_id, u_id, ord_id, 10000.00)
-            ON CONFLICT (order_id) DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+-- Recreate the scope because marker 12..16 is also executed as a standalone
+-- idempotency test and must clean up every temporary object it creates.
+CREATE TEMP TABLE dev_managed_product_scope (
+    slug VARCHAR(280) PRIMARY KEY
+);
+
+INSERT INTO dev_managed_product_scope (slug)
+SELECT product.slug
+FROM products product
+JOIN product_attributes owner
+  ON owner.product_id = product.id
+ AND owner.name = 'SeedOwner'
+ AND owner.value = 'R3_PRODUCT_CATALOG_100'
+WHERE product.status = 'ACTIVE'
+  AND product.deleted_at IS NULL;
+
+-- Remove the occasional non-mock usage produced by the old random loop only
+-- when its coupon code and fixed amount make its seed ownership unambiguous.
+DELETE FROM coupon_usages usage
+USING coupons coupon, orders customer_order
+WHERE usage.coupon_id = coupon.id
+  AND usage.order_id = customer_order.id
+  AND coupon.code ~ '^COUPON([1-9]|[1-9][0-9]|100)$'
+  AND usage.discount_amount = 10000.00
+  AND customer_order.order_code !~ '^VW-MOCK-[0-9]+$';
+
+WITH mock_usage_fixture AS (
+    SELECT
+        customer_order.id AS order_id,
+        customer_order.user_id,
+        customer_order.updated_at AS used_at,
+        coupon.id AS coupon_id,
+        LEAST(
+            coupon.max_discount,
+            ROUND(customer_order.subtotal * coupon.value / 100.00, 2)
+        ) AS discount_amount
+    FROM orders customer_order
+    JOIN coupons coupon
+      ON coupon.code = 'COUPON'
+          || (SUBSTRING(customer_order.order_code FROM '([0-9]+)$')::INTEGER - 1000)
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+)
+INSERT INTO coupon_usages (
+    coupon_id,
+    user_id,
+    order_id,
+    discount_amount,
+    used_at
+)
+SELECT
+    fixture.coupon_id,
+    fixture.user_id,
+    fixture.order_id,
+    fixture.discount_amount,
+    fixture.used_at
+FROM mock_usage_fixture fixture
+ON CONFLICT (order_id) DO UPDATE
+SET
+    coupon_id = EXCLUDED.coupon_id,
+    user_id = EXCLUDED.user_id,
+    discount_amount = EXCLUDED.discount_amount,
+    used_at = EXCLUDED.used_at;
+
+UPDATE orders customer_order
+SET
+    discount_amount = usage.discount_amount,
+    final_amount = customer_order.subtotal
+        + customer_order.shipping_fee
+        - usage.discount_amount
+FROM coupon_usages usage
+WHERE usage.order_id = customer_order.id
+  AND customer_order.order_code ~ '^VW-MOCK-[0-9]+$';
+
+UPDATE payments payment
+SET amount = customer_order.final_amount
+FROM orders customer_order
+WHERE payment.order_id = customer_order.id
+  AND customer_order.order_code ~ '^VW-MOCK-[0-9]+$';
+
+UPDATE coupons coupon
+SET used_count = (
+    SELECT COUNT(*)::INTEGER
+    FROM coupon_usages usage
+    WHERE usage.coupon_id = coupon.id
+)
+WHERE coupon.code ~ '^COUPON([1-9]|[1-9][0-9]|100)$';
 
 -- 17. Reviews (100 records)
-DO $$
-DECLARE
-    i INT;
-    u_id BIGINT;
-    oi_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO u_id FROM users ORDER BY RANDOM() LIMIT 1;
-        SELECT id INTO oi_id FROM order_items oi WHERE NOT EXISTS (SELECT 1 FROM reviews r WHERE r.order_item_id = oi.id) ORDER BY RANDOM() LIMIT 1;
-        IF u_id IS NOT NULL AND oi_id IS NOT NULL THEN
-            INSERT INTO reviews (user_id, order_item_id, rating, comment)
-            VALUES (u_id, oi_id, (i % 5) + 1, 'Review for product: ' || oi_id)
-            ON CONFLICT (user_id, order_item_id) DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+-- A random review could previously land on a non-mock order. Its generated
+-- comment identifies it without relying on an unstable database ID.
+DELETE FROM reviews review
+USING order_items order_item, orders customer_order
+WHERE review.order_item_id = order_item.id
+  AND order_item.order_id = customer_order.id
+  AND review.comment ~ '^Review for product: [0-9]+$'
+  AND customer_order.order_code !~ '^VW-MOCK-[0-9]+$';
+
+-- Retain the oldest review ID per managed mock item, then reconcile its owner
+-- with the order owner. Review images on removed duplicates cascade safely.
+WITH ranked_reviews AS (
+    SELECT
+        review.id,
+        ROW_NUMBER() OVER (
+            PARTITION BY review.order_item_id
+            ORDER BY review.id
+        ) AS fixture_rank
+    FROM reviews review
+    JOIN order_items order_item ON order_item.id = review.order_item_id
+    JOIN orders customer_order ON customer_order.id = order_item.order_id
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+)
+DELETE FROM reviews duplicate
+USING ranked_reviews ranked
+WHERE duplicate.id = ranked.id
+  AND ranked.fixture_rank > 1;
+
+WITH review_fixture AS (
+    SELECT
+        customer_order.user_id,
+        order_item.id AS order_item_id,
+        (
+            (SUBSTRING(customer_order.order_code FROM '([0-9]+)$')::INTEGER - 1001) % 5
+        ) + 1 AS rating,
+        'Deterministic mock review for ' || customer_order.order_code AS comment
+    FROM orders customer_order
+    JOIN order_items order_item ON order_item.order_id = customer_order.id
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+)
+UPDATE reviews existing
+SET
+    user_id = fixture.user_id,
+    rating = fixture.rating,
+    comment = fixture.comment
+FROM review_fixture fixture
+WHERE existing.order_item_id = fixture.order_item_id;
+
+WITH review_fixture AS (
+    SELECT
+        customer_order.user_id,
+        order_item.id AS order_item_id,
+        (
+            (SUBSTRING(customer_order.order_code FROM '([0-9]+)$')::INTEGER - 1001) % 5
+        ) + 1 AS rating,
+        'Deterministic mock review for ' || customer_order.order_code AS comment
+    FROM orders customer_order
+    JOIN order_items order_item ON order_item.order_id = customer_order.id
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+)
+INSERT INTO reviews (user_id, order_item_id, rating, comment)
+SELECT
+    fixture.user_id,
+    fixture.order_item_id,
+    fixture.rating,
+    fixture.comment
+FROM review_fixture fixture
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM reviews existing
+    WHERE existing.order_item_id = fixture.order_item_id
+)
+ON CONFLICT (user_id, order_item_id) DO UPDATE
+SET
+    rating = EXCLUDED.rating,
+    comment = EXCLUDED.comment;
 
 -- 18. Review Images (100 records)
-DO $$
-DECLARE
-    i INT;
-    rev_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO rev_id FROM reviews ORDER BY RANDOM() LIMIT 1;
-        IF rev_id IS NOT NULL THEN
-            INSERT INTO review_images (review_id, image)
-            VALUES (rev_id, CASE WHEN i % 2 = 0 THEN '/uploads/reviews/essential-cotton-tee-review.png' ELSE '/uploads/reviews/north-utility-jacket-review.png' END)
-            ON CONFLICT DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+WITH ranked_images AS (
+    SELECT
+        review_image.id,
+        ROW_NUMBER() OVER (
+            PARTITION BY review_image.review_id
+            ORDER BY review_image.id
+        ) AS fixture_rank
+    FROM review_images review_image
+    JOIN reviews review ON review.id = review_image.review_id
+    JOIN order_items order_item ON order_item.id = review.order_item_id
+    JOIN orders customer_order ON customer_order.id = order_item.order_id
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+)
+DELETE FROM review_images duplicate
+USING ranked_images ranked
+WHERE duplicate.id = ranked.id
+  AND ranked.fixture_rank > 1;
+
+UPDATE review_images existing
+SET image = order_item.image
+FROM reviews review
+JOIN order_items order_item ON order_item.id = review.order_item_id
+JOIN orders customer_order ON customer_order.id = order_item.order_id
+WHERE existing.review_id = review.id
+  AND customer_order.order_code ~ '^VW-MOCK-[0-9]+$';
+
+INSERT INTO review_images (review_id, image)
+SELECT review.id, order_item.image
+FROM reviews review
+JOIN order_items order_item ON order_item.id = review.order_item_id
+JOIN orders customer_order ON customer_order.id = order_item.order_id
+WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM review_images existing
+      WHERE existing.review_id = review.id
+  );
 
 -- 19. Inventory Logs (100 records)
-DO $$
-DECLARE
-    i INT;
-    v_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO v_id FROM product_variants ORDER BY RANDOM() LIMIT 1;
-        IF v_id IS NOT NULL THEN
-            INSERT INTO inventory_logs (variant_id, change_quantity, type, reason)
-            VALUES (v_id, 10, 'IMPORT', 'Mock inventory import ' || i)
-            ON CONFLICT DO NOTHING;
-        END If;
-    END LOOP;
-END $$;
+DELETE FROM inventory_logs inventory_log
+WHERE inventory_log.type = 'IMPORT'
+  AND inventory_log.reason ~ '^Mock inventory import [0-9]+$';
+
+WITH ranked_logs AS (
+    SELECT
+        inventory_log.id,
+        ROW_NUMBER() OVER (
+            PARTITION BY inventory_log.variant_id, inventory_log.reason
+            ORDER BY inventory_log.id
+        ) AS fixture_rank
+    FROM inventory_logs inventory_log
+    JOIN product_variants variant ON variant.id = inventory_log.variant_id
+    JOIN products product ON product.id = variant.product_id
+    JOIN dev_managed_product_scope managed ON managed.slug = product.slug
+    WHERE inventory_log.type = 'IMPORT'
+      AND inventory_log.reason = 'Deterministic dev stock import: ' || variant.sku
+)
+DELETE FROM inventory_logs duplicate
+USING ranked_logs ranked
+WHERE duplicate.id = ranked.id
+  AND ranked.fixture_rank > 1;
+
+UPDATE inventory_logs inventory_log
+SET change_quantity = GREATEST(variant.stock_quantity, 1)
+FROM product_variants variant
+JOIN products product ON product.id = variant.product_id
+JOIN dev_managed_product_scope managed ON managed.slug = product.slug
+WHERE inventory_log.variant_id = variant.id
+  AND inventory_log.type = 'IMPORT'
+  AND inventory_log.reason = 'Deterministic dev stock import: ' || variant.sku;
+
+INSERT INTO inventory_logs (variant_id, change_quantity, type, reason)
+SELECT
+    variant.id,
+    GREATEST(variant.stock_quantity, 1),
+    'IMPORT',
+    'Deterministic dev stock import: ' || variant.sku
+FROM product_variants variant
+JOIN products product ON product.id = variant.product_id
+JOIN dev_managed_product_scope managed ON managed.slug = product.slug
+WHERE variant.deleted_at IS NULL
+  AND variant.status = 'ACTIVE'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM inventory_logs existing
+      WHERE existing.variant_id = variant.id
+        AND existing.type = 'IMPORT'
+        AND existing.reason = 'Deterministic dev stock import: ' || variant.sku
+  );
 
 -- 20. Order Status Histories (100 records)
-DO $$
-DECLARE
-    i INT;
-    ord_id BIGINT;
-    u_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO ord_id FROM orders ORDER BY RANDOM() LIMIT 1;
-        SELECT id INTO u_id FROM users ORDER BY RANDOM() LIMIT 1;
-        IF ord_id IS NOT NULL AND u_id IS NOT NULL THEN
-            INSERT INTO order_status_histories (order_id, from_status, to_status, changed_by, reason)
-            VALUES (ord_id, 'PENDING', 'COMPLETED', u_id, 'Status change ' || i)
-            ON CONFLICT DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+DELETE FROM order_status_histories history
+WHERE history.reason ~ '^Status change [0-9]+$';
+
+WITH history_fixture (
+    order_id,
+    from_status,
+    to_status,
+    reason,
+    created_at
+) AS (
+    SELECT
+        customer_order.id,
+        NULL::VARCHAR,
+        'PENDING',
+        'VW-MOCK fixture created',
+        customer_order.created_at
+    FROM orders customer_order
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+
+    UNION ALL
+
+    SELECT
+        customer_order.id,
+        'PENDING',
+        'COMPLETED',
+        'VW-MOCK fixture completed',
+        customer_order.updated_at
+    FROM orders customer_order
+    WHERE customer_order.order_code ~ '^VW-MOCK-[0-9]+$'
+), actor AS (
+    SELECT id
+    FROM users
+    WHERE email = 'staff@velawear.local'
+)
+INSERT INTO order_status_histories (
+    order_id,
+    from_status,
+    to_status,
+    changed_by,
+    reason,
+    created_at
+)
+SELECT
+    fixture.order_id,
+    fixture.from_status,
+    fixture.to_status,
+    actor.id,
+    fixture.reason,
+    fixture.created_at
+FROM history_fixture fixture
+CROSS JOIN actor
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM order_status_histories existing
+    WHERE existing.order_id = fixture.order_id
+      AND existing.reason = fixture.reason
+);
 
 -- 21. Wishlists (100 records)
-DO $$
-DECLARE
-    i INT;
-    u_id BIGINT;
-    prod_id BIGINT;
-BEGIN
-    FOR i IN 1..100 LOOP
-        SELECT id INTO u_id FROM users ORDER BY RANDOM() LIMIT 1;
-        SELECT id INTO prod_id FROM products ORDER BY RANDOM() LIMIT 1;
-        IF u_id IS NOT NULL AND prod_id IS NOT NULL THEN
-            INSERT INTO wishlists (user_id, product_id)
-            VALUES (u_id, prod_id)
-            ON CONFLICT (user_id, product_id) DO NOTHING;
-        END IF;
-    END LOOP;
-END $$;
+WITH fixture_customers (email, product_offset) AS (
+    VALUES
+        ('user@velawear.local', 0),
+        ('linh@velawear.local', 8),
+        ('minh@velawear.local', 16)
+), managed_products AS (
+    SELECT
+        product.id,
+        ROW_NUMBER() OVER (ORDER BY product.slug) - 1 AS fixture_index,
+        COUNT(*) OVER () AS fixture_count
+    FROM products product
+    JOIN dev_managed_product_scope managed ON managed.slug = product.slug
+    WHERE product.deleted_at IS NULL
+      AND product.status = 'ACTIVE'
+), selected_wishlists AS (
+    SELECT customer.id AS user_id, product.id AS product_id
+    FROM fixture_customers fixture
+    JOIN users customer ON customer.email = fixture.email
+    CROSS JOIN generate_series(0, 3) AS slot(slot_number)
+    JOIN managed_products product
+      ON product.fixture_index = MOD(
+          (fixture.product_offset + slot.slot_number)::BIGINT,
+          product.fixture_count
+      )
+)
+INSERT INTO wishlists (user_id, product_id)
+SELECT fixture.user_id, fixture.product_id
+FROM selected_wishlists fixture
+ON CONFLICT (user_id, product_id) DO NOTHING;
+
+DROP TABLE IF EXISTS dev_managed_product_scope;
