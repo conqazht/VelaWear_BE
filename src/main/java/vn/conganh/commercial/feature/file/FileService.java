@@ -6,4 +6,8 @@ import vn.conganh.commercial.feature.file.dto.FileUploadResponse;
 public interface FileService {
 
     FileUploadResponse store(MultipartFile file, String folder);
+
+    FileUploadResponse storeAvatar(MultipartFile file);
+
+    boolean deleteManagedAvatar(String avatarUrl);
 }

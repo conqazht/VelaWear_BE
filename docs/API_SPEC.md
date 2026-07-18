@@ -772,7 +772,7 @@ Request dùng riêng `UpdateMyProfileRequest`:
 
 Ba field trên đều bắt buộc và `birthDate` phải ở quá khứ. DTO này không có
 `avatar`; field `avatar` gửi thừa không được bind và không thể thay đổi avatar đang
-lưu. Customer avatar upload được quản lý ở contract file riêng trong BE-004.
+lưu. Customer tự đổi avatar dùng `PUT /api/v1/files/avatar`.
 
 **Success Response (200):** `UserResponse`
 
@@ -791,7 +791,8 @@ lưu. Customer avatar upload được quản lý ở contract file riêng trong 
 
 Generic operator endpoint kept for compatibility. Email and password are not
 updated here; unlike `/api/v1/users/me`, its operator `UpdateUserRequest` still
-contains `avatar` until the separate customer-avatar contract is delivered.
+contains `avatar` for admin/operator-managed user records. Customer self-profile
+must use `PUT /api/v1/files/avatar` for avatar changes.
 
 **Request Body:**
 
@@ -1213,7 +1214,8 @@ Tài liệu contract, thuật toán và response đầy đủ xem
 
 ### POST /files
 
-Upload an image file for later use as a user avatar or company logo.
+Upload ảnh generic cho các luồng operator/admin có quyền `UPLOAD_FILE`.
+Customer tự đổi avatar không dùng endpoint này nữa; dùng `PUT /files/avatar`.
 
 **Auth:** Bearer
 
@@ -1232,9 +1234,9 @@ Upload an image file for later use as a user avatar or company logo.
 {
   "statusCode": 201,
   "data": {
-    "fileName": "1709123456789_photo.jpg",
+    "fileName": "7f2f9b7a-5488-4c1a-b2f7-1cbd9e37f21e_photo.jpg",
     "folder": "avatars",
-    "fileUrl": "/uploads/avatars/1709123456789_photo.jpg",
+    "fileUrl": "/uploads/avatars/7f2f9b7a-5488-4c1a-b2f7-1cbd9e37f21e_photo.jpg",
     "size": 24576,
     "uploadedAt": "2026-06-26T09:00:00Z"
   },
@@ -1249,10 +1251,70 @@ Upload an image file for later use as a user avatar or company logo.
 |--------|------|
 | 400 | Missing file/folder, invalid folder, invalid extension, invalid file name, or business size validation failed |
 | 401 | Missing or invalid JWT |
-| 403 | Authenticated user does not have `UPLOAD_FILE` permission |
+| 403 | Authenticated user does not have `UPLOAD_FILE` permission; `ROLE_USER` mặc định bị từ chối |
 | 413 | Servlet multipart size limit exceeded |
 
-Client uses the returned `fileName` to update the related entity, for example `avatar` on `PUT /users/{id}`.
+File name dùng UUID prefix và write qua `.tmp` trước khi move vào thư mục đích.
+Endpoint này không cập nhật `users.avatar` trực tiếp.
+
+### PUT /files/avatar
+
+Self-scoped customer avatar upload. Backend lấy user từ JWT, không nhận `userId`,
+`folder` hoặc avatar URL từ request.
+
+**Auth:** Bearer
+
+**Content-Type:** `multipart/form-data`
+
+**Form Data:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | File | Yes | Image file. Allowed extensions, content type, signature and size follow `app.upload`. |
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "id": 42,
+    "fullName": "Nguyen Van A",
+    "email": "a@example.com",
+    "birthDate": "1995-01-01",
+    "avatar": "/uploads/avatars/7f2f9b7a-5488-4c1a-b2f7-1cbd9e37f21e_avatar.jpg",
+    "gender": "OTHER",
+    "roles": ["USER"]
+  },
+  "message": "Success",
+  "timestamp": "2026-07-18T12:00:00"
+}
+```
+
+**Lifecycle và security:**
+
+- Rate limit Redis policy `avatar-upload`: `user 5/1h`, `IP 30/1h`,
+  `global 300/1m`; reject trả `429 AUTH_RATE_LIMITED` kèm `Retry-After`.
+- Backend lock row user bằng `PESSIMISTIC_WRITE`, lưu file mới, cập nhật
+  `users.avatar` trong transaction.
+- Nếu DB rollback sau khi file đã lưu, backend xóa file mới.
+- Sau commit, backend chỉ xóa previous managed avatar nằm trong
+  `/uploads/avatars/*`. External URL, product image hoặc review image cũ không
+  bị xóa.
+- Background reconciliation scan `/uploads/avatars/*` mỗi 6h, grace 24h, recheck
+  DB reference trước khi delete orphan và emit metric
+  `security.avatar.cleanup`.
+
+**Errors:**
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `INVALID_REQUEST` | Missing/invalid file, invalid extension/content type/signature/size |
+| 401 | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 | `FORBIDDEN` | Missing `UPDATE_MY_AVATAR` permission |
+| 404 | `USER_NOT_FOUND` | JWT user no longer exists or is soft-deleted |
+| 429 | `AUTH_RATE_LIMITED` | Avatar upload policy exceeded |
+| 503 | `SERVICE_UNAVAILABLE` | Redis/rate-limit dependency unavailable |
 
 ---
 
@@ -1948,7 +2010,8 @@ theo exact method/path RBAC. Với generic customer-resource route đã contract
 | POST | `/products` | Bearer | Implemented | Create product |
 | PUT | `/products/{id}` | Bearer | Implemented | Update product |
 | DELETE | `/products/{id}` | Bearer | Implemented | Soft archive product |
-| POST | `/files` | Bearer | Implemented | Upload image file |
+| POST | `/files` | Bearer | Implemented | Generic operator image upload; `ROLE_USER` denied |
+| PUT | `/api/v1/files/avatar` | Bearer | Implemented | Principal-scoped avatar upload with managed cleanup |
 | GET | `/brands` | Bearer | Implemented | List brands |
 | GET | `/brands/{id}` | Bearer | Implemented | Get brand |
 | POST | `/brands` | Bearer | Implemented | Create brand |

@@ -144,6 +144,18 @@ class SystemSecurityIntegrationTest extends AuthenticatedIntegrationTest {
     }
 
     @Test
+    @DisplayName("V23 chỉ cho USER upload avatar self-scoped và thu hồi generic file upload")
+    void fileUploadPermissions_v23ScopeUserToSelfAvatarOnly() {
+        assertThat(hasRolePermission("USER", "/api/v1/files/avatar", "PUT")).isTrue();
+        assertThat(hasRolePermission("USER", "/api/v1/files", "POST")).isFalse();
+
+        assertProductionRoleAssignments(List.of("ADMIN", "MANAGER", "STAFF"),
+                new PermissionKey("POST", "/api/v1/files"));
+        assertProductionRoleAssignments(List.of("ADMIN", "MANAGER", "STAFF", "USER"),
+                new PermissionKey("PUT", "/api/v1/files/avatar"));
+    }
+
+    @Test
     @DisplayName("Actuator metrics chỉ cho ADMIN")
     void actuatorMetrics_requiresAdminRole() throws Exception {
         mockMvc.perform(get("/actuator/metrics"))

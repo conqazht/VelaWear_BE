@@ -46,6 +46,14 @@ public class SecurityMetrics {
                 .increment();
     }
 
+    public void avatarCleanup(String outcome, String reason) {
+        meterRegistry.counter(
+                        "security.avatar.cleanup",
+                        "outcome", bounded(outcome),
+                        "reason", bounded(reason))
+                .increment();
+    }
+
     public Timer.Sample startTimer() {
         return Timer.start(meterRegistry);
     }
