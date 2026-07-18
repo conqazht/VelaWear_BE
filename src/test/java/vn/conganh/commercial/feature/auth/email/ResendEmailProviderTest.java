@@ -3,14 +3,17 @@ package vn.conganh.commercial.feature.auth.email;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.resend.Resend;
+import com.resend.core.exception.ResendException;
 import com.resend.services.emails.Emails;
 import com.resend.services.emails.model.CreateEmailOptions;
 import com.resend.services.emails.model.CreateEmailResponse;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,10 +50,30 @@ class ResendEmailProviderTest {
         when(emails.send(any(CreateEmailOptions.class))).thenReturn(mockResponse);
 
         // Act
-        emailProvider.sendEmail("delivered@resend.dev", "Test Subject", "<p>Test Content</p>");
+        String providerMessageId = emailProvider.sendEmail(
+                "delivered@resend.dev", "Test Subject", "<p>Test Content</p>");
 
         // Assert
+        assertThat(providerMessageId).isEqualTo("msg-12345");
         verify(emails).send(any(CreateEmailOptions.class));
+    }
+
+    @Test
+    @DisplayName("Should pass an HTTP idempotency key and return provider message id")
+    void shouldSendEmailWithIdempotencyKey() throws Exception {
+        CreateEmailResponse mockResponse = mock(CreateEmailResponse.class);
+        when(mockResponse.getId()).thenReturn("msg-idempotent");
+        Map<String, String> options = Map.of("Idempotency-Key", "order-completed/10");
+        when(emails.send(any(CreateEmailOptions.class), eq(options))).thenReturn(mockResponse);
+
+        String providerMessageId = emailProvider.sendEmail(
+                "delivered@resend.dev",
+                "Test Subject",
+                "<p>Test Content</p>",
+                "order-completed/10");
+
+        assertThat(providerMessageId).isEqualTo("msg-idempotent");
+        verify(emails).send(any(CreateEmailOptions.class), eq(options));
     }
 
     @Test
@@ -62,7 +85,7 @@ class ResendEmailProviderTest {
         // Act & Assert
         assertThatThrownBy(() -> emailProvider.sendEmail("delivered@resend.dev", "Test Subject", "<p>Test Content</p>"))
                 .isInstanceOf(ServiceUnavailableException.class)
-                .hasMessageContaining("Failed to send verification email");
+                .hasMessageContaining("Failed to send email");
     }
 
     @Test
@@ -74,6 +97,41 @@ class ResendEmailProviderTest {
         // Act & Assert
         assertThatThrownBy(() -> emailProvider.sendEmail("delivered@resend.dev", "Test Subject", "<p>Test Content</p>"))
                 .isInstanceOf(ServiceUnavailableException.class)
-                .hasMessageContaining("Verification email provider is currently unavailable");
+                .hasMessageContaining("Email provider is currently unavailable");
+    }
+
+    @Test
+    @DisplayName("Should classify a Resend validation error as permanent")
+    void shouldClassifyValidationErrorAsPermanent() throws Exception {
+        when(emails.send(any(CreateEmailOptions.class)))
+                .thenThrow(new ResendException(
+                        "provider rejected request",
+                        422,
+                        "{\"name\":\"validation_error\",\"message\":\"provider details\"}"));
+
+        assertThatThrownBy(() -> emailProvider.sendEmail(
+                        "invalid@example.com", "Test Subject", "<p>Test Content</p>"))
+                .isInstanceOfSatisfying(EmailDeliveryException.class, exception -> {
+                    assertThat(exception.isRetryable()).isFalse();
+                    assertThat(exception.getMessage())
+                            .contains("status=422")
+                            .contains("validation_error")
+                            .doesNotContain("provider details");
+                });
+    }
+
+    @Test
+    @DisplayName("Should classify a Resend rate limit as retryable")
+    void shouldClassifyRateLimitAsRetryable() throws Exception {
+        when(emails.send(any(CreateEmailOptions.class)))
+                .thenThrow(new ResendException(
+                        "provider rate limited request",
+                        429,
+                        "{\"name\":\"rate_limit_exceeded\",\"message\":\"provider details\"}"));
+
+        assertThatThrownBy(() -> emailProvider.sendEmail(
+                        "delivered@resend.dev", "Test Subject", "<p>Test Content</p>"))
+                .isInstanceOfSatisfying(EmailDeliveryException.class,
+                        exception -> assertThat(exception.isRetryable()).isTrue());
     }
 }

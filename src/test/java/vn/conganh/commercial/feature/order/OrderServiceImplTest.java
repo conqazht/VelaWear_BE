@@ -39,6 +39,7 @@ import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
 import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
+import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailOutboxService;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,6 +60,8 @@ class OrderServiceImplTest {
     private OrderResourceLifecycleService resourceLifecycleService;
     @Mock
     private PaymentRepository paymentRepository;
+    @Mock
+    private OrderCompletedEmailOutboxService orderCompletedEmailOutboxService;
 
     private OrderServiceImpl orderService;
 
@@ -66,7 +69,8 @@ class OrderServiceImplTest {
     void setUp() {
         orderService = new OrderServiceImpl(
                 orderRepository, userRepository, orderStatusHistoryRepository,
-                orderItemRepository, resourceLifecycleService, paymentRepository);
+                orderItemRepository, resourceLifecycleService, paymentRepository,
+                orderCompletedEmailOutboxService);
     }
 
     @Nested
@@ -227,6 +231,49 @@ class OrderServiceImplTest {
                     history.getOrder().equals(order)
                             && "PENDING".equals(history.getFromStatus())
                             && "SHIPPING".equals(history.getToStatus())));
+        }
+
+        @Test
+        @DisplayName("updateOrder - tạo email outbox khi đơn chuyển từ SHIPPING sang COMPLETED")
+        void updateOrder_shippingToCompleted_enqueuesOrderCompletedEmail() {
+            Order order = order(10L, user(1L), "SHIPPING");
+            UpdateOrderRequest request = updateRequest("COMPLETED");
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
+            when(orderRepository.save(order)).thenReturn(order);
+
+            OrderResponse response = orderService.updateOrder(10L, request);
+
+            assertThat(response.status()).isEqualTo("COMPLETED");
+            verify(orderCompletedEmailOutboxService).enqueue(order);
+        }
+
+        @Test
+        @DisplayName("updateOrder - vẫn tạo email nếu API đưa đơn từ trạng thái khác vào COMPLETED")
+        void updateOrder_nonCompletedToCompleted_enqueuesOrderCompletedEmail() {
+            Order order = order(10L, user(1L), "PENDING");
+            UpdateOrderRequest request = updateRequest("COMPLETED");
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
+            when(orderRepository.save(order)).thenReturn(order);
+
+            orderService.updateOrder(10L, request);
+
+            verify(orderCompletedEmailOutboxService).enqueue(order);
+        }
+
+        @Test
+        @DisplayName("updateOrder - khóa dữ liệu dùng để render email sau khi COMPLETED")
+        void updateOrder_completedOrderChangingReceiptData_isRejected() {
+            Order order = order(10L, user(1L), "COMPLETED");
+            when(orderRepository.findWithLockById(10L)).thenReturn(Optional.of(order));
+
+            UpdateOrderRequest request = new UpdateOrderRequest(
+                    null, null, null, BigDecimal.valueOf(120000),
+                    null, null, null, null, null);
+
+            assertThatThrownBy(() -> orderService.updateOrder(10L, request))
+                    .isInstanceOf(InvalidRequestException.class)
+                    .hasMessageContaining("Completed order receipt fields");
+            verify(orderRepository, never()).save(any());
         }
 
         @Test

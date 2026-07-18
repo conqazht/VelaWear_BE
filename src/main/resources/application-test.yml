@@ -11,11 +11,30 @@ spring:
     enabled: true
     locations: classpath:db/migration,classpath:db/dev
 
+server:
+  port: 0
+
 jwt:
+  access-token-secret-key: test-access-secret-key-for-integration-tests-must-be-at-least-64-characters-long-hs512
+  refresh-token-secret-key: test-refresh-secret-key-for-integration-tests-must-be-at-least-64-characters-long-hs512
   access-token-expiration: 900
   refresh-token-expiration: 259200
 
+resend:
+  api-key: test-resend-api-key
+  from-email: onboarding@resend.dev
+
 app:
+  email:
+    storefront-base-url: http://localhost:3000
+    outbox:
+      enabled: false
+      scan-ms: 10000
+      batch-size: 10
+      max-attempts: 3
+      lease-duration: 2m
+      retry-base-delay: 1m
+      retry-max-delay: 1h
   security:
     hmac-secret: test-security-hmac-secret-for-integration-tests-32-bytes-minimum
     rate-limit:
