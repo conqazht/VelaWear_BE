@@ -13,9 +13,9 @@
 - Risk: High
 - Category: Security / Abuse prevention / File lifecycle
 - Priority / effort / wave: P1 / L / 2
-- Planned against: `2be2362` ngày 2026-07-16
+- Planned against: `b4658c2` ngày 2026-07-17
 - Branch: `feature/upload-governance`
-- Dependency: BE-002
+- Dependency: BE-002 đã merge trong PR #23; BE-003 đã merge trong PR #24 tại `b4658c2`
 - Reserved migration: `V23__scope_customer_file_upload_permissions.sql`
 
 ## Vì sao
@@ -37,7 +37,7 @@ Authenticated user có thể gọi generic public upload endpoint và tự chọ
 Chạy drift check này trước implementation:
 
 ```powershell
-git diff --stat 2be2362..HEAD -- src/main/java/vn/conganh/commercial/feature/file src/main/java/vn/conganh/commercial/feature/user src/main/java/vn/conganh/commercial/feature/review src/main/resources src/test docs
+git diff --stat b4658c2..HEAD -- src/main/java/vn/conganh/commercial/feature/file src/main/java/vn/conganh/commercial/feature/user src/main/java/vn/conganh/commercial/feature/review src/main/resources src/test docs
 ```
 
 | Gate | Exact command | Expected result |
@@ -65,7 +65,7 @@ git diff --stat 2be2362..HEAD -- src/main/java/vn/conganh/commercial/feature/fil
 
 ### Exact file allowlist
 
-- Existing: `src/main/java/vn/conganh/commercial/feature/file/FileController.java`, `src/main/java/vn/conganh/commercial/feature/file/FileService.java`, `src/main/java/vn/conganh/commercial/feature/file/FileServiceImpl.java`, `src/main/java/vn/conganh/commercial/feature/file/CONTEXT.md`, `src/main/java/vn/conganh/commercial/feature/user/UserRepository.java`, `src/main/java/vn/conganh/commercial/security/ratelimit/AuthRateLimitService.java`, `src/main/java/vn/conganh/commercial/security/ratelimit/RateLimitProperties.java`, `src/main/java/vn/conganh/commercial/security/ClientIpResolver.java`, `src/main/java/vn/conganh/commercial/security/monitoring/SecurityMetrics.java`, `src/main/java/vn/conganh/commercial/security/monitoring/SecurityEventLogger.java`, `src/main/resources/application.yaml`, `src/test/java/vn/conganh/commercial/feature/file/FileControllerTest.java`, `src/test/java/vn/conganh/commercial/feature/file/FileServiceImplTest.java`, `src/test/java/vn/conganh/commercial/SystemSecurityIntegrationTest.java`, `docs/API_SPEC.md`, `docs/PROJECT-STATUS.md`, `docs/decisions/file-upload-strategy.md`.
+- Existing: `src/main/java/vn/conganh/commercial/feature/file/FileController.java`, `src/main/java/vn/conganh/commercial/feature/file/FileService.java`, `src/main/java/vn/conganh/commercial/feature/file/FileServiceImpl.java`, `src/main/java/vn/conganh/commercial/feature/file/CONTEXT.md`, `src/main/java/vn/conganh/commercial/feature/user/UserRepository.java`, `src/main/java/vn/conganh/commercial/security/ratelimit/AuthRateLimitService.java`, `src/main/java/vn/conganh/commercial/security/ratelimit/RateLimitProperties.java`, `src/main/java/vn/conganh/commercial/security/ClientIpResolver.java`, `src/main/java/vn/conganh/commercial/security/monitoring/SecurityMetrics.java`, `src/main/java/vn/conganh/commercial/security/monitoring/SecurityEventLogger.java`, `src/main/resources/application.yaml`, `src/test/java/vn/conganh/commercial/feature/file/FileControllerTest.java`, `src/test/java/vn/conganh/commercial/feature/file/FileServiceImplTest.java`, `src/test/java/vn/conganh/commercial/SystemSecurityIntegrationTest.java`, `docs/API_SPEC.md`, `docs/PROJECT-STATUS.md`, `docs/decisions/file-upload-strategy.md`, `plans/004-govern-public-upload-lifecycle.md`, `plans/vi/004-govern-public-upload-lifecycle.vi.md`.
 - New: `src/main/java/vn/conganh/commercial/feature/file/AvatarUploadService.java`, `src/main/java/vn/conganh/commercial/feature/file/AvatarReconciliationJob.java`, `src/main/resources/db/migration/V23__scope_customer_file_upload_permissions.sql`, `src/test/java/vn/conganh/commercial/feature/file/AvatarUploadIntegrationTest.java`, `src/test/java/vn/conganh/commercial/feature/file/AvatarReconciliationJobTest.java`.
 - Không table, cloud adapter, product/review storage file, hay source khác được đổi nếu chưa reconcile plan.
 

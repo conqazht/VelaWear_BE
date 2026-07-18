@@ -1,11 +1,13 @@
 package vn.conganh.commercial.feature.user;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,15 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     Optional<User> findByEmailAndDeletedAtIsNull(String email);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select u
+            from User u
+            where u.id = :id
+              and u.deletedAt is null
+            """)
+    Optional<User> findByIdAndDeletedAtIsNullWithLock(Long id);
+
     @Modifying(clearAutomatically = false, flushAutomatically = true)
     @Transactional
     @Query("""
@@ -40,6 +51,16 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
               and u.deletedAt is null
             """)
     Optional<Long> findSecurityVersionByIdAndDeletedAtIsNull(Long userId);
+
+    boolean existsByAvatar(String avatar);
+
+    @Query("""
+            select u.avatar
+            from User u
+            where u.avatar is not null
+              and u.deletedAt is null
+            """)
+    List<String> findManagedAvatarReferences();
 
     @Query("""
             select uhr.role

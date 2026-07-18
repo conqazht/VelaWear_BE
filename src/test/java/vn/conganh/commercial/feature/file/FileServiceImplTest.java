@@ -43,7 +43,7 @@ class FileServiceImplTest {
             FileUploadResponse response = fileService.store(file, "avatars");
 
             // Assert
-            assertThat(response.fileName()).matches("\\d+_my_photo_2024_\\.jpg");
+            assertThat(response.fileName()).matches("[0-9a-f-]{36}_my_photo_2024_\\.jpg");
             assertThat(response.folder()).isEqualTo("avatars");
             assertThat(response.fileUrl()).isEqualTo("/uploads/avatars/" + response.fileName());
             assertThat(response.size()).isEqualTo(file.getSize());
@@ -124,6 +124,54 @@ class FileServiceImplTest {
             assertThatThrownBy(() -> fileService.store(file, "avatars"))
                     .isInstanceOf(InvalidRequestException.class)
                     .hasMessage("File content does not match file extension");
+        }
+
+        @Test
+        @DisplayName("store - ghi file qua temporary path và không để lại file tmp")
+        void store_validImage_doesNotLeaveTemporaryFile() throws Exception {
+            FileUploadResponse response = fileService.storeAvatar(imageFile("avatar.jpg", jpegBytes()));
+
+            assertThat(Files.exists(uploadDirectory.resolve("avatars").resolve(response.fileName()))).isTrue();
+            try (var files = Files.list(uploadDirectory.resolve("avatars"))) {
+                assertThat(files.map(path -> path.getFileName().toString()))
+                        .noneMatch(fileName -> fileName.endsWith(".tmp"));
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("Managed avatar delete")
+    class ManagedAvatarDelete {
+
+        @Test
+        @DisplayName("deleteManagedAvatar - chỉ xóa file trong namespace avatars")
+        void deleteManagedAvatar_managedAvatar_deletesOnlyAvatarNamespace() throws Exception {
+            Path avatarDirectory = Files.createDirectories(uploadDirectory.resolve("avatars"));
+            Path productDirectory = Files.createDirectories(uploadDirectory.resolve("products"));
+            Path reviewDirectory = Files.createDirectories(uploadDirectory.resolve("reviews"));
+            Path avatar = Files.write(avatarDirectory.resolve("old.jpg"), jpegBytes());
+            Path product = Files.write(productDirectory.resolve("product.jpg"), jpegBytes());
+            Path review = Files.write(reviewDirectory.resolve("review.jpg"), jpegBytes());
+
+            assertThat(fileService.deleteManagedAvatar("/uploads/avatars/old.jpg")).isTrue();
+            assertThat(fileService.deleteManagedAvatar("/uploads/products/product.jpg")).isFalse();
+            assertThat(fileService.deleteManagedAvatar("/uploads/reviews/review.jpg")).isFalse();
+            assertThat(fileService.deleteManagedAvatar("https://cdn.test.local/avatar.jpg")).isFalse();
+
+            assertThat(avatar).doesNotExist();
+            assertThat(product).exists();
+            assertThat(review).exists();
+        }
+
+        @Test
+        @DisplayName("deleteManagedAvatar - từ chối traversal path")
+        void deleteManagedAvatar_traversalPath_doesNotDelete() throws Exception {
+            Path avatarDirectory = Files.createDirectories(uploadDirectory.resolve("avatars"));
+            Path avatar = Files.write(avatarDirectory.resolve("safe.jpg"), jpegBytes());
+
+            assertThat(fileService.deleteManagedAvatar("/uploads/avatars/../safe.jpg")).isFalse();
+
+            assertThat(avatar).exists();
         }
     }
 

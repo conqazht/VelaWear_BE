@@ -1,3 +1,23 @@
+### BE-004: Govern public upload lifecycle cho customer avatar
+
+- **Date/Time**: 2026-07-18 (Asia/Saigon)
+- **Summary of Changes**: Thêm `PUT /api/v1/files/avatar` self-scoped, chỉ nhận
+  `multipart file`; backend lấy user từ JWT, lock row bằng `PESSIMISTIC_WRITE`,
+  lưu avatar vào `/uploads/avatars/*`, cập nhật `users.avatar`, rollback thì xóa
+  file mới và after-commit thì xóa previous managed avatar. Generic
+  `POST /api/v1/files` giữ cho operator/admin flow nhưng V23 thu hồi `UPLOAD_FILE`
+  khỏi `ROLE_USER` và seed permission `UPDATE_MY_AVATAR`.
+- **Security/Correctness**: Avatar upload dùng Redis policy `avatar-upload`
+  (`user 5/1h`, `IP 30/1h`, `global 300/1m`) và trả `AUTH_RATE_LIMITED`.
+  File name dùng UUID, ghi `.tmp` rồi atomic move. Managed deletion chỉ áp dụng
+  `/uploads/avatars/*`; external URL, product image và review image không bị xóa.
+  Background reconciliation scan avatar namespace mỗi 6h, grace 24h, recheck DB
+  trước khi delete orphan và emit metric `security.avatar.cleanup`.
+- **Verification**: Focused Testcontainers suite pass `71/71`:
+  `FileControllerTest,FileServiceImplTest,AvatarUploadIntegrationTest,
+  AvatarReconciliationJobTest,SystemSecurityIntegrationTest`. Full
+  `mvnw.cmd clean verify` pass `723/723` và build JAR thành công.
+
 ### BE-003: Serialize coupon counter updates
 
 - **Date/Time**: 2026-07-16 (Asia/Saigon)
