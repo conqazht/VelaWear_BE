@@ -31,4 +31,6 @@ public interface AuthService {
     void changeEmail(String currentEmail, ChangeEmailRequest request);
 
     void changePassword(String currentEmail, ChangePasswordRequest request);
+
+    void deleteMe(String email);
 }

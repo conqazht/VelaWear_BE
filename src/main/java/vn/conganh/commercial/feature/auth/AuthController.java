@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -165,6 +166,17 @@ public class AuthController {
                 SecurityChangeResponse.revokedAndReauthenticationRequired(),
                 "Password updated successfully",
                 java.time.LocalDateTime.now()));
+    }
+
+    @DeleteMapping("/me")
+    @Operation(summary = "Delete my account", description = "Soft-deletes the current user's account and revokes their active sessions.")
+    public ResponseEntity<ApiResponse<Void>> deleteMe(
+            @AuthenticationPrincipal Jwt jwt,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        authService.deleteMe(jwt.getSubject());
+        clearRefreshTokenCookie(httpRequest, httpResponse);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     private String extractRefreshToken(HttpServletRequest httpRequest) {

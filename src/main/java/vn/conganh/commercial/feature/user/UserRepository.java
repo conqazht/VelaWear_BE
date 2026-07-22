@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.feature.permission.Permission;
 import vn.conganh.commercial.feature.role.Role;
@@ -17,6 +18,9 @@ import vn.conganh.commercial.feature.role.Role;
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
+
+    @Query("SELECT u FROM User u WHERE u.deletedAt < :cutoffTime AND u.email NOT LIKE 'deleted_%@anonymized.local'")
+    Page<User> findExpiredDeletedUsersToAnonymize(@Param("cutoffTime") java.time.Instant cutoffTime, Pageable pageable);
 
     Page<User> findAllByDeletedAtIsNull(Pageable pageable);
 

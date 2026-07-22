@@ -4,5 +4,6 @@ public enum SessionRevocationReason {
     PASSWORD_RESET,
     PASSWORD_CHANGE,
     EMAIL_CHANGE,
-    ROLE_CHANGE
+    ROLE_CHANGE,
+    ACCOUNT_DELETED
 }

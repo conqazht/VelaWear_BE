@@ -521,4 +521,18 @@ public class AuthServiceImpl implements AuthService {
         log.info("[VelaWear/Auth] - CHANGE_PASSWORD: userId: {}, hadPassword: {}", user.getId(), hasPassword);
         securityMetrics.authAttempt("password_change", "success");
     }
+
+    @Override
+    @Transactional
+    public void deleteMe(String email) {
+        String normalizedEmail = email.toLowerCase().trim();
+        User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedEmail));
+
+        user.setDeletedAt(java.time.Instant.now());
+        sessionRevocationService.revokeAll(user, SessionRevocationReason.ACCOUNT_DELETED);
+        userRepository.save(user);
+
+        log.info("[VelaWear/Auth] - DELETE_ME: userId: {}", user.getId());
+    }
 }

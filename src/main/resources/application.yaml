@@ -215,6 +215,9 @@ app:
     avatar:
       reconciliation-cron: ${AVATAR_RECONCILIATION_CRON:0 0 */6 * * *}
       orphan-grace: ${AVATAR_ORPHAN_GRACE:24h}
+  user:
+    retention-days: ${USER_RETENTION_DAYS:45}
+    cleanup-cron: ${USER_CLEANUP_CRON:0 0 3 * * *}
 
 springdoc:
   api-docs:
