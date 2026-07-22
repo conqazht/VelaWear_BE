@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.user;
 
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -20,7 +21,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
 
     @Query("SELECT u FROM User u WHERE u.deletedAt < :cutoffTime AND u.email NOT LIKE 'deleted_%@anonymized.local'")
-    Page<User> findExpiredDeletedUsersToAnonymize(@Param("cutoffTime") java.time.Instant cutoffTime, Pageable pageable);
+    Page<User> findExpiredDeletedUsersToAnonymize(@Param("cutoffTime") Instant cutoffTime, Pageable pageable);
 
     Page<User> findAllByDeletedAtIsNull(Pageable pageable);
 
