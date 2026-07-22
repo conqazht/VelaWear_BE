@@ -207,8 +207,9 @@ public class SecurityConfig {
             ApiResponse<Void> apiResponse = new ApiResponse<>(
                     HttpStatus.UNAUTHORIZED.value(),
                     null,
-                    authException.getMessage(),
-                    LocalDateTime.now()
+                    "Authentication required",
+                    LocalDateTime.now(),
+                    "AUTHENTICATION_REQUIRED"
             );
 
             objectMapper.writeValue(response.getOutputStream(), apiResponse);
@@ -224,8 +225,9 @@ public class SecurityConfig {
             ApiResponse<Void> apiResponse = new ApiResponse<>(
                     HttpStatus.FORBIDDEN.value(),
                     null,
-                    accessDeniedException.getMessage(),
-                    LocalDateTime.now()
+                    "Access denied",
+                    LocalDateTime.now(),
+                    "ACCESS_DENIED"
             );
 
             objectMapper.writeValue(response.getOutputStream(), apiResponse);

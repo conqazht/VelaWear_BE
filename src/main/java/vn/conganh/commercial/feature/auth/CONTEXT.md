@@ -97,5 +97,11 @@ See [`docs/RACE_CONDITION_TESTING_VI.md`](../../../../../../../../docs/RACE_COND
 for the real Redis/PostgreSQL concurrency tests.
 
 The complete API flows, Redis keys, limiter thresholds, trusted-proxy setup,
-rollout rules and troubleshooting are documented in
+rollout rollout rules and troubleshooting are documented in
 [`docs/OTP_SECURITY_FLOW_VI.md`](../../../../../../../../docs/OTP_SECURITY_FLOW_VI.md).
+
+## API Error Contract
+
+- Framework and security failures return stable `code` values (`REQUEST_BODY_INVALID`, `INVALID_REQUEST`, `AUTHENTICATION_REQUIRED`, `ACCESS_DENIED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_SERVER_ERROR`).
+- Consumers must branch on `code` and `Retry-After` headers/fields, not on the `message` text.
+- Exceptions never leak root causes or stack traces to the client response.
