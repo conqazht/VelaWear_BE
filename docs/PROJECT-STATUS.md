@@ -1,3 +1,9 @@
+### BE-005: Stabilize API error contract
+
+- **Date/Time**: 2026-07-22 (Asia/Saigon)
+- **Summary of Changes**: Updated `GlobalExceptionHandler` and `SecurityConfig` to return stable `code` values for all framework and security exceptions (`REQUEST_BODY_INVALID`, `INVALID_REQUEST`, `AUTHENTICATION_REQUIRED`, `ACCESS_DENIED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_SERVER_ERROR`). Exceptions now use explicit handlers instead of falling through to generic 500s or leaking internal stack traces/messages to the client response.
+- **Verification**: `GlobalExceptionHandlerTest` explicitly tests all new handled exceptions. `ApiErrorContractIntegrationTest` validates `INTERNAL_SERVER_ERROR` without details on generic failures. Full `mvnw.cmd clean verify` pass and JAR build successful. Contract changes documented in `API_SPEC.md` and `feature/auth/CONTEXT.md`.
+
 ### BE-004: Govern public upload lifecycle cho customer avatar
 
 - **Date/Time**: 2026-07-18 (Asia/Saigon)

@@ -171,10 +171,24 @@ Common application errors:
 | `401 Unauthorized` | Missing, expired, or invalid token |
 | `403 Forbidden` | Authenticated user lacks RBAC permission |
 | `404 Not Found` | Resource does not exist or was soft-deleted |
+| `405 Method Not Allowed` | Unsupported HTTP method |
 | `409 Conflict` | Duplicate or invalid business state |
+| `415 Unsupported Media Type` | Unsupported content type |
 | `429 Too Many Requests` | Auth/OTP quota exceeded; always includes `Retry-After` and `data.retryAfterSeconds` |
 | `503 Service Unavailable` | Security state/email provider unavailable; Auth/OTP fails closed |
 | `500 Internal Server Error` | Unexpected server error |
+
+Framework and Security Error Codes (present in the `code` field):
+
+| Code | HTTP status | Meaning |
+|---|---|---|
+| `REQUEST_BODY_INVALID` | 400 | Malformed JSON or unreadable request body |
+| `INVALID_REQUEST` | 400 | Invalid argument, missing part, or type mismatch |
+| `AUTHENTICATION_REQUIRED` | 401 | Unauthenticated or invalid token |
+| `ACCESS_DENIED` | 403 | Authenticated user lacks RBAC permission |
+| `METHOD_NOT_ALLOWED` | 405 | Unsupported HTTP method |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | Unsupported content type |
+| `INTERNAL_SERVER_ERROR` | 500 | Unexpected server failure |
 
 Stable Auth/OTP codes are `OTP_INVALID_OR_EXPIRED`,
 `OTP_ATTEMPTS_EXHAUSTED`, `OTP_RATE_LIMITED`,
