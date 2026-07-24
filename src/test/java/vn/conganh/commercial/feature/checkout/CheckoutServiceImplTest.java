@@ -9,13 +9,17 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -47,6 +51,7 @@ import vn.conganh.commercial.feature.order.OrderStatusHistoryRepository;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 import vn.conganh.commercial.feature.payment.sepay.SePayService;
 import vn.conganh.commercial.feature.product.Product;
+import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.productvariant.InventoryLogRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
@@ -463,5 +468,210 @@ class CheckoutServiceImplTest {
                 () -> checkoutService.cancelOrder(1L, "test@example.com"));
 
         verify(lifecycleService, never()).releaseLockedOrder(any(), anyString(), anyString());
+    }
+
+    // ─── Image selection characterization (BE-006) ──────────────────────────
+
+    @Nested
+    @DisplayName("Image selection characterization")
+    class ImageSelectionCharacterizationTest {
+
+        @Captor
+        private ArgumentCaptor<List<Long>> productIdCaptor;
+
+        private ProductImage makeImage(Long id, Product product, ProductVariant variant,
+                                       Boolean isThumbnail, Integer sortOrder, String url) {
+            ProductImage image = new ProductImage();
+            ReflectionTestUtils.setField(image, "id", id);
+            image.setProduct(product);
+            image.setVariant(variant);
+            image.setIsThumbnail(isThumbnail);
+            image.setSortOrder(sortOrder);
+            image.setImage(url);
+            return image;
+        }
+
+        private void stubCheckoutInfra() {
+            when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+            when(cartRepository.findWithLockByUserId(1L)).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(cart));
+            when(orderRepository.findWithLockByUserIdAndCheckoutIdempotencyKey(eq(1L), anyString()))
+                    .thenReturn(Optional.empty());
+            when(cartItemRepository.findByCartId(300L)).thenReturn(List.of(cartItem));
+            when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(List.of(1L))).thenReturn(List.of(variant));
+            when(pricingService.resolve(eq(List.of(variant)), any(Instant.class), eq(1L)))
+                    .thenReturn(Map.of(1L, new VariantPricing(
+                            1L, BigDecimal.valueOf(100), BigDecimal.valueOf(80),
+                            PriceSource.BASE, null, null, null, 10)));
+            when(orderRepository.save(any(Order.class))).thenAnswer(i -> {
+                Order o = i.getArgument(0);
+                ReflectionTestUtils.setField(o, "id", 100L);
+                return o;
+            });
+            when(productVariantRepository.decrementStock(1L, 2)).thenReturn(1);
+            when(orderItemRepository.saveAll(any())).thenAnswer(invocation -> {
+                @SuppressWarnings("unchecked")
+                List<OrderItem> items = invocation.getArgument(0);
+                ReflectionTestUtils.setField(items.getFirst(), "id", 200L);
+                return items;
+            });
+            when(lifecycleService.confirmLockedOrder(any(Order.class))).thenReturn(true);
+        }
+
+        private CheckoutResponse doCheckout() {
+            CheckoutPreviewResponse preview = checkoutService.preview(
+                    new CheckoutPreviewRequest("COD", null), "test@example.com");
+            CheckoutRequest req = new CheckoutRequest(
+                    "Receiver", "0123456789", "Address", "COD",
+                    BigDecimal.valueOf(15), null, preview.pricingFingerprint());
+            return checkoutService.checkout(req, "test@example.com");
+        }
+
+        @Test
+        @DisplayName("Should prefer variant-specific image over product-level fallback")
+        void checkout_variantImagePreferredOverProductFallback() {
+            stubCheckoutInfra();
+            ProductImage productImage = makeImage(10L, product, null, true, 0, "product-thumb.jpg");
+            ProductImage variantImage = makeImage(20L, product, variant, false, 0, "variant.jpg");
+            when(productImageRepository.findByProductIdIn(any())).thenReturn(List.of(productImage, variantImage));
+
+            CheckoutResponse response = doCheckout();
+
+            assertEquals("variant.jpg", response.items().getFirst().image());
+        }
+
+        @Test
+        @DisplayName("Should fall back to product image when variant has no specific image")
+        void checkout_productFallbackWhenNoVariantImage() {
+            stubCheckoutInfra();
+            ProductImage productImage = makeImage(10L, product, null, true, 0, "product-thumb.jpg");
+            when(productImageRepository.findByProductIdIn(any())).thenReturn(List.of(productImage));
+
+            CheckoutResponse response = doCheckout();
+
+            assertEquals("product-thumb.jpg", response.items().getFirst().image());
+        }
+
+        @Test
+        @DisplayName("Should prefer thumbnail image within variant images")
+        void checkout_thumbnailPreferredWithinVariantImages() {
+            stubCheckoutInfra();
+            ProductImage nonThumb = makeImage(10L, product, variant, false, 0, "non-thumb.jpg");
+            ProductImage thumb = makeImage(20L, product, variant, true, 5, "thumb.jpg");
+            when(productImageRepository.findByProductIdIn(any())).thenReturn(List.of(nonThumb, thumb));
+
+            CheckoutResponse response = doCheckout();
+
+            assertEquals("thumb.jpg", response.items().getFirst().image());
+        }
+
+        @Test
+        @DisplayName("Should use sortOrder then ID as tie-breaker when thumbnail is equal")
+        void checkout_sortOrderAndIdTieBreaker() {
+            stubCheckoutInfra();
+            ProductImage img1 = makeImage(30L, product, variant, false, 2, "sort2-id30.jpg");
+            ProductImage img2 = makeImage(10L, product, variant, false, 2, "sort2-id10.jpg");
+            ProductImage img3 = makeImage(20L, product, variant, false, 1, "sort1-id20.jpg");
+            when(productImageRepository.findByProductIdIn(any())).thenReturn(List.of(img1, img2, img3));
+
+            CheckoutResponse response = doCheckout();
+
+            // sortOrder=1 wins, then within sortOrder=1, ID=20 is the only one
+            assertEquals("sort1-id20.jpg", response.items().getFirst().image());
+        }
+
+        @Test
+        @DisplayName("Should return null image when no images exist")
+        void checkout_noImages_returnsNull() {
+            stubCheckoutInfra();
+            when(productImageRepository.findByProductIdIn(any())).thenReturn(List.of());
+
+            CheckoutResponse response = doCheckout();
+
+            assertNull(response.items().getFirst().image());
+        }
+
+        @Test
+        @DisplayName("Should call findByProductIdIn exactly once regardless of line count")
+        void checkout_bulkImageCall_exactlyOnce() {
+            stubCheckoutInfra();
+            when(productImageRepository.findByProductIdIn(any())).thenReturn(List.of());
+
+            doCheckout();
+
+            verify(productImageRepository, times(1)).findByProductIdIn(any());
+            verify(productImageRepository, never()).findByVariantId(anyLong());
+            verify(productImageRepository, never()).findByProductId(anyLong());
+        }
+
+        @Test
+        @DisplayName("Should handle duplicate product lines with single bulk image call")
+        void checkout_duplicateProductLines_singleBulkCall() {
+            // Set up two variants of the same product
+            ProductVariant variant2 = new ProductVariant();
+            ReflectionTestUtils.setField(variant2, "id", 2L);
+            variant2.setProduct(product);
+            variant2.setPrice(BigDecimal.valueOf(50));
+            variant2.setStockQuantity(5);
+            variant2.setStatus("ACTIVE");
+            variant2.setSku("SKU-2");
+
+            CartItem cartItem2 = new CartItem();
+            ReflectionTestUtils.setField(cartItem2, "id", 401L);
+            cartItem2.setCart(cart);
+            cartItem2.setVariantId(2L);
+            cartItem2.setQuantity(1);
+
+            when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+            when(cartRepository.findWithLockByUserId(1L)).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(cart));
+            when(orderRepository.findWithLockByUserIdAndCheckoutIdempotencyKey(eq(1L), anyString()))
+                    .thenReturn(Optional.empty());
+            when(cartItemRepository.findByCartId(300L)).thenReturn(List.of(cartItem, cartItem2));
+            when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(any()))
+                    .thenReturn(List.of(variant, variant2));
+            when(pricingService.resolve(any(), any(Instant.class), eq(1L)))
+                    .thenReturn(Map.of(
+                            1L, new VariantPricing(1L, BigDecimal.valueOf(100), BigDecimal.valueOf(80),
+                                    PriceSource.BASE, null, null, null, 10),
+                            2L, new VariantPricing(2L, BigDecimal.valueOf(50), BigDecimal.valueOf(50),
+                                    PriceSource.BASE, null, null, null, 5)));
+            when(orderRepository.save(any(Order.class))).thenAnswer(i -> {
+                Order o = i.getArgument(0);
+                ReflectionTestUtils.setField(o, "id", 100L);
+                return o;
+            });
+            when(productVariantRepository.decrementStock(1L, 2)).thenReturn(1);
+            when(productVariantRepository.decrementStock(2L, 1)).thenReturn(1);
+            when(orderItemRepository.saveAll(any())).thenAnswer(invocation -> {
+                @SuppressWarnings("unchecked")
+                List<OrderItem> items = invocation.getArgument(0);
+                long id = 200L;
+                for (OrderItem item : items) {
+                    ReflectionTestUtils.setField(item, "id", id++);
+                }
+                return items;
+            });
+            when(lifecycleService.confirmLockedOrder(any(Order.class))).thenReturn(true);
+
+            ProductImage v1Image = makeImage(10L, product, variant, true, 0, "v1-thumb.jpg");
+            ProductImage v2Image = makeImage(20L, product, variant2, false, 0, "v2.jpg");
+            when(productImageRepository.findByProductIdIn(any())).thenReturn(List.of(v1Image, v2Image));
+
+            CheckoutPreviewResponse preview = checkoutService.preview(
+                    new CheckoutPreviewRequest("COD", null), "test@example.com");
+            CheckoutRequest req = new CheckoutRequest(
+                    "Receiver", "0123456789", "Address", "COD",
+                    BigDecimal.valueOf(15), null, preview.pricingFingerprint());
+            CheckoutResponse response = checkoutService.checkout(req, "test@example.com");
+
+            // Only one bulk call for images even with 2 variants of the same product
+            verify(productImageRepository, times(1)).findByProductIdIn(productIdCaptor.capture());
+            List<Long> capturedIds = productIdCaptor.getValue();
+            assertEquals(1, capturedIds.size(), "Should deduplicate product IDs");
+            assertEquals(product.getId(), capturedIds.getFirst());
+            verify(productImageRepository, never()).findByVariantId(anyLong());
+            verify(productImageRepository, never()).findByProductId(anyLong());
+        }
     }
 }

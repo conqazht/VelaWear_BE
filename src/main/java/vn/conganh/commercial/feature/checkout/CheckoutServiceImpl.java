@@ -9,10 +9,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -85,6 +87,15 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private static final Duration PAYMENT_WINDOW = Duration.ofMinutes(15);
     private static final Duration PAYMENT_GRACE = Duration.ofSeconds(30);
+
+    /**
+     * Deterministic image selection: thumbnail first, then lowest sortOrder, then lowest ID.
+     * Shared between bulk prefetch selection and any standalone selection call.
+     */
+    static final Comparator<ProductImage> IMAGE_SELECTION_ORDER = Comparator
+            .comparing((ProductImage image) -> !Boolean.TRUE.equals(image.getIsThumbnail()))
+            .thenComparing(ProductImage::getSortOrder, Comparator.nullsLast(Integer::compareTo))
+            .thenComparing(ProductImage::getId, Comparator.nullsLast(Long::compareTo));
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -396,10 +407,10 @@ public class CheckoutServiceImpl implements CheckoutService {
             List<QuoteLine> lines,
             Order order,
             QuoteLocalization localization) {
+        ImageIndex imageIndex = prefetchImageIndex(lines);
         List<OrderItem> orderItems = new ArrayList<>();
         for (QuoteLine line : lines) {
             ProductVariant variant = line.variant();
-            Product product = variant.getProduct();
             VariantPricing pricing = line.pricing();
             CatalogContentLocalizationService.LocalizedProduct localizedProduct = localizedProduct(
                     line,
@@ -411,7 +422,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             orderItem.setProductSlug(localizedProduct.slug());
             orderItem.setVariantName(buildVariantName(variant));
             orderItem.setSku(variant.getSku());
-            orderItem.setImage(resolveItemImage(variant, product));
+            orderItem.setImage(resolveItemImage(variant, imageIndex));
             orderItem.setListPrice(pricing.listPrice());
             orderItem.setPrice(pricing.effectivePrice());
             orderItem.setPriceSource(pricing.priceSource());
@@ -614,20 +625,46 @@ public class CheckoutServiceImpl implements CheckoutService {
         return colorName.isEmpty() ? sizeName : colorName;
     }
 
-    private String resolveItemImage(ProductVariant variant, Product product) {
-        Optional<String> variantImage = selectImage(productImageRepository.findByVariantId(variant.getId()));
-        return variantImage.orElseGet(() -> selectImage(productImageRepository.findByProductId(product.getId())).orElse(null));
+    /**
+     * Prefetch all product images for the given checkout lines in a single bulk query,
+     * then build in-memory indexes keyed by variant ID and product ID.
+     */
+    private ImageIndex prefetchImageIndex(List<QuoteLine> lines) {
+        Set<Long> productIds = lines.stream()
+                .map(line -> line.variant().getProduct().getId())
+                .collect(Collectors.toSet());
+        List<ProductImage> allImages = productIds.isEmpty()
+                ? List.of()
+                : productImageRepository.findByProductIdIn(new ArrayList<>(productIds));
+        Map<Long, List<ProductImage>> byVariant = new HashMap<>();
+        Map<Long, List<ProductImage>> byProduct = new HashMap<>();
+        for (ProductImage image : allImages) {
+            byProduct.computeIfAbsent(image.getProduct().getId(), k -> new ArrayList<>()).add(image);
+            if (image.getVariant() != null) {
+                byVariant.computeIfAbsent(image.getVariant().getId(), k -> new ArrayList<>()).add(image);
+            }
+        }
+        return new ImageIndex(byVariant, byProduct);
+    }
+
+    /**
+     * Resolve the best image for an order item using prefetched indexes.
+     * Selection order: variant-specific images first, then product-level fallback.
+     * Within each group: thumbnail first, lowest sortOrder, lowest ID.
+     */
+    private String resolveItemImage(ProductVariant variant, ImageIndex imageIndex) {
+        Optional<String> variantImage = selectImage(
+                imageIndex.byVariant().getOrDefault(variant.getId(), List.of()));
+        return variantImage.orElseGet(() -> selectImage(
+                imageIndex.byProduct().getOrDefault(variant.getProduct().getId(), List.of())).orElse(null));
     }
 
     private Optional<String> selectImage(List<ProductImage> images) {
-        if (images == null) {
+        if (images == null || images.isEmpty()) {
             return Optional.empty();
         }
         return images.stream()
-                .sorted(Comparator
-                        .comparing((ProductImage image) -> !Boolean.TRUE.equals(image.getIsThumbnail()))
-                        .thenComparing(ProductImage::getSortOrder, Comparator.nullsLast(Integer::compareTo))
-                        .thenComparing(ProductImage::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(IMAGE_SELECTION_ORDER)
                 .map(ProductImage::getImage)
                 .findFirst();
     }
@@ -744,4 +781,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             BigDecimal shippingFee,
             BigDecimal discountAmount,
             BigDecimal finalAmount) {}
+
+    private record ImageIndex(
+            Map<Long, List<ProductImage>> byVariant,
+            Map<Long, List<ProductImage>> byProduct) {}
 }

@@ -1,3 +1,9 @@
+### BE-006: Batch checkout image loading
+
+- **Date/Time**: 2026-07-24 (Asia/Saigon)
+- **Summary of Changes**: Thay thế N+1 image query per line bằng một single bulk `findByProductIdIn(...)` call cho mỗi checkout. Build in-memory index theo variant ID và product ID, giữ nguyên deterministic selection logic (variant-first → product fallback, thumbnail → sortOrder → ID). Centralize image selection comparator thành `IMAGE_SELECTION_ORDER` static constant.
+- **Verification**: Image characterization tests cover variant-specific, product fallback, thumbnail preference, sortOrder/ID tie-break, missing images, và duplicate product lines. `CheckoutImageQueryPerformanceIntegrationTest` dùng Hibernate statistics chứng minh image query count constant (1 vs 5 items). Focused suite pass `40/40` (16 unit + 24 integration); full `mvnw.cmd clean verify` pass `740/740` và build JAR thành công.
+
 ### BE-005: Stabilize API error contract
 
 - **Date/Time**: 2026-07-22 (Asia/Saigon)
