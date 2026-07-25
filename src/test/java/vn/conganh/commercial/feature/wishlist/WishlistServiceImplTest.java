@@ -48,11 +48,32 @@ class WishlistServiceImplTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private vn.conganh.commercial.feature.category.CategoryRepository categoryRepository;
+
+    @Mock
+    private vn.conganh.commercial.feature.product.ProductTranslationRepository productTranslationRepository;
+
+    @Mock
+    private vn.conganh.commercial.feature.category.CategoryTranslationRepository categoryTranslationRepository;
+
+    @Mock
+    private vn.conganh.commercial.feature.product.ProductImageRepository productImageRepository;
+
+    @Mock
+    private vn.conganh.commercial.feature.productvariant.ProductVariantRepository productVariantRepository;
+
+    @Mock
+    private vn.conganh.commercial.feature.salecampaign.VariantPricingService variantPricingService;
+
     private WishlistServiceImpl wishlistService;
 
     @BeforeEach
     void setUp() {
-        wishlistService = new WishlistServiceImpl(wishlistRepository, userRepository, productRepository);
+        wishlistService = new WishlistServiceImpl(
+                wishlistRepository, userRepository, productRepository, categoryRepository,
+                productTranslationRepository, categoryTranslationRepository,
+                productImageRepository, productVariantRepository, variantPricingService);
     }
 
     @Nested

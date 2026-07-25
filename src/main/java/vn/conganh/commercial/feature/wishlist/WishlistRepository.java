@@ -10,6 +10,9 @@ public interface WishlistRepository extends JpaRepository<Wishlist, Long>, JpaSp
 
     Page<Wishlist> findByUserId(Long userId, Pageable pageable);
 
+    @org.springframework.data.jpa.repository.Query("SELECT w FROM Wishlist w JOIN w.product p WHERE w.user.id = :userId AND p.status = 'ACTIVE' AND p.deletedAt IS NULL")
+    Page<Wishlist> findActiveWishlistsByUserId(@org.springframework.data.repository.query.Param("userId") Long userId, Pageable pageable);
+
     Page<Wishlist> findByProductId(Long productId, Pageable pageable);
 
     Optional<Wishlist> findByUserIdAndProductId(Long userId, Long productId);

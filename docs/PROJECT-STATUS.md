@@ -1,5 +1,10 @@
-### BE-008: Eliminate admin-list N+1 queries
+### BE-009: Add a wishlist product-summary contract
 
+- **Date/Time**: 2026-07-25 (Asia/Saigon)
+- **Summary of Changes**: Implement `GET /api/v1/wishlists/me` trả về wishlist của current user kèm product summary (`WishlistProductSummary`). Batch load translations, images và pricing để giải quyết vấn đề N+1 queries khi hiển thị danh sách wishlist. Chỉ trả về những sản phẩm `ACTIVE` và chưa bị xoá, `totalElements` của page được đồng bộ với danh sách products hiển thị. Áp dụng locale fallback theo thứ tự: query param `locale` -> header `Accept-Language` -> mặc định `vi`.
+- **Verification**: Thêm integration test `WishlistProductSummaryIntegrationTest` chứng minh query count không đổi kể cả 1 hay nhiều items. Update `WishlistControllerTest` và `WishlistServiceImplTest` để bao phủ locale fallbacks, thiếu image/translation, và logic tie-break của giá (minimum effective price -> lowest variant ID). Full test suite passed (751/751). Contract documented trong `API_SPEC.md` và `feature/product/CONTEXT.md`.
+
+### BE-008: Eliminate admin-list N+1 queries
 - **Date/Time**: 2026-07-25 (Asia/Saigon)
 - **Summary of Changes**: Tối ưu hoá list endpoints của Order, Payment, và Cart trong admin (những endpoint dùng chung `JpaSpecificationExecutor` và trả về `ResultPaginationDTO`) bằng cách thêm phương thức `findAll` override với `@EntityGraph`. Các methods này fetch eagerly các associations to-one (`Order.user`, `Payment.order`, `Cart.user`), loại bỏ vấn đề N+1 lazy loading queries khi mapping sang các DTOs.
 - **Verification**: Viết thêm `AdminCommerceListFetchIntegrationTest` dùng Hibernate Statistics trên PostgreSQL Testcontainers để so sánh query count giữa single-row page và 10-row page. Số lượng query constant (chênh lệch 1) chứng minh N+1 đã được giải quyết. Focused tests và full `mvnw.cmd clean verify` pass.

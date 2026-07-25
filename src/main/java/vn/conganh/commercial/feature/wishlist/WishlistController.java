@@ -16,8 +16,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import vn.conganh.commercial.dto.ApiResponse;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistFilterRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
@@ -29,6 +32,7 @@ import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 public class WishlistController {
 
     private final WishlistService wishlistService;
+    private final CatalogLocaleResolver localeResolver;
 
     @GetMapping
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getWishlists(
@@ -40,8 +44,11 @@ public class WishlistController {
     @GetMapping(path = "/me")
     public ResponseEntity<ApiResponse<ResultPaginationDTO>> getMyWishlists(
             @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String locale,
+            @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(wishlistService.getMyWishlists(jwt.getSubject(), pageable)));
+        String resolvedLocale = localeResolver.resolve(locale, acceptLanguage);
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getMyWishlists(jwt.getSubject(), resolvedLocale, pageable)));
     }
 
     @PostMapping(path = "/me/{productId}")
