@@ -1815,7 +1815,7 @@ thúc; campaign `CANCELLED`/`ENDED` là lịch sử chỉ đọc.
 ```
 
 For `STANDARD`, `quota` and `maxPerCustomer` must be null. One campaign may
-contain variants from one or many products.
+contain variants from one or many products. A campaign can contain a maximum of 100 items.
 
 **Detail Response:**
 

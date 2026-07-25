@@ -67,8 +67,11 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
         Instant now = Instant.now();
         var campaigns = campaignRepository
                 .findAll(Specification.where(SaleCampaignSpecification.build(filter, now)), pageable);
+        List<Long> campaignIds = campaigns.getContent().stream().map(SaleCampaign::getId).toList();
+        List<SaleCampaign> detailedCampaigns = campaignIds.isEmpty() ? List.of() :
+                campaignRepository.findAllDetailedByIdIn(campaignIds);
         Map<Long, SaleCampaignResponse> responses = responses(
-                campaigns.getContent(),
+                detailedCampaigns,
                 now,
                 localeCode);
         return ResultPaginationDTO.fromPage(campaigns.map(campaign -> responses.get(campaign.getId())));
@@ -324,12 +327,15 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
                         || !"ACTIVE".equals(variant.getProduct().getStatus()))) {
             throw new InvalidRequestException("Campaign contains a deleted or inactive product variant");
         }
+        Map<Long, List<SaleCampaignItem>> overlapsByVariant = itemRepository.findOverlappingForVariants(
+                ids, campaign.getStartsAt(), campaign.getEndsAt(), campaign.getId())
+            .stream()
+            .collect(Collectors.groupingBy(overlap -> overlap.getVariant().getId()));
         for (SaleCampaignItem item : campaign.getItems()) {
             item.setReferencePrice(item.getVariant().getPrice());
             validateItem(campaign.getType(), item.getReferencePrice(), new SaleCampaignItemRequest(
                     item.getVariant().getId(), item.getPromotionalPrice(), item.getQuota(), item.getMaxPerCustomer()));
-            for (SaleCampaignItem overlap : itemRepository.findOverlappingForVariant(
-                    item.getVariant().getId(), campaign.getStartsAt(), campaign.getEndsAt(), campaign.getId())) {
+            for (SaleCampaignItem overlap : overlapsByVariant.getOrDefault(item.getVariant().getId(), List.of())) {
                 if (overlap.getCampaign().getType() == campaign.getType()) {
                     throw rule("CAMPAIGN_OVERLAP", "Variant already belongs to an overlapping campaign of the same type",
                             Map.of("variantId", item.getVariant().getId(), "campaignId", overlap.getCampaign().getId()));

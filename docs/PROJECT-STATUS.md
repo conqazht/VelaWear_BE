@@ -1,3 +1,9 @@
+### BE-007: Batch sale-campaign queries
+
+- **Date/Time**: 2026-07-24 (Asia/Saigon)
+- **Summary of Changes**: Tối ưu hoá page loading của sale-campaign bằng cách lấy ID trước và load detailed items sau (two-phase page loading), loại bỏ fetch join trên pageable query và duy trì pagination order. Tối ưu hoá overlap validation khi publish campaign bằng cách gộp tất cả variants thành 1 câu query duy nhất với `in clause` (`findOverlappingForVariants`). Áp dụng max 100 items per campaign trong API payload để bảo vệ memory.
+- **Verification**: Focused tests `SaleCampaignControllerIntegrationTest,SaleCampaignConcurrencyIntegrationTest,SaleCampaignServiceImplLocalizationTest,SaleCampaignQueryPerformanceIntegrationTest` passed. `SaleCampaignQueryPerformanceIntegrationTest` sử dụng Hibernate Statistics để chứng minh số lượng query không đổi khi tạo/publish campaign có 1 hay 5 items. Full `mvnw.cmd clean verify` passed.
+
 ### BE-006: Batch checkout image loading
 
 - **Date/Time**: 2026-07-24 (Asia/Saigon)

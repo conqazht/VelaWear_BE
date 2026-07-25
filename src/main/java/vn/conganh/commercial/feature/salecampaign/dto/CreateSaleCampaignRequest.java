@@ -17,5 +17,5 @@ public record CreateSaleCampaignRequest(
         @NotNull SaleCampaignType type,
         @NotNull Instant startsAt,
         @NotNull Instant endsAt,
-        @NotEmpty List<@Valid SaleCampaignItemRequest> items
+        @NotEmpty @Size(max = 100) List<@Valid SaleCampaignItemRequest> items
 ) {}

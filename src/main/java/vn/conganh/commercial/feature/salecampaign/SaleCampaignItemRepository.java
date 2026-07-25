@@ -67,6 +67,21 @@ public interface SaleCampaignItemRepository extends JpaRepository<SaleCampaignIt
             @Param("endsAt") Instant endsAt,
             @Param("excludedCampaignId") Long excludedCampaignId);
 
+    @EntityGraph(attributePaths = {"campaign", "variant", "variant.product"})
+    @Query("""
+            select i from SaleCampaignItem i
+            where i.variant.id in :variantIds
+              and i.campaign.status = vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus.PUBLISHED
+              and i.campaign.startsAt < :endsAt
+              and i.campaign.endsAt > :startsAt
+              and (:excludedCampaignId is null or i.campaign.id <> :excludedCampaignId)
+            """)
+    List<SaleCampaignItem> findOverlappingForVariants(
+            @Param("variantIds") List<Long> variantIds,
+            @Param("startsAt") Instant startsAt,
+            @Param("endsAt") Instant endsAt,
+            @Param("excludedCampaignId") Long excludedCampaignId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"campaign", "variant"})
     @Query("select i from SaleCampaignItem i where i.id = :id")
