@@ -1,3 +1,9 @@
+### BE-008: Eliminate admin-list N+1 queries
+
+- **Date/Time**: 2026-07-25 (Asia/Saigon)
+- **Summary of Changes**: Tối ưu hoá list endpoints của Order, Payment, và Cart trong admin (những endpoint dùng chung `JpaSpecificationExecutor` và trả về `ResultPaginationDTO`) bằng cách thêm phương thức `findAll` override với `@EntityGraph`. Các methods này fetch eagerly các associations to-one (`Order.user`, `Payment.order`, `Cart.user`), loại bỏ vấn đề N+1 lazy loading queries khi mapping sang các DTOs.
+- **Verification**: Viết thêm `AdminCommerceListFetchIntegrationTest` dùng Hibernate Statistics trên PostgreSQL Testcontainers để so sánh query count giữa single-row page và 10-row page. Số lượng query constant (chênh lệch 1) chứng minh N+1 đã được giải quyết. Focused tests và full `mvnw.cmd clean verify` pass.
+
 ### BE-007: Batch sale-campaign queries
 
 - **Date/Time**: 2026-07-24 (Asia/Saigon)
