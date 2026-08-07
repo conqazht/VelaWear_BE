@@ -2,8 +2,9 @@ package vn.conganh.commercial.feature.wishlist;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import vn.conganh.commercial.AuthenticatedIntegrationTest;
 
-public class WishlistProductSummaryIntegrationTest extends vn.conganh.commercial.AuthenticatedIntegrationTest {
+public class WishlistProductSummaryIntegrationTest extends AuthenticatedIntegrationTest {
 
     @Autowired
     private WishlistService wishlistService;

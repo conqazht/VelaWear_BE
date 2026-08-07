@@ -1,23 +1,47 @@
 package vn.conganh.commercial.feature.wishlist;
 
-import org.springframework.data.jpa.domain.Specification;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
+import vn.conganh.commercial.feature.category.Category;
+import vn.conganh.commercial.feature.category.CategoryRepository;
+import vn.conganh.commercial.feature.category.CategoryTranslation;
+import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
 import vn.conganh.commercial.feature.product.Product;
+import vn.conganh.commercial.feature.product.ProductImage;
+import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.product.ProductRepository;
+import vn.conganh.commercial.feature.product.ProductTranslation;
+import vn.conganh.commercial.feature.product.ProductTranslationRepository;
+import vn.conganh.commercial.feature.productvariant.ProductVariant;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricing;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistFilterRequest;
+import vn.conganh.commercial.feature.wishlist.dto.WishlistProductSummaryResponse;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
+import vn.conganh.commercial.feature.wishlist.dto.WishlistSelfItemResponse;
 import vn.conganh.commercial.util.FilterSpecifications;
-
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -26,12 +50,12 @@ public class WishlistServiceImpl implements WishlistService {
     private final WishlistRepository wishlistRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
-    private final vn.conganh.commercial.feature.category.CategoryRepository categoryRepository;
-    private final vn.conganh.commercial.feature.product.ProductTranslationRepository productTranslationRepository;
-    private final vn.conganh.commercial.feature.category.CategoryTranslationRepository categoryTranslationRepository;
-    private final vn.conganh.commercial.feature.product.ProductImageRepository productImageRepository;
-    private final vn.conganh.commercial.feature.productvariant.ProductVariantRepository productVariantRepository;
-    private final vn.conganh.commercial.feature.salecampaign.VariantPricingService variantPricingService;
+    private final CategoryRepository categoryRepository;
+    private final ProductTranslationRepository productTranslationRepository;
+    private final CategoryTranslationRepository categoryTranslationRepository;
+    private final ProductImageRepository productImageRepository;
+    private final ProductVariantRepository productVariantRepository;
+    private final VariantPricingService variantPricingService;
 
     @Override
     @Transactional(readOnly = true)
@@ -68,33 +92,33 @@ public class WishlistServiceImpl implements WishlistService {
     @Transactional(readOnly = true)
     public ResultPaginationDTO getMyWishlists(String email, String localeCode, Pageable pageable) {
         User user = findUserByEmail(email);
-        org.springframework.data.domain.Page<Wishlist> page = wishlistRepository.findActiveWishlistsByUserId(user.getId(), pageable);
+        Page<Wishlist> page = wishlistRepository.findActiveWishlistsByUserId(user.getId(), pageable);
 
         if (page.isEmpty()) {
             return ResultPaginationDTO.fromPage(page.map(w -> null));
         }
 
-        java.util.List<Wishlist> wishlists = page.getContent();
-        java.util.List<Long> productIds = wishlists.stream().map(w -> w.getProduct().getId()).distinct().toList();
-        java.util.List<Long> categoryIds = wishlists.stream().map(w -> w.getProduct().getCategoryId()).distinct().toList();
+        List<Wishlist> wishlists = page.getContent();
+        List<Long> productIds = wishlists.stream().map(w -> w.getProduct().getId()).distinct().toList();
+        List<Long> categoryIds = wishlists.stream().map(w -> w.getProduct().getCategoryId()).distinct().toList();
 
-        String defaultLocale = vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver.DEFAULT_LOCALE;
+        String defaultLocale = CatalogLocaleResolver.DEFAULT_LOCALE;
 
-        java.util.Map<Long, vn.conganh.commercial.feature.product.ProductTranslation> reqProdTrans = productTranslationRepository.findByProductIdInAndLocaleCode(productIds, localeCode).stream().collect(java.util.stream.Collectors.toMap(t -> t.getProductId(), t -> t));
-        java.util.Map<Long, vn.conganh.commercial.feature.product.ProductTranslation> defProdTrans = localeCode.equals(defaultLocale) ? reqProdTrans : productTranslationRepository.findByProductIdInAndLocaleCode(productIds, defaultLocale).stream().collect(java.util.stream.Collectors.toMap(t -> t.getProductId(), t -> t));
+        Map<Long, ProductTranslation> reqProdTrans = productTranslationRepository.findByProductIdInAndLocaleCode(productIds, localeCode).stream().collect(Collectors.toMap(ProductTranslation::getProductId, t -> t));
+        Map<Long, ProductTranslation> defProdTrans = localeCode.equals(defaultLocale) ? reqProdTrans : productTranslationRepository.findByProductIdInAndLocaleCode(productIds, defaultLocale).stream().collect(Collectors.toMap(ProductTranslation::getProductId, t -> t));
 
-        java.util.Map<Long, vn.conganh.commercial.feature.category.CategoryTranslation> reqCatTrans = categoryTranslationRepository.findByCategoryIdInAndLocaleCode(categoryIds, localeCode).stream().collect(java.util.stream.Collectors.toMap(t -> t.getCategoryId(), t -> t));
-        java.util.Map<Long, vn.conganh.commercial.feature.category.CategoryTranslation> defCatTrans = localeCode.equals(defaultLocale) ? reqCatTrans : categoryTranslationRepository.findByCategoryIdInAndLocaleCode(categoryIds, defaultLocale).stream().collect(java.util.stream.Collectors.toMap(t -> t.getCategoryId(), t -> t));
+        Map<Long, CategoryTranslation> reqCatTrans = categoryTranslationRepository.findByCategoryIdInAndLocaleCode(categoryIds, localeCode).stream().collect(Collectors.toMap(CategoryTranslation::getCategoryId, t -> t));
+        Map<Long, CategoryTranslation> defCatTrans = localeCode.equals(defaultLocale) ? reqCatTrans : categoryTranslationRepository.findByCategoryIdInAndLocaleCode(categoryIds, defaultLocale).stream().collect(Collectors.toMap(CategoryTranslation::getCategoryId, t -> t));
 
-        java.util.Map<Long, java.util.List<vn.conganh.commercial.feature.product.ProductImage>> imagesByProd = productImageRepository.findByProductIdIn(productIds).stream().collect(java.util.stream.Collectors.groupingBy(i -> i.getProduct().getId()));
+        Map<Long, List<ProductImage>> imagesByProd = productImageRepository.findByProductIdIn(productIds).stream().collect(Collectors.groupingBy(i -> i.getProduct().getId()));
 
-        java.util.List<vn.conganh.commercial.feature.productvariant.ProductVariant> variants = productVariantRepository.findByProductIdInAndDeletedAtIsNull(productIds);
-        java.util.Map<Long, vn.conganh.commercial.feature.salecampaign.VariantPricing> pricingByVariant = variantPricingService.resolve(variants, java.time.Instant.now(), user.getId());
-        java.util.Map<Long, java.util.List<vn.conganh.commercial.feature.productvariant.ProductVariant>> variantsByProd = variants.stream().collect(java.util.stream.Collectors.groupingBy(v -> v.getProduct().getId()));
+        List<ProductVariant> variants = productVariantRepository.findByProductIdInAndDeletedAtIsNull(productIds);
+        Map<Long, VariantPricing> pricingByVariant = variantPricingService.resolve(variants, Instant.now(), user.getId());
+        Map<Long, List<ProductVariant>> variantsByProd = variants.stream().collect(Collectors.groupingBy(v -> v.getProduct().getId()));
 
-        java.util.Map<Long, vn.conganh.commercial.feature.category.Category> categories = categoryRepository.findAllById(categoryIds).stream().collect(java.util.stream.Collectors.toMap(c -> c.getId(), c -> c));
+        Map<Long, Category> categories = categoryRepository.findAllById(categoryIds).stream().collect(Collectors.toMap(Category::getId, c -> c));
 
-        java.util.List<vn.conganh.commercial.feature.wishlist.dto.WishlistSelfItemResponse> content = wishlists.stream().map(w -> {
+        List<WishlistSelfItemResponse> content = wishlists.stream().map(w -> {
             Product p = w.getProduct();
             Long pId = p.getId();
             var pReq = reqProdTrans.get(pId);
@@ -114,29 +138,29 @@ public class WishlistServiceImpl implements WishlistService {
 
             String image = null;
             String thumbnail = null;
-            java.util.List<vn.conganh.commercial.feature.product.ProductImage> imgs = imagesByProd.getOrDefault(pId, java.util.Collections.emptyList());
+            List<ProductImage> imgs = imagesByProd.getOrDefault(pId, Collections.emptyList());
             if (!imgs.isEmpty()) {
-                java.util.List<vn.conganh.commercial.feature.product.ProductImage> pLevelImgs = imgs.stream().filter(i -> i.getVariant() == null).sorted(java.util.Comparator.comparing(vn.conganh.commercial.feature.product.ProductImage::getSortOrder, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))).toList();
+                List<ProductImage> pLevelImgs = imgs.stream().filter(i -> i.getVariant() == null).sorted(Comparator.comparing(ProductImage::getSortOrder, Comparator.nullsLast(Comparator.naturalOrder()))).toList();
                 if (pLevelImgs.isEmpty()) pLevelImgs = imgs;
-                thumbnail = pLevelImgs.stream().filter(i -> Boolean.TRUE.equals(i.getIsThumbnail())).map(vn.conganh.commercial.feature.product.ProductImage::getImage).findFirst().orElse(null);
+                thumbnail = pLevelImgs.stream().filter(i -> Boolean.TRUE.equals(i.getIsThumbnail())).map(ProductImage::getImage).findFirst().orElse(null);
                 if (thumbnail == null && !pLevelImgs.isEmpty()) thumbnail = pLevelImgs.get(0).getImage();
                 image = thumbnail;
             }
 
-            java.math.BigDecimal price = null;
-            vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse pricingResp = null;
-            java.util.List<vn.conganh.commercial.feature.productvariant.ProductVariant> pVars = variantsByProd.getOrDefault(pId, java.util.Collections.emptyList());
+            BigDecimal price = null;
+            VariantPricingResponse pricingResp = null;
+            List<ProductVariant> pVars = variantsByProd.getOrDefault(pId, Collections.emptyList());
             if (!pVars.isEmpty()) {
-                var repVar = pVars.stream().min(java.util.Comparator.comparing((vn.conganh.commercial.feature.productvariant.ProductVariant v) -> pricingByVariant.get(v.getId()).effectivePrice()).thenComparing(vn.conganh.commercial.feature.productvariant.ProductVariant::getId)).orElse(pVars.get(0));
+                var repVar = pVars.stream().min(Comparator.comparing((ProductVariant v) -> pricingByVariant.get(v.getId()).effectivePrice()).thenComparing(ProductVariant::getId)).orElse(pVars.get(0));
                 var repPricing = pricingByVariant.get(repVar.getId());
                 price = repVar.getPrice();
                 pricingResp = repPricing.toResponse();
             }
 
-            var summary = new vn.conganh.commercial.feature.wishlist.dto.WishlistProductSummaryResponse(
+            var summary = new WishlistProductSummaryResponse(
                 pId, slug, name, desc, p.getCategoryId(), p.getSlug(), shortDesc, p.getStatus(), image, thumbnail, catName, catSlug, price, pricingResp
             );
-            return new vn.conganh.commercial.feature.wishlist.dto.WishlistSelfItemResponse(
+            return new WishlistSelfItemResponse(
                 w.getId(), w.getUser().getId(), pId, w.getCreatedAt(), summary
             );
         }).toList();
