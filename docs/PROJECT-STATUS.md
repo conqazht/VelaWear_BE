@@ -1,3 +1,9 @@
+### BE-013: Refactor sale-campaign orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách các tác vụ kiểm tra hợp lệ nghiệp vụ và dựng dữ liệu phản hồi từ `SaleCampaignServiceImpl` sang 2 collaborators độc lập: `SaleCampaignValidator` (chịu trách nhiệm kiểm tra hợp lệ thời gian, mã duy nhất, cấu hình giảm giá, và kiểm tra trùng lặp thời gian overlap trong transaction) và `SaleCampaignResponseAssembler` (chịu trách nhiệm dựng đối tượng DTO `SaleCampaignResponse` kèm hỗ trợ đa ngôn ngữ vi/en). `SaleCampaignServiceImpl` giữ nguyên toàn bộ giao dịch vòng đời chiến dịch (`@Transactional`), quản lý phiên bản (optimistic locking `version`), cũng như các query batching tối ưu từ BE-007.
+- **Verification**: Negative boundary check (`rg -n`) xác nhận `SaleCampaignResponseAssembler` là pure component (0 phụ thuộc Repository/EntityManager/Transactional). Focused test suite `SaleCampaignValidatorTest,SaleCampaignResponseAssemblerTest,SaleCampaignControllerIntegrationTest,SaleCampaignServiceImplLocalizationTest,SaleCampaignConcurrencyIntegrationTest,SaleCampaignQueryPerformanceIntegrationTest` pass 100% (29/29). Full `mvnw.cmd clean verify` pass 100% (767/767). Tuân thủ 100% `git diff --check` và file allowlist (`git diff --name-only`).
+
 ### BE-012: Refactor checkout orchestration
 
 - **Date/Time**: 2026-08-07 (Asia/Saigon)
