@@ -71,7 +71,7 @@ Client
    → AuthenticationManager.authenticate()
    → CustomUserDetailsService.loadUserByUsername() → query DB
    → Password verified (BCrypt)
-   → JwtEncoder creates access token (15min) + refresh token (7d)
+   → AuthTokenCodec creates access token (15min) + refresh token (7d)
    → Return tokens to client
 
 2. Authenticated Request:

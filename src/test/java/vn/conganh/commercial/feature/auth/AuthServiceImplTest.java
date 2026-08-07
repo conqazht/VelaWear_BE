@@ -122,6 +122,11 @@ class AuthServiceImplTest {
     void setUp() {
         JwtProperties jwtProperties = new JwtProperties(SECRET_KEY, REFRESH_SECRET_KEY, 900, 259200);
         JwtConfig jwtConfig = new JwtConfig(jwtProperties);
+        AuthTokenCodec authTokenCodec = new AuthTokenCodec(
+                jwtConfig.jwtEncoder(),
+                jwtConfig.refreshJwtEncoder(),
+                jwtConfig.refreshJwtDecoder(),
+                jwtProperties);
         authService = new AuthServiceImpl(
                 authenticationManager,
                 userRepository,
@@ -130,9 +135,7 @@ class AuthServiceImplTest {
                 refreshTokenService,
                 refreshTokenSessionService,
                 passwordEncoder,
-                jwtConfig.jwtEncoder(),
-                jwtConfig.refreshJwtEncoder(),
-                jwtConfig.refreshJwtDecoder(),
+                authTokenCodec,
                 jwtProperties,
                 tokenBlacklistService,
                 otpService,
