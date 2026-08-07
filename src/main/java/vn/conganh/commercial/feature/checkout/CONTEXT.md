@@ -27,6 +27,11 @@ Checkout chạy trong một `@Transactional` duy nhất và theo thứ tự cố
 9. Atomic consume coupon trên eligible subtotal; dòng `FLASH_SALE` bị loại.
 10. Lưu order, order item snapshot, payment và sale allocation; xóa cart và commit.
 
+## Pure Collaborators
+
+- `CheckoutFingerprintService`: Chịu trách nhiệm tính toán canonical serialization & SHA-256 pricing fingerprint từ quote lines, coupon và subtotal, cũng như request hash cho idempotency. Độc lập hoàn toàn với DB/Redis/HTTP.
+- `CheckoutOrderItemAssembler`: Chịu trách nhiệm dựng đối tượng snapshot `OrderItem` từ quote line, order, localized product/campaign, variant name và thumbnail image. Độc lập hoàn toàn với DB/Redis/HTTP và không chứa repository/lock.
+
 Một bước thất bại phải rollback toàn transaction. Ví dụ reserve được quota nhưng
 stock thực tế chỉ còn 1 trong khi khách mua 2 thì quota/customer usage cũng quay
 về trạng thái trước checkout; không gọi "bù" bằng một transaction rời.

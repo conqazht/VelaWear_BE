@@ -105,7 +105,8 @@ Each business feature is self-contained:
 
 ```
 feature/
-├── auth/                    # Authentication & token management
+├── auth/                    # Authentication & token management (AuthTokenCodec)
+├── checkout/                # Checkout orchestration (CheckoutFingerprintService, CheckoutOrderItemAssembler)
 ├── user/                    # User CRUD + profile
 ├── company/                 # Company CRUD
 ├── role/                    # Role CRUD + assign permissions

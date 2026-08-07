@@ -116,6 +116,8 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final SaleAllocationRepository allocationRepository;
     private final OrderResourceLifecycleService lifecycleService;
     private final CatalogContentLocalizationService localizationService;
+    private final CheckoutFingerprintService fingerprintService;
+    private final CheckoutOrderItemAssembler orderItemAssembler;
 
     @Value("${app.checkout.shipping-fee:30000}")
     private BigDecimal configuredShippingFee;
@@ -408,34 +410,13 @@ public class CheckoutServiceImpl implements CheckoutService {
             Order order,
             QuoteLocalization localization) {
         ImageIndex imageIndex = prefetchImageIndex(lines);
-        List<OrderItem> orderItems = new ArrayList<>();
-        for (QuoteLine line : lines) {
-            ProductVariant variant = line.variant();
-            VariantPricing pricing = line.pricing();
-            CatalogContentLocalizationService.LocalizedProduct localizedProduct = localizedProduct(
-                    line,
-                    localization);
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            orderItem.setVariantId(variant.getId());
-            orderItem.setProductName(localizedProduct.name());
-            orderItem.setProductSlug(localizedProduct.slug());
-            orderItem.setVariantName(buildVariantName(variant));
-            orderItem.setSku(variant.getSku());
-            orderItem.setImage(resolveItemImage(variant, imageIndex));
-            orderItem.setListPrice(pricing.listPrice());
-            orderItem.setPrice(pricing.effectivePrice());
-            orderItem.setPriceSource(pricing.priceSource());
-            orderItem.setSaleCampaignItem(pricing.campaignItem());
-            if (pricing.campaignItem() != null) {
-                orderItem.setSaleCampaignCode(pricing.campaignItem().getCampaign().getCode());
-                orderItem.setSaleCampaignName(localizedCampaignName(pricing, localization));
-            }
-            orderItem.setQuantity(line.item().getQuantity());
-            orderItem.setSubtotal(pricing.effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())));
-            orderItem.setStatus("PENDING");
-            orderItems.add(orderItem);
-        }
+        List<OrderItem> orderItems = orderItemAssembler.assembleOrderItems(
+                lines,
+                order,
+                line -> localizedProduct(line, localization),
+                pricing -> localizedCampaignName(pricing, localization),
+                this::buildVariantName,
+                variant -> resolveItemImage(variant, imageIndex));
         return orderItemRepository.saveAll(orderItems);
     }
 
@@ -538,50 +519,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             BigDecimal shippingFee,
             BigDecimal discountAmount,
             BigDecimal finalAmount) {
-        String canonical = lines.stream()
-                .sorted(Comparator.comparing(line -> line.variant().getId()))
-                .map(line -> String.join(":",
-                        line.variant().getId().toString(),
-                        Integer.toString(line.item().getQuantity()),
-                        line.pricing().listPrice().toPlainString(),
-                        line.pricing().effectivePrice().toPlainString(),
-                        line.pricing().priceSource().name(),
-                        line.pricing().campaignItem() == null ? "-" : line.pricing().campaignItem().getId().toString()))
-                .collect(Collectors.joining("|"));
-        String couponSnapshot = coupon == null
-                ? "-"
-                : String.join(":",
-                        coupon.getId().toString(),
-                        coupon.getCode(),
-                        coupon.getType().name(),
-                        coupon.getValue().toPlainString(),
-                        coupon.getMaxDiscount() == null ? "-" : coupon.getMaxDiscount().toPlainString(),
-                        coupon.getMinOrderAmount() == null ? "-" : coupon.getMinOrderAmount().toPlainString());
-        return sha256(canonical
-                + "|coupon=" + couponSnapshot
-                + "|eligible=" + eligibleSubtotal.toPlainString()
-                + "|shipping=" + shippingFee.toPlainString()
-                + "|discount=" + discountAmount.toPlainString()
-                + "|final=" + finalAmount.toPlainString());
+        return fingerprintService.computeFingerprint(
+                lines, coupon, eligibleSubtotal, shippingFee, discountAmount, finalAmount);
     }
 
     private String requestHash(CheckoutRequest request) {
-        return sha256(String.join("|",
-                nullSafe(request.receiverName()),
-                nullSafe(request.receiverPhone()),
-                nullSafe(request.receiverAddress()),
-                nullSafe(request.paymentMethod()).toUpperCase(),
-                nullSafe(request.couponCode()),
-                nullSafe(request.pricingFingerprint())));
-    }
-
-    private String sha256(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+        return fingerprintService.computeRequestHash(request);
     }
 
     private User findUser(String email) {
@@ -764,7 +707,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 }).toList());
     }
 
-    private record QuoteLine(CartItem item, ProductVariant variant, VariantPricing pricing) {}
+    record QuoteLine(CartItem item, ProductVariant variant, VariantPricing pricing) {}
 
     private record QuoteLocalization(
             Map<Long, CatalogContentLocalizationService.LocalizedProduct> products,
