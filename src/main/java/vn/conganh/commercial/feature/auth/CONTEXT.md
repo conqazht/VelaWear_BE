@@ -22,6 +22,8 @@ Auth exposes public endpoints under `/api/v1/auth`:
 - Refresh token lifetime is configured by `JWT_REFRESH_TOKEN_EXPIRATION`, default `259200` seconds.
 - Production must provide separate `JWT_ACCESS_TOKEN_SECRET_KEY` and `JWT_REFRESH_TOKEN_SECRET_KEY`
   environment variables.
+- Token encoding/decoding is isolated within `AuthTokenCodec`. `AuthTokenCodec` encapsulates access-token encoding (encode-only) and refresh-token encoding/decoding/validation (`type=refresh`, `jti`, `securityVersion`).
+- `AuthTokenCodec` uses `@Qualifier("refreshJwtDecoder")` for decoding refresh tokens; it MUST NOT decode access tokens or copy/duplicate Spring Security's resource-server access decoder (`JwtConfig.jwtDecoder()`).
 - Access tokens are JWTs signed by the access-token `JwtEncoder` with HS512.
 - Refresh tokens are JWTs signed by the refresh-token `JwtEncoder` with HS512.
 - Access and refresh JWTs include `userId` and `securityVersion`. Refresh JWTs also

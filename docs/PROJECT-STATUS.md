@@ -1,3 +1,9 @@
+### BE-011: Refactor authentication orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách lớp mã hóa/giải mã và kiểm tra tính hợp lệ của JWT token từ `AuthServiceImpl` sang component độc lập `AuthTokenCodec`. `AuthTokenCodec` đảm nhận việc encode access token (chỉ encode) và encode/decode/validate refresh token (`type=refresh`, `jti`, `securityVersion`), sử dụng `@Qualifier("refreshJwtDecoder")` mà không can thiệp hay duplicate `jwtDecoder` của Spring Security Resource Server. `AuthServiceImpl` giữ nguyên toàn bộ luồng nghiệp vụ xác thực, quản lý DB audit, và Redis session CAS rotation.
+- **Verification**: Extraction boundary verification (`rg -n`) xác nhận `AuthTokenCodec` là pure component (0 phụ thuộc HTTP/DB/Redis). Focused test suite `AuthTokenCodecTest,AuthServiceImplTest,AuthControllerTest,AuthRefreshConcurrencyIntegrationTest,RefreshTokenSessionServiceIntegrationTest,RedisSecurityAndCleanupIntegrationTest` pass (55/55). Full `mvnw.cmd clean verify` pass 100% (757/757). Tuân thủ 100% `git diff --check` và allowlist scope (`git diff --name-only`).
+
 ### BE-010: Characterize large orchestration services
 
 - **Date/Time**: 2026-08-07 (Asia/Saigon)
