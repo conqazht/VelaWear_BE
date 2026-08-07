@@ -251,6 +251,7 @@ Supported filters:
 | `GET /reviews/me` | `orderId` tùy chọn; luôn scope theo JWT principal |
 | `GET /storefront/products` | `q`, `categorySlugs`, `colorIds`, `sizeIds`, `minPrice`, `maxPrice`, `sort`, `page`, `size`, `locale` |
 | `GET /wishlists` | `userId`, `productId`, `createdFrom`, `createdTo` |
+| `GET /api/v1/wishlists/me` | `locale` (query), `Accept-Language` (header) - for `WishlistProductSummary` locale |
 
 ---
 
@@ -2083,6 +2084,7 @@ theo exact method/path RBAC. Với generic customer-resource route đã contract
 | GET | `/wishlists/{id}` | Bearer | Implemented | Get wishlist item |
 | POST | `/wishlists` | Bearer | Implemented | Create wishlist item |
 | DELETE | `/wishlists/{id}` | Bearer | Implemented | Delete wishlist item |
+| GET | `/api/v1/wishlists/me` | Bearer | Implemented | List principal-owned wishlists with `WishlistProductSummary`. Supports `locale` / `Accept-Language` for fallbacks. Returns ACTIVE products with totalElements synced to visible rows. |
 | GET | `/api/v1/orders/me` | Bearer | Implemented | List principal-owned orders |
 | GET | `/api/v1/orders/me/{id}` | Bearer | Implemented | Get principal-owned order; foreign ID is 404 |
 | GET | `/api/v1/orders/me/code/{orderCode}` | Bearer | Implemented | Get principal-owned order by code; foreign code is 404 |

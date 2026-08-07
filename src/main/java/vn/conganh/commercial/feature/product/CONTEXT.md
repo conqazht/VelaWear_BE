@@ -10,7 +10,7 @@ quản trị `/api/v1/products`.
 - Xóa Product là soft archive: đặt `status = ARCHIVED` và `deletedAt`.
 - Product Variant, tồn kho và Sale Campaign có workflow riêng; Product không tự
   tính giá khuyến mãi.
-- Nội dung storefront resolve theo `locale`, `Accept-Language`, rồi fallback `vi`
+- Nội dung storefront (Storefront Catalog, Wishlist Self List) resolve theo `locale`, `Accept-Language`, rồi fallback `vi`
   và field core.
 
 ## Storefront catalog

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,7 +29,7 @@ public class PublicSaleController {
             @RequestParam(required = false) SaleCampaignType type,
             @RequestParam(required = false, name = "phase") List<SaleCampaignPhase> phases,
             @RequestParam(required = false) String locale,
-            @org.springframework.web.bind.annotation.RequestHeader(
+            @RequestHeader(
                     name = "Accept-Language",
                     required = false) String acceptLanguage) {
         String localeCode = localeResolver.resolve(locale, acceptLanguage);
@@ -39,7 +40,7 @@ public class PublicSaleController {
     public ResponseEntity<ApiResponse<SaleCampaignResponse>> getByCode(
             @PathVariable String code,
             @RequestParam(required = false) String locale,
-            @org.springframework.web.bind.annotation.RequestHeader(
+            @RequestHeader(
                     name = "Accept-Language",
                     required = false) String acceptLanguage) {
         String localeCode = localeResolver.resolve(locale, acceptLanguage);
