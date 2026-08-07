@@ -108,6 +108,7 @@ feature/
 ├── auth/                    # Authentication & token management (AuthTokenCodec)
 ├── checkout/                # Checkout orchestration (CheckoutFingerprintService, CheckoutOrderItemAssembler)
 ├── salecampaign/            # Sale campaign orchestration (SaleCampaignValidator, SaleCampaignResponseAssembler)
+├── product/                 # Product CRUD & DTO assembly (ProductResponseAssembler)
 ├── user/                    # User CRUD + profile
 ├── company/                 # Company CRUD
 ├── role/                    # Role CRUD + assign permissions

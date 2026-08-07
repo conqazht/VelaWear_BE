@@ -48,6 +48,7 @@ public class ProductServiceImpl implements ProductService {
     private final VariantPricingService variantPricingService;
     private final SaleCampaignItemRepository saleCampaignItemRepository;
     private final SaleCampaignTranslationRepository saleCampaignTranslationRepository;
+    private final ProductResponseAssembler responseAssembler;
 
     @Override
     @Transactional(readOnly = true)
@@ -80,29 +81,20 @@ public class ProductServiceImpl implements ProductService {
 
         return ResultPaginationDTO.fromPage(products.map(product -> {
             Category category = categoryMap.get(product.getCategoryId());
-            CategoryTranslation categoryTranslation = category == null
-                    ? null
-                    : mergeCategoryTranslation(
-                            category,
-                            resolvedLocale,
-                            categoryTranslations.getOrDefault(category.getId(), Map.of()));
-            String catName = categoryTranslation == null ? null : categoryTranslation.getName();
-            String catSlug = categoryTranslation == null ? null : categoryTranslation.getSlug();
-            
+            Map<String, CategoryTranslation> catTranslations = category == null
+                    ? Map.of()
+                    : categoryTranslations.getOrDefault(category.getId(), Map.of());
             VariantPricing representativePrice = representativePrices.get(product.getId());
 
-            return ProductResponse.fromEntity(
+            return responseAssembler.assemble(
                     product,
-                    mergeProductTranslation(
-                            product,
-                            resolvedLocale,
-                            translations.getOrDefault(product.getId(), Map.of())),
+                    resolvedLocale,
+                    translations.getOrDefault(product.getId(), Map.of()),
                     imagesMap.get(product.getId()),
-                    catName,
-                    catSlug,
-                    representativePrice == null ? null : representativePrice.listPrice(),
-                    toPricingResponse(representativePrice, campaignNames),
-                    translationLocales(translations.getOrDefault(product.getId(), Map.of())));
+                    category,
+                    catTranslations,
+                    representativePrice,
+                    campaignNames);
         }));
     }
 
@@ -120,36 +112,27 @@ public class ProductServiceImpl implements ProductService {
         List<ProductImage> images = productImageRepository.findByProductId(product.getId());
         Map<String, ProductTranslation> translations = loadTranslationRows(List.of(product.getId()))
                 .getOrDefault(product.getId(), Map.of());
-        
-        String categoryName = null;
-        String categorySlug = null;
-        Optional<Category> categoryOpt = categoryRepository.findById(product.getCategoryId());
-        if (categoryOpt.isPresent()) {
-            Category category = categoryOpt.get();
-            Map<String, CategoryTranslation> categoryTranslations = loadCategoryTranslationRows(
-                    List.of(category.getId())).getOrDefault(category.getId(), Map.of());
-            CategoryTranslation categoryTranslation = mergeCategoryTranslation(
-                    category,
-                    resolvedLocale,
-                    categoryTranslations);
-            categoryName = categoryTranslation.getName();
-            categorySlug = categoryTranslation.getSlug();
-        }
-        
+
+        Category category = categoryRepository.findById(product.getCategoryId()).orElse(null);
+        Map<String, CategoryTranslation> categoryTranslations = category == null
+                ? Map.of()
+                : loadCategoryTranslationRows(List.of(category.getId()))
+                        .getOrDefault(category.getId(), Map.of());
+
         VariantPricing representativePrice = findRepresentativePrice(product.getId());
         Map<Long, String> campaignNames = loadCampaignNames(
                 representativePrice == null ? List.of() : List.of(representativePrice),
                 resolvedLocale);
 
-        return ProductResponse.fromEntity(
+        return responseAssembler.assemble(
                 product,
-                mergeProductTranslation(product, resolvedLocale, translations),
+                resolvedLocale,
+                translations,
                 images,
-                categoryName,
-                categorySlug,
-                representativePrice == null ? null : representativePrice.listPrice(),
-                toPricingResponse(representativePrice, campaignNames),
-                translationLocales(translations));
+                category,
+                categoryTranslations,
+                representativePrice,
+                campaignNames);
     }
 
     @Override
@@ -339,21 +322,6 @@ public class ProductServiceImpl implements ProductService {
         return result;
     }
 
-    private VariantPricingResponse toPricingResponse(
-            VariantPricing pricing,
-            Map<Long, String> campaignNames) {
-        if (pricing == null) {
-            return null;
-        }
-        if (pricing.campaignItem() == null) {
-            return pricing.toResponse();
-        }
-        Long campaignId = pricing.campaignItem().getCampaign().getId();
-        return pricing.toResponse(campaignNames.getOrDefault(
-                campaignId,
-                pricing.campaignItem().getCampaign().getName()));
-    }
-
     private Map<Long, VariantPricing> loadRepresentativePrices(List<Long> productIds) {
         if (productIds.isEmpty()) {
             return Map.of();
@@ -394,100 +362,6 @@ public class ProductServiceImpl implements ProductService {
                         Collectors.toMap(CategoryTranslation::getLocaleCode, Function.identity())));
     }
 
-    private ProductTranslation mergeProductTranslation(
-            Product product,
-            String localeCode,
-            Map<String, ProductTranslation> translations) {
-        ProductTranslation requested = translations.get(localeCode);
-        ProductTranslation defaultTranslation = translations.get(CatalogLocaleResolver.DEFAULT_LOCALE);
-        ProductTranslation merged = new ProductTranslation();
-        merged.setProductId(product.getId());
-        merged.setLocaleCode(localeCode);
-        merged.setName(firstValue(
-                requested == null ? null : requested.getName(),
-                defaultTranslation == null ? null : defaultTranslation.getName(),
-                product.getName()));
-        merged.setSlug(firstValue(
-                requested == null ? null : requested.getSlug(),
-                defaultTranslation == null ? null : defaultTranslation.getSlug(),
-                product.getSlug()));
-        merged.setShortDescription(firstValue(
-                requested == null ? null : requested.getShortDescription(),
-                defaultTranslation == null ? null : defaultTranslation.getShortDescription(),
-                product.getDescription()));
-        merged.setDescription(firstValue(
-                requested == null ? null : requested.getDescription(),
-                defaultTranslation == null ? null : defaultTranslation.getDescription(),
-                product.getDescription()));
-        merged.setMaterial(firstValue(
-                requested == null ? null : requested.getMaterial(),
-                defaultTranslation == null ? null : defaultTranslation.getMaterial()));
-        merged.setCareInstruction(firstValue(
-                requested == null ? null : requested.getCareInstruction(),
-                defaultTranslation == null ? null : defaultTranslation.getCareInstruction()));
-        merged.setSeoTitle(firstValue(
-                requested == null ? null : requested.getSeoTitle(),
-                defaultTranslation == null ? null : defaultTranslation.getSeoTitle(),
-                product.getName()));
-        merged.setSeoDescription(firstValue(
-                requested == null ? null : requested.getSeoDescription(),
-                defaultTranslation == null ? null : defaultTranslation.getSeoDescription(),
-                product.getDescription()));
-        return merged;
-    }
-
-    private CategoryTranslation mergeCategoryTranslation(
-            Category category,
-            String localeCode,
-            Map<String, CategoryTranslation> translations) {
-        CategoryTranslation requested = translations.get(localeCode);
-        CategoryTranslation defaultTranslation = translations.get(CatalogLocaleResolver.DEFAULT_LOCALE);
-        CategoryTranslation merged = new CategoryTranslation();
-        merged.setCategoryId(category.getId());
-        merged.setLocaleCode(localeCode);
-        merged.setName(firstValue(
-                requested == null ? null : requested.getName(),
-                defaultTranslation == null ? null : defaultTranslation.getName(),
-                category.getName()));
-        merged.setSlug(firstValue(
-                requested == null ? null : requested.getSlug(),
-                defaultTranslation == null ? null : defaultTranslation.getSlug(),
-                category.getSlug()));
-        merged.setDescription(firstValue(
-                requested == null ? null : requested.getDescription(),
-                defaultTranslation == null ? null : defaultTranslation.getDescription()));
-        merged.setSeoTitle(firstValue(
-                requested == null ? null : requested.getSeoTitle(),
-                defaultTranslation == null ? null : defaultTranslation.getSeoTitle(),
-                category.getName()));
-        merged.setSeoDescription(firstValue(
-                requested == null ? null : requested.getSeoDescription(),
-                defaultTranslation == null ? null : defaultTranslation.getSeoDescription()));
-        return merged;
-    }
-
-    private List<String> translationLocales(Map<String, ?> translations) {
-        return translations.keySet().stream().sorted(this::compareLocales).toList();
-    }
-
-    private List<String> storedTranslationLocales(Long productId) {
-        return productTranslationRepository.findByProductId(productId).stream()
-                .map(ProductTranslation::getLocaleCode)
-                .distinct()
-                .sorted(this::compareLocales)
-                .toList();
-    }
-
-    private int compareLocales(String left, String right) {
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(left)) {
-            return CatalogLocaleResolver.DEFAULT_LOCALE.equals(right) ? 0 : -1;
-        }
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(right)) {
-            return 1;
-        }
-        return left.compareTo(right);
-    }
-
     private String firstValue(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -495,6 +369,14 @@ public class ProductServiceImpl implements ProductService {
             }
         }
         return null;
+    }
+
+    private List<String> storedTranslationLocales(Long productId) {
+        return productTranslationRepository.findByProductId(productId).stream()
+                .map(ProductTranslation::getLocaleCode)
+                .distinct()
+                .sorted(responseAssembler::compareLocales)
+                .toList();
     }
 
     private String validateStatus(String status, java.util.Set<String> allowed, String resource) {

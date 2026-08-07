@@ -133,7 +133,7 @@ Thêm chính xác dòng an toàn, không phải secret `DB_NAME=VelaWear` vào `
 
 ### 4. Sửa architecture và feature documentation
 
-Update stale statement về filter, stateless auth, Redis session/security state, upload lifecycle, avatar/product/review file responsibility, migration, metric, và service boundary từ wave. Thay stale sibling-directory storefront companion link bằng `https://github.com/coqanklazy/VelaWear_FE/blob/main/docs/STOREFRONT_CATALOG_UX_FRONTEND_VI.md` để backend-only checkout vẫn hợp lệ. Ưu tiên link canonical feature `CONTEXT.md`/ADR thay duplicate detail.
+Update stale statement về filter, stateless auth, Redis session/security state, upload lifecycle, avatar/product/review file responsibility, migration, metric, và service boundary từ wave. Thay stale sibling-directory storefront companion link bằng `https://github.com/conqazht/VelaWear_FE/blob/main/docs/STOREFRONT_CATALOG_UX_FRONTEND_VI.md` để backend-only checkout vẫn hợp lệ. Ưu tiên link canonical feature `CONTEXT.md`/ADR thay duplicate detail.
 
 **Verify**: `rg -n "Redis|securityVersion|avatar-upload|reconciliation|CheckoutFingerprintService|ProductResponseAssembler|metrics" docs src/main/java/vn/conganh/commercial/feature -g CONTEXT.md` → mỗi shipped responsibility có trong canonical document và không stale stateless/no-filter claim.
 

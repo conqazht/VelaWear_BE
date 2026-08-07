@@ -133,7 +133,7 @@ Add the exact safe, non-secret line `DB_NAME=VelaWear` to `.env.example`, matchi
 
 ### 4. Correct architecture and feature documentation
 
-Update stale statements about filters, stateless auth, Redis session/security state, upload lifecycle, avatar/product/review file responsibilities, migrations, metrics, and wave-delivered service boundaries. Replace the stale sibling-directory storefront companion link with `https://github.com/coqanklazy/VelaWear_FE/blob/main/docs/STOREFRONT_CATALOG_UX_FRONTEND_VI.md`, so backend-only checkouts remain valid. Prefer links to canonical feature `CONTEXT.md`/ADR instead of duplicate details.
+Update stale statements about filters, stateless auth, Redis session/security state, upload lifecycle, avatar/product/review file responsibilities, migrations, metrics, and wave-delivered service boundaries. Replace the stale sibling-directory storefront companion link with `https://github.com/conqazht/VelaWear_FE/blob/main/docs/STOREFRONT_CATALOG_UX_FRONTEND_VI.md`, so backend-only checkouts remain valid. Prefer links to canonical feature `CONTEXT.md`/ADR instead of duplicate details.
 
 **Verify**: `rg -n "Redis|securityVersion|avatar-upload|reconciliation|CheckoutFingerprintService|ProductResponseAssembler|metrics" docs src/main/java/vn/conganh/commercial/feature -g CONTEXT.md` → each shipped responsibility appears in its canonical document and no stale stateless/no-filter claim remains.
 

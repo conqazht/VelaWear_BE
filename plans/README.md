@@ -8,7 +8,7 @@
 
 ## Planning baseline
 
-- Repository: `coqanklazy/VelaWear_BE`
+- Repository: `conqazht/VelaWear_BE`
 - Planned at: commit `2be2362` on `main`
 - Planning branch: `docs/shadcn-improve-plans`
 - Delivery rule: merge this planning PR into `main` before creating any
