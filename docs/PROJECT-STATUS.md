@@ -1,3 +1,9 @@
+### BE-012: Refactor checkout orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách các tác vụ tính toán thuần túy từ `CheckoutServiceImpl` sang 2 collaborators độc lập: `CheckoutFingerprintService` (chịu trách nhiệm tính toán canonical pricing fingerprint & request hash SHA-256) và `CheckoutOrderItemAssembler` (chịu trách nhiệm dựng đối tượng snapshot `OrderItem`). `CheckoutServiceImpl` giữ nguyên toàn bộ giao dịch thanh toán (`@Transactional`), thứ tự khóa tài nguyên theo ID tăng dần (`PESSIMISTIC_WRITE`), trừ kho, trừ coupon, trừ quota campaign, cũng như các thông báo lỗi và localization.
+- **Verification**: Extraction boundary verification (`rg -n`) xác nhận 2 collaborator mới là pure component (0 phụ thuộc HTTP/DB/Redis/Transactional). Focused test suite `CheckoutFingerprintServiceTest,CheckoutOrderItemAssemblerTest,CheckoutServiceImplTest,CheckoutControllerTest,CheckoutConcurrencyTest,SaleCampaignConcurrencyIntegrationTest` pass 100% (45/45). Full `mvnw.cmd clean verify` pass 100% (763/763). Tuân thủ 100% `git diff --check` và file allowlist (`git diff --name-only`).
+
 ### BE-011: Refactor authentication orchestration
 
 - **Date/Time**: 2026-08-07 (Asia/Saigon)
