@@ -1,3 +1,9 @@
+### BE-010: Characterize large orchestration services
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Triển khai bộ characterization test củng cố cho 4 Orchestration Services lớn (Auth, Checkout, Sale Campaign, Product) để bảo vệ các bất biến về public outputs, stable error codes, lock ordering (ASC variant IDs), transaction boundaries, request pricing fingerprint, money/image snapshots, session revocation invariants, localization fallback (vi/en), và campaign phase transitions (`UPCOMING`, `LIVE`, `ENDED`). Không làm thay đổi bất kỳ mã nguồn production (`src/main/java`) hay public contract API nào.
+- **Verification**: Focused characterization test gate `Dtest=AuthServiceImplTest,AuthControllerTest,CheckoutServiceImplTest,SaleCampaignServiceImplLocalizationTest,ProductServiceImplTest,ProductResponseTest` pass (75/75). Full verification `mvnw.cmd clean verify` pass 100% (756/756). Complete compliance with `git diff --check` and allowlist scope (`git diff --name-only`).
+
 ### BE-009: Add a wishlist product-summary contract
 
 - **Date/Time**: 2026-07-25 (Asia/Saigon)
