@@ -51,6 +51,8 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
     private final ProductTranslationRepository productTranslationRepository;
     private final SaleCampaignTranslationRepository campaignTranslationRepository;
     private final UserRepository userRepository;
+    private final SaleCampaignValidator validator;
+    private final SaleCampaignResponseAssembler responseAssembler;
 
     @Override
     @Transactional(readOnly = true)
@@ -279,107 +281,11 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
     }
 
     private List<SaleCampaignItem> buildItems(SaleCampaignType type, List<SaleCampaignItemRequest> requests) {
-        List<Long> variantIds = requests.stream().map(SaleCampaignItemRequest::variantId).sorted().toList();
-        if (new HashSet<>(variantIds).size() != variantIds.size()) {
-            throw new InvalidRequestException("A variant can only appear once in a campaign");
-        }
-        List<ProductVariant> variants = variantRepository.findAllByIdsWithLock(variantIds);
-        if (variants.size() != variantIds.size()) {
-            throw new InvalidRequestException("One or more product variants do not exist");
-        }
-        lockAndValidateParentProducts(variants);
-        Map<Long, ProductVariant> variantMap = variants.stream()
-                .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
-        List<SaleCampaignItem> items = new ArrayList<>();
-        for (SaleCampaignItemRequest request : requests) {
-            ProductVariant variant = variantMap.get(request.variantId());
-            if (!"ACTIVE".equals(variant.getStatus())
-                    || variant.getProduct().getDeletedAt() != null
-                    || !"ACTIVE".equals(variant.getProduct().getStatus())) {
-                throw new InvalidRequestException("Variant is not active: " + variant.getId());
-            }
-            validateItem(type, variant.getPrice(), request);
-            SaleCampaignItem item = new SaleCampaignItem();
-            item.setVariant(variant);
-            item.setReferencePrice(variant.getPrice());
-            item.setPromotionalPrice(request.promotionalPrice());
-            item.setQuota(type == SaleCampaignType.FLASH ? request.quota() : null);
-            item.setMaxPerCustomer(type == SaleCampaignType.FLASH ? request.maxPerCustomer() : null);
-            items.add(item);
-        }
-        return items;
+        return validator.buildItems(type, requests);
     }
 
     private void validateForPublish(SaleCampaign campaign) {
-        Instant now = Instant.now();
-        if (!campaign.getEndsAt().isAfter(now)) {
-            throw new InvalidRequestException("Cannot publish an ended campaign");
-        }
-        if (campaign.getItems().isEmpty()) {
-            throw new InvalidRequestException("Campaign must contain at least one variant");
-        }
-        List<Long> ids = campaign.getItems().stream().map(item -> item.getVariant().getId()).sorted().toList();
-        List<ProductVariant> publishableVariants = variantRepository.findAllByIdsWithLock(ids);
-        lockAndValidateParentProducts(publishableVariants);
-        if (publishableVariants.size() != ids.size()
-                || publishableVariants.stream().anyMatch(variant -> !"ACTIVE".equals(variant.getStatus())
-                        || variant.getProduct().getDeletedAt() != null
-                        || !"ACTIVE".equals(variant.getProduct().getStatus()))) {
-            throw new InvalidRequestException("Campaign contains a deleted or inactive product variant");
-        }
-        Map<Long, List<SaleCampaignItem>> overlapsByVariant = itemRepository.findOverlappingForVariants(
-                ids, campaign.getStartsAt(), campaign.getEndsAt(), campaign.getId())
-            .stream()
-            .collect(Collectors.groupingBy(overlap -> overlap.getVariant().getId()));
-        for (SaleCampaignItem item : campaign.getItems()) {
-            item.setReferencePrice(item.getVariant().getPrice());
-            validateItem(campaign.getType(), item.getReferencePrice(), new SaleCampaignItemRequest(
-                    item.getVariant().getId(), item.getPromotionalPrice(), item.getQuota(), item.getMaxPerCustomer()));
-            for (SaleCampaignItem overlap : overlapsByVariant.getOrDefault(item.getVariant().getId(), List.of())) {
-                if (overlap.getCampaign().getType() == campaign.getType()) {
-                    throw rule("CAMPAIGN_OVERLAP", "Variant already belongs to an overlapping campaign of the same type",
-                            Map.of("variantId", item.getVariant().getId(), "campaignId", overlap.getCampaign().getId()));
-                }
-                BigDecimal flashPrice = campaign.getType() == SaleCampaignType.FLASH
-                        ? item.getPromotionalPrice() : overlap.getPromotionalPrice();
-                BigDecimal standardPrice = campaign.getType() == SaleCampaignType.STANDARD
-                        ? item.getPromotionalPrice() : overlap.getPromotionalPrice();
-                if (flashPrice.compareTo(standardPrice) >= 0) {
-                    throw rule("INVALID_FLASH_PRICE", "Flash price must be lower than overlapping standard price",
-                            Map.of("variantId", item.getVariant().getId()));
-                }
-            }
-        }
-    }
-
-    private void validateItem(SaleCampaignType type, BigDecimal referencePrice, SaleCampaignItemRequest item) {
-        if (item.promotionalPrice().compareTo(referencePrice) >= 0) {
-            throw new InvalidRequestException("Promotional price must be lower than base price for variant " + item.variantId());
-        }
-        if (type == SaleCampaignType.FLASH) {
-            if (item.quota() == null || item.quota() < 1) {
-                throw new InvalidRequestException("FLASH items require quota");
-            }
-            if (item.maxPerCustomer() != null && item.maxPerCustomer() > item.quota()) {
-                throw new InvalidRequestException("maxPerCustomer cannot exceed quota");
-            }
-        } else if (item.quota() != null || item.maxPerCustomer() != null) {
-            throw new InvalidRequestException("STANDARD items cannot define quota or maxPerCustomer");
-        }
-    }
-
-    private void lockAndValidateParentProducts(List<ProductVariant> variants) {
-        List<Long> productIds = variants.stream()
-                .map(variant -> variant.getProduct().getId())
-                .distinct()
-                .sorted()
-                .toList();
-        List<vn.conganh.commercial.feature.product.Product> products =
-                productRepository.findAllWithLockByIdIn(productIds);
-        if (products.size() != productIds.size()
-                || products.stream().anyMatch(product -> !"ACTIVE".equals(product.getStatus()))) {
-            throw new InvalidRequestException("Campaign contains a deleted or inactive product");
-        }
+        validator.validateForPublish(campaign);
     }
 
     private void applyCampaign(SaleCampaign campaign, String code, String name, String description, String bannerUrl,
@@ -394,36 +300,23 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
     }
 
     private void validateTime(Instant startsAt, Instant endsAt) {
-        if (!endsAt.isAfter(startsAt)) {
-            throw new InvalidRequestException("endsAt must be after startsAt");
-        }
+        validator.validateTime(startsAt, endsAt);
     }
 
     private void validateUniqueCode(String code, Long currentId) {
-        campaignRepository.findDetailedByCode(normalizeCode(code)).ifPresent(existing -> {
-            if (currentId == null || !existing.getId().equals(currentId)) {
-                throw new InvalidRequestException("Sale campaign code already exists");
-            }
-        });
+        validator.validateUniqueCode(code, currentId);
     }
 
     private String normalizeCode(String code) {
-        return code.trim().toUpperCase(Locale.ROOT);
+        return validator.normalizeCode(code);
     }
 
     private void verifyVersion(SaleCampaign campaign, long expected) {
-        if (campaign.getVersion() != expected) {
-            throw rule("CAMPAIGN_VERSION_CONFLICT", "Campaign was changed by another administrator",
-                    Map.of("currentVersion", campaign.getVersion()));
-        }
+        validator.verifyVersion(campaign, expected);
     }
 
     private void assertLive(SaleCampaign campaign) {
-        Instant now = Instant.now();
-        if (campaign.getStatus() != SaleCampaignStatus.PUBLISHED
-                || SaleCampaignPhase.from(campaign.getStartsAt(), campaign.getEndsAt(), now) != SaleCampaignPhase.LIVE) {
-            throw rule("CAMPAIGN_NOT_LIVE", "Campaign is not live");
-        }
+        validator.assertLive(campaign);
     }
 
     private User findActor(String email) {
@@ -470,77 +363,8 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
                         .collect(Collectors.groupingBy(
                                 ProductTranslation::getProductId,
                                 Collectors.toMap(ProductTranslation::getLocaleCode, Function.identity())));
-        return campaigns.stream().collect(Collectors.toMap(
-                SaleCampaign::getId,
-                campaign -> mapResponse(
-                        campaign,
-                        now,
-                        localeCode,
-                        imagesByProduct,
-                        campaignTranslations.getOrDefault(campaign.getId(), Map.of()),
-                        productTranslations)));
-    }
-
-    private SaleCampaignResponse mapResponse(
-            SaleCampaign campaign,
-            Instant now,
-            String localeCode,
-            Map<Long, List<ProductImage>> imagesByProduct,
-            Map<String, SaleCampaignTranslation> campaignTranslationsByLocale,
-            Map<Long, Map<String, ProductTranslation>> productTranslations) {
-        Map<Long, String> imagesByVariant = new java.util.HashMap<>();
-        campaign.getItems().forEach(item -> {
-            String image = resolveImage(item.getVariant(), imagesByProduct);
-            if (image != null) {
-                imagesByVariant.put(item.getVariant().getId(), image);
-            }
-        });
-        SaleCampaignTranslation requestedCampaign = campaignTranslationsByLocale.get(localeCode);
-        SaleCampaignTranslation defaultCampaign = campaignTranslationsByLocale.get(
-                CatalogLocaleResolver.DEFAULT_LOCALE);
-        Map<Long, String> productNames = new java.util.HashMap<>();
-        Map<Long, String> productSlugs = new java.util.HashMap<>();
-        campaign.getItems().stream()
-                .map(item -> item.getVariant().getProduct())
-                .distinct()
-                .forEach(product -> {
-                    Map<String, ProductTranslation> translations = productTranslations.getOrDefault(
-                            product.getId(),
-                            Map.of());
-                    ProductTranslation requested = translations.get(localeCode);
-                    ProductTranslation defaultTranslation = translations.get(CatalogLocaleResolver.DEFAULT_LOCALE);
-                    productNames.put(
-                            product.getId(),
-                            firstValue(
-                                    requested == null ? null : requested.getName(),
-                                    defaultTranslation == null ? null : defaultTranslation.getName(),
-                                    product.getName()));
-                    productSlugs.put(
-                            product.getId(),
-                            firstValue(
-                                    requested == null ? null : requested.getSlug(),
-                                    defaultTranslation == null ? null : defaultTranslation.getSlug(),
-                                    product.getSlug()));
-                });
-
-        List<String> translationLocales = campaignTranslationsByLocale.keySet().stream()
-                .sorted(this::compareLocales)
-                .toList();
-        return SaleCampaignResponse.fromEntity(
-                campaign,
-                now,
-                imagesByVariant,
-                productNames,
-                productSlugs,
-                firstValue(
-                        requestedCampaign == null ? null : requestedCampaign.getName(),
-                        defaultCampaign == null ? null : defaultCampaign.getName(),
-                        campaign.getName()),
-                firstValue(
-                        requestedCampaign == null ? null : requestedCampaign.getDescription(),
-                        defaultCampaign == null ? null : defaultCampaign.getDescription(),
-                        campaign.getDescription()),
-                translationLocales);
+        return responseAssembler.assembleResponses(
+                campaigns, now, localeCode, imagesByProduct, campaignTranslations, productTranslations);
     }
 
     private void upsertDefaultTranslation(SaleCampaign campaign) {

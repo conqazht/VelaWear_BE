@@ -42,6 +42,9 @@ class SaleCampaignServiceImplLocalizationTest {
 
     @BeforeEach
     void setUp() {
+        SaleCampaignValidator validator = new SaleCampaignValidator(
+                itemRepository, variantRepository, productRepository, campaignRepository);
+        SaleCampaignResponseAssembler responseAssembler = new SaleCampaignResponseAssembler();
         service = new SaleCampaignServiceImpl(
                 campaignRepository,
                 itemRepository,
@@ -50,7 +53,9 @@ class SaleCampaignServiceImplLocalizationTest {
                 productRepository,
                 productTranslationRepository,
                 campaignTranslationRepository,
-                userRepository);
+                userRepository,
+                validator,
+                responseAssembler);
     }
 
     @Test
