@@ -1,4 +1,4 @@
-# Vela Wear Backend (VelaWear_BE)
+# Vela Wear Backend
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-conqazht/VelaWear__BE-blue)](https://github.com/conqazht/VelaWear_BE)
 
