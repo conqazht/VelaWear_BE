@@ -257,7 +257,7 @@ Các tài liệu chi tiết được lưu trong thư mục `docs/`:
 
 ## Lộ Trình Cải Tiến & Refactoring (Improvement Plans)
 
-Các kế hoạch trong thư mục `plans/` được tạo ra từ đợt audit nâng cao chất lượng codebase (shadcn/improve audit), dùng để quản lý các đợt refactoring, tối ưu hiệu năng, thắt chặt bảo mật và bảo trì hệ thống qua 5 đợt (waves):
+Các kế hoạch trong thư mục `plans/` được tạo ra từ đợt audit nâng cao chất lượng codebase, dùng để quản lý các đợt refactoring, tối ưu hiệu năng, thắt chặt bảo mật và bảo trì hệ thống qua 5 đợt (waves):
 
 - [Lộ trình cải tiến Backend (tiếng Việt)](plans/README.vi.md)
 - [Improvement Plans Index (English)](plans/README.md)
