@@ -92,43 +92,51 @@ Hệ thống giữa Frontend (Next.js 16) và Backend (Spring Boot 4) phối h�
 
 ### 1. Luồng Xác Thực & Quản Lý Token (Authentication & Token Refresh)
 
-```text
-  [ Frontend (Next.js 16) ]                         [ Backend (Spring Boot 4) ]
-             │                                                   │
-             │─── 1. POST /api/v1/auth/login ───────────────────►│
-             │    (credentials: email, password)                 │── Verification (BCrypt)
-             │                                                   │── Generate Access Token (15m) & Refresh Token (3d)
-             │◄── 2. Response 200 OK ────────────────────────────│
-             │    Body: { data: { accessToken: "JWT..." } }      │
-             │    Header: Set-Cookie: refresh_token=... (HttpOnly)│
-  Lưu Token  │                                                   │
- (In-Memory) │                                                   │
-             │─── 3. GET /api/v1/users/me (Bearer AccessToken)─►│
-             │                                                   │── JwtDecoder (HS512 validation)
-             │◄── 4. Response 200 OK (User Data) ───────────────│
-             │                                                   │
- [Token Expired 401]                                             │
-             │─── 5. POST /api/v1/auth/refresh ─────────────────►│
-             │    Cookie: refresh_token=... (Auto by Browser)    │── Verify Refresh JWT & Check Redis Revocation
-             │                                                   │── Rotate Refresh Token & Issue New Access Token
-             │◄── 6. Response 200 OK (New Access Token) ─────────│
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Client (Next.js 16)
+    participant BE as Backend (Spring Boot 4)
+    participant Redis as Redis Storage
+
+    User->>BE: POST /api/v1/auth/login (email, password)
+    Note over BE: Kiểm tra MK (BCrypt) & nạp User Details
+    BE-->>User: 200 OK (Body: AccessToken | Cookie: refresh_token HttpOnly)
+    Note over User: Lưu AccessToken vào In-Memory (JavaScript)
+
+    User->>BE: GET /api/v1/users/me (Header: Bearer AccessToken)
+    Note over BE: JwtDecoder xác thực chữ ký HMAC-HS512
+    BE-->>User: 200 OK (Dữ liệu User Profile)
+
+    Note over User: Access Token hết hạn (Bị trả về 401 Unauthorized)
+    User->>BE: POST /api/v1/auth/refresh (Browser tự gửi HttpOnly Cookie)
+    BE->>Redis: Kiểm tra xem Refresh Token có bị thu hồi hay không
+    Redis-->>BE: Session hợp lệ
+    Note over BE: Xoay vòng (Rotate) Refresh Token & Tạo Access Token mới
+    BE-->>User: 200 OK (AccessToken mới & Set-Cookie RefreshToken mới)
 ```
 
 ### 2. Luồng Đặt Hàng & Thanh Toán (Checkout & Payment Flow)
 
-```text
-  [ Client (Frontend) ]                              [ Backend (Spring Boot 4) ]
-             │                                                   │
-             │─── 1. POST /api/v1/orders/preview ───────────────►│
-             │    (items, promoCode, shippingAddress)            │── Calculate canonical price, discounts & taxes
-             │◄── 2. 200 OK { pricingFingerprint, items } ───────│
-             │                                                   │
-             │─── 3. POST /api/v1/orders/checkout ──────────────►│
-             │    Header: Idempotency-Key: <UUID>                │── Validate Idempotency & Check pricingFingerprint
-             │    Body: { pricingFingerprint, paymentMethod }    │── Create Order (PENDING) & Lock Inventory
-             │◄── 4. 201 Created { orderCode, paymentUrl } ──────│
-             │                                                   │
-             │─── 5. Redirect to Payment Gateway (SePay) ───────►│── Webhook Payment Status Update (PAID)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor FE as Storefront Client
+    participant BE as Backend (Spring Boot 4)
+    participant PG as Payment Gateway (SePay)
+
+    FE->>BE: POST /api/v1/orders/preview (items, promoCode, address)
+    Note over BE: Tính toán giá chuẩn, giảm giá & thuế
+    BE-->>FE: 200 OK (pricingFingerprint, finalAmount)
+
+    FE->>BE: POST /api/v1/orders/checkout (Header: Idempotency-Key, Body: pricingFingerprint)
+    Note over BE: Kiểm tra Idempotency-Key & So khớp pricingFingerprint
+    Note over BE: Khóa hàng tồn kho & Tạo đơn hàng (PENDING)
+    BE-->>FE: 201 Created (orderCode, paymentUrl)
+
+    FE->>PG: Chuyển hướng người dùng sang trang thanh toán SePay
+    PG-->>BE: Gửi Webhook cập nhật trạng thái thanh toán (PAID)
+    Note over BE: Cập nhật trạng thái Đơn hàng sang PAID & hoàn tất
 ```
 
 ## Environment Variables
