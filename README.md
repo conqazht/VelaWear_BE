@@ -255,11 +255,11 @@ Các tài liệu chi tiết được lưu trong thư mục `docs/`:
 - [Sale campaign backend](docs/SALE_CAMPAIGN_BACKEND.md)
 - [Hướng dẫn i18n catalog](docs/I18N_CATALOG_SALE_VI.md)
 
-## Implementation Plans
+## Lộ Trình Cải Tiến & Refactoring (Improvement Plans)
 
-Theo dõi lộ trình phát triển và các giai đoạn triển khai tại thư mục `plans/`:
+Các kế hoạch trong thư mục `plans/` được tạo ra từ đợt audit nâng cao chất lượng codebase (shadcn/improve audit), dùng để quản lý các đợt refactoring, tối ưu hiệu năng, thắt chặt bảo mật và bảo trì hệ thống qua 5 đợt (waves):
 
-- [Lộ trình triển khai Backend (tiếng Việt)](plans/README.vi.md)
-- [Implementation Plans (English)](plans/README.md)
+- [Lộ trình cải tiến Backend (tiếng Việt)](plans/README.vi.md)
+- [Improvement Plans Index (English)](plans/README.md)
 
-Các kế hoạch bao gồm 15 bản kế hoạch (plans) được chia làm 5 làn sóng (waves) chính: security hardening → performance optimization → orchestration refactoring → maintenance.
+*Lưu ý: Thư mục `plans/` tập trung vào lộ trình refactoring và tối ưu hóa hệ thống, các tài liệu đặc tả nghiệp vụ chính nằm trong thư mục `docs/`.*
