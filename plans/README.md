@@ -41,21 +41,21 @@ or treat dependency drift as automatically safe.
 
 | ID | Plan | Branch | Priority | Effort | Depends on | Wave | Status |
 |---|---|---|---:|---:|---|---:|---|
-| BE-001 | [Expand the customer self-service contract](001-expand-customer-self-service-contract.md) | `feature/customer-self-service-contract` | P1 | L | — | 1 | TODO |
-| BE-002 | [Revoke cross-account role-user access](002-revoke-cross-account-role-user-access.md) | `fix/cross-account-role-user-access` | P1 | M | BE-001 and external FE-001 merged | 1 | TODO |
-| BE-003 | [Serialize coupon counter updates](003-serialize-coupon-counter-updates.md) | `fix/coupon-counter-concurrency` | P1 | M | BE-002 | 2 | TODO |
-| BE-004 | [Govern the public upload lifecycle](004-govern-public-upload-lifecycle.md) | `feature/upload-governance` | P1 | L | BE-002 | 2 | TODO |
-| BE-005 | [Stabilize the API error contract](005-stabilize-api-error-contract.md) | `fix/api-error-contract` | P1 | M | BE-002 | 2 | TODO |
-| BE-006 | [Batch checkout image loading](006-batch-checkout-image-loading.md) | `perf/checkout-image-batching` | P2 | M | BE-003 | 3 | TODO |
-| BE-007 | [Batch sale-campaign queries](007-batch-sale-campaign-queries.md) | `perf/sale-campaign-query-batching` | P2 | L | BE-003 | 3 | TODO |
-| BE-008 | [Eliminate admin-list N+1 queries](008-eliminate-admin-list-n-plus-one.md) | `perf/admin-list-fetching` | P2 | L | BE-002 | 3 | TODO |
-| BE-009 | [Add a wishlist product-summary contract](009-add-wishlist-product-summary-contract.md) | `feature/wishlist-product-summary` | P2 | M | BE-002 | 3 | TODO |
-| BE-010 | [Characterize large orchestration services](010-characterize-large-orchestration-services.md) | `test/orchestration-characterization` | P2 | L | BE-003 and BE-005–BE-009 | 4 | TODO |
-| BE-011 | [Refactor authentication orchestration](011-refactor-auth-orchestration.md) | `refactor/auth-orchestration` | P3 | L | BE-001, BE-002, BE-005, BE-010 | 4 | TODO |
-| BE-012 | [Refactor checkout orchestration](012-refactor-checkout-orchestration.md) | `refactor/checkout-orchestration` | P3 | L | BE-003, BE-006, BE-010 | 4 | TODO |
-| BE-013 | [Refactor sale-campaign orchestration](013-refactor-sale-campaign-orchestration.md) | `refactor/sale-campaign-orchestration` | P3 | L | BE-007, BE-010 | 4 | TODO |
-| BE-014 | [Refactor product orchestration](014-refactor-product-orchestration.md) | `refactor/product-orchestration` | P3 | L | BE-007, BE-009, BE-010, BE-013 | 4 | TODO |
-| BE-015 | [Clean backend dependencies and documentation](015-clean-backend-dependencies-and-docs.md) | `chore/backend-maintenance-docs` | P3 | M | BE-001–BE-014 | 5 | TODO |
+| BE-001 | [Expand the customer self-service contract](001-expand-customer-self-service-contract.md) | `feature/customer-self-service-contract` | P1 | L | — | 1 | DONE |
+| BE-002 | [Revoke cross-account role-user access](002-revoke-cross-account-role-user-access.md) | `fix/cross-account-role-user-access` | P1 | M | BE-001 and external FE-001 merged | 1 | DONE |
+| BE-003 | [Serialize coupon counter updates](003-serialize-coupon-counter-updates.md) | `fix/coupon-counter-concurrency` | P1 | M | BE-002 | 2 | DONE |
+| BE-004 | [Govern the public upload lifecycle](004-govern-public-upload-lifecycle.md) | `feature/upload-governance` | P1 | L | BE-002 | 2 | DONE |
+| BE-005 | [Stabilize the API error contract](005-stabilize-api-error-contract.md) | `fix/api-error-contract` | P1 | M | BE-002 | 2 | DONE |
+| BE-006 | [Batch checkout image loading](006-batch-checkout-image-loading.md) | `perf/checkout-image-batching` | P2 | M | BE-003 | 3 | DONE |
+| BE-007 | [Batch sale-campaign queries](007-batch-sale-campaign-queries.md) | `perf/sale-campaign-query-batching` | P2 | L | BE-003 | 3 | DONE |
+| BE-008 | [Eliminate admin-list N+1 queries](008-eliminate-admin-list-n-plus-one.md) | `perf/admin-list-fetching` | P2 | L | BE-002 | 3 | DONE |
+| BE-009 | [Add a wishlist product-summary contract](009-add-wishlist-product-summary-contract.md) | `feature/wishlist-product-summary` | P2 | M | BE-002 | 3 | DONE |
+| BE-010 | [Characterize large orchestration services](010-characterize-large-orchestration-services.md) | `test/orchestration-characterization` | P2 | L | BE-003 and BE-005–BE-009 | 4 | DONE |
+| BE-011 | [Refactor authentication orchestration](011-refactor-auth-orchestration.md) | `refactor/auth-orchestration` | P3 | L | BE-001, BE-002, BE-005, BE-010 | 4 | DONE |
+| BE-012 | [Refactor checkout orchestration](012-refactor-checkout-orchestration.md) | `refactor/checkout-orchestration` | P3 | L | BE-003, BE-006, BE-010 | 4 | DONE |
+| BE-013 | [Refactor sale-campaign orchestration](013-refactor-sale-campaign-orchestration.md) | `refactor/sale-campaign-orchestration` | P3 | L | BE-007, BE-010 | 4 | DONE |
+| BE-014 | [Refactor product orchestration](014-refactor-product-orchestration.md) | `refactor/product-orchestration` | P3 | L | BE-007, BE-009, BE-010, BE-013 | 4 | DONE |
+| BE-015 | [Clean backend dependencies and documentation](015-clean-backend-dependencies-and-docs.md) | `chore/backend-maintenance-docs` | P3 | M | BE-001–BE-014 | 5 | DONE |
 
 Status values: `TODO`, `IN PROGRESS`, `DONE`, `BLOCKED (<reason>)`, or
 `REJECTED (<reason>)`.

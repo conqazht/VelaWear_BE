@@ -1,3 +1,9 @@
+### BE-016: Deliver order-completed email outbox and brand-consistent OTP HTML template
+
+- **Date/Time**: 2026-08-08 (Asia/Saigon)
+- **Summary of Changes**: Merge PR #25 (`feature/order-completed-email`). Triển khai Transactional Outbox Pattern cho sự kiện gửi email hóa đơn khi đơn hàng hoàn tất (`COMPLETED`), bao gồm bảng `email_outbox` (`V24__create_email_outbox.sql`), background worker `EmailOutboxJob` hỗ trợ lease-based locking, idempotency-key và retry tự động qua `ResendEmailProvider`. Chuẩn hóa bộ khung giao diện HTML email nhận diện thương hiệu VelaWear (`order-completed.html` & `otp.html`) với tông màu kem/xám `#f5f3ef`, khung trắng `#ffffff`, header logo `VELAWEAR` (dãn chữ 5px) và footer đen nhám `#1c1a18`. Bổ sung `OtpEmailTemplateRenderer` đồng bộ mẫu HTML cho toàn bộ các kịch bản OTP (`REGISTER`, `FORGOT_PASSWORD`, `CHANGE_EMAIL`).
+- **Verification**: `mvnw.cmd clean test` pass 100% (792/792 tests). Merge PR #25 vào `main` thành công (`ffa2d1a`). `git status` sạch sẽ trên `main`.
+
 ### BE-015: Clean backend dependencies and documentation
 
 - **Date/Time**: 2026-08-08 (Asia/Saigon)
