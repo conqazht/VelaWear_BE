@@ -22,11 +22,11 @@ import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.security.SecurityHmacService;
 import vn.conganh.commercial.security.monitoring.SecurityMetrics;
 import vn.conganh.commercial.security.ratelimit.OtpRateLimitProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import vn.conganh.commercial.util.constant.OtpPurpose;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class OtpServiceImpl implements OtpService {
 
     private static final String NO_ACTOR = "-";
@@ -38,7 +38,47 @@ public class OtpServiceImpl implements OtpService {
     private final OtpProperties properties;
     private final OtpRateLimitProperties otpRateLimitProperties;
     private final SecurityMetrics securityMetrics;
+    private final OtpEmailTemplateRenderer templateRenderer;
     private final SecureRandom secureRandom = new SecureRandom();
+
+    @Autowired
+    public OtpServiceImpl(
+            UserRepository userRepository,
+            EmailProvider emailProvider,
+            OtpRedisStore redisStore,
+            SecurityHmacService hmacService,
+            OtpProperties properties,
+            OtpRateLimitProperties otpRateLimitProperties,
+            SecurityMetrics securityMetrics,
+            OtpEmailTemplateRenderer templateRenderer) {
+        this.userRepository = userRepository;
+        this.emailProvider = emailProvider;
+        this.redisStore = redisStore;
+        this.hmacService = hmacService;
+        this.properties = properties;
+        this.otpRateLimitProperties = otpRateLimitProperties;
+        this.securityMetrics = securityMetrics;
+        this.templateRenderer = templateRenderer;
+    }
+
+    public OtpServiceImpl(
+            UserRepository userRepository,
+            EmailProvider emailProvider,
+            OtpRedisStore redisStore,
+            SecurityHmacService hmacService,
+            OtpProperties properties,
+            OtpRateLimitProperties otpRateLimitProperties,
+            SecurityMetrics securityMetrics) {
+        this(
+                userRepository,
+                emailProvider,
+                redisStore,
+                hmacService,
+                properties,
+                otpRateLimitProperties,
+                securityMetrics,
+                new OtpEmailTemplateRenderer());
+    }
 
     @Override
     public OtpRequestResponse requestOtp(OtpRequest request) {
@@ -69,10 +109,11 @@ public class OtpServiceImpl implements OtpService {
         if (deliverEmail) {
             Timer.Sample deliveryTimer = securityMetrics.startTimer();
             try {
+                long minutes = Math.max(1, properties.getTtlSeconds() / 60);
                 emailProvider.sendEmail(
                         normalizedEmail,
-                        getEmailSubject(purpose),
-                        getEmailContentHtml(purpose, rawCode));
+                        templateRenderer.getSubject(purpose),
+                        templateRenderer.render(purpose, rawCode, minutes));
                 securityMetrics.stopOtpDelivery(deliveryTimer, "success");
             } catch (RuntimeException exception) {
                 securityMetrics.stopOtpDelivery(deliveryTimer, "failure");
@@ -231,35 +272,5 @@ public class OtpServiceImpl implements OtpService {
 
     private String shortDigest(String digest) {
         return digest.substring(0, Math.min(12, digest.length()));
-    }
-
-    private String getEmailSubject(OtpPurpose purpose) {
-        return switch (purpose) {
-            case REGISTER -> "[Vela Wear] Email Verification Code";
-            case FORGOT_PASSWORD -> "[Vela Wear] Password Recovery Code";
-            case CHANGE_EMAIL -> "[Vela Wear] Change Email Verification Code";
-        };
-    }
-
-    private String getEmailContentHtml(OtpPurpose purpose, String code) {
-        String actionText = switch (purpose) {
-            case REGISTER -> "complete your registration";
-            case FORGOT_PASSWORD -> "reset your password";
-            case CHANGE_EMAIL -> "update your email address";
-        };
-        long minutes = Math.max(1, properties.getTtlSeconds() / 60);
-        return """
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-                  <h2 style="color: #333333;">Vela Wear Verification</h2>
-                  <p>Hello,</p>
-                  <p>You requested a verification code to %s.</p>
-                  <div style="background-color: #f5f5f5; padding: 15px; text-align: center; border-radius: 4px; margin: 20px 0;">
-                    <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #1a1a1a;">%s</span>
-                  </div>
-                  <p>This code is valid for <strong>%d minutes</strong>. If you did not request this, you can safely ignore this email.</p>
-                  <br/>
-                  <p>Best regards,<br/>The Vela Wear Team</p>
-                </div>
-                """.formatted(actionText, code, minutes);
     }
 }

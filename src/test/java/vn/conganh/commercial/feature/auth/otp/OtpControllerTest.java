@@ -287,7 +287,7 @@ class OtpControllerTest extends AbstractIntegrationTest {
         ArgumentCaptor<String> contentCaptor = ArgumentCaptor.forClass(String.class);
         verify(emailProvider).sendEmail(eq(email), anyString(), contentCaptor.capture());
         String code = contentCaptor.getValue().replaceAll(
-                "(?s).*letter-spacing: 5px; color: #1a1a1a;\">(\\d{6})</span>.*",
+                "(?s).*(\\d{6})</span>.*",
                 "$1");
         assertThat(code).matches("\\d{6}");
         return new IssuedOtp(challengeId, code);
