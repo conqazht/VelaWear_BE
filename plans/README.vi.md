@@ -8,7 +8,7 @@
 
 ## Baseline lập kế hoạch
 
-- Repository: `coqanklazy/VelaWear_BE`
+- Repository: `conqazht/VelaWear_BE`
 - Planned at: commit `2be2362` trên `main`
 - Planning branch: `docs/shadcn-improve-plans`
 - Phải merge PR tài liệu này vào `main` trước khi tạo implementation branch.

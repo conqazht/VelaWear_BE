@@ -5,10 +5,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface WishlistRepository extends JpaRepository<Wishlist, Long>, JpaSpecificationExecutor<Wishlist> {
 
     Page<Wishlist> findByUserId(Long userId, Pageable pageable);
+
+    @Query("SELECT w FROM Wishlist w JOIN w.product p WHERE w.user.id = :userId AND p.status = 'ACTIVE' AND p.deletedAt IS NULL")
+    Page<Wishlist> findActiveWishlistsByUserId(@Param("userId") Long userId, Pageable pageable);
 
     Page<Wishlist> findByProductId(Long productId, Pageable pageable);
 

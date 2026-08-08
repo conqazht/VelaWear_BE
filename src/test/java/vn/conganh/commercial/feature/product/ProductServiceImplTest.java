@@ -64,6 +64,7 @@ class ProductServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        ProductResponseAssembler responseAssembler = new ProductResponseAssembler();
         productService = new ProductServiceImpl(
                 productRepository,
                 productTranslationRepository,
@@ -73,7 +74,8 @@ class ProductServiceImplTest {
                 productVariantRepository,
                 variantPricingService,
                 saleCampaignItemRepository,
-                saleCampaignTranslationRepository);
+                saleCampaignTranslationRepository,
+                responseAssembler);
         lenient().when(productVariantRepository.findByProductIdInAndDeletedAtIsNull(any())).thenReturn(List.of());
     }
 

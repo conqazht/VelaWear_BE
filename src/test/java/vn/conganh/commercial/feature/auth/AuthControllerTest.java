@@ -32,7 +32,6 @@ import vn.conganh.commercial.feature.auth.dto.ChangeEmailRequest;
 import vn.conganh.commercial.feature.auth.dto.ChangePasswordRequest;
 import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
-import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenRepository;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;

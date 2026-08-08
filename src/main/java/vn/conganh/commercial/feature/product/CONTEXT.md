@@ -10,8 +10,12 @@ quản trị `/api/v1/products`.
 - Xóa Product là soft archive: đặt `status = ARCHIVED` và `deletedAt`.
 - Product Variant, tồn kho và Sale Campaign có workflow riêng; Product không tự
   tính giá khuyến mãi.
-- Nội dung storefront resolve theo `locale`, `Accept-Language`, rồi fallback `vi`
+- Nội dung storefront (Storefront Catalog, Wishlist Self List) resolve theo `locale`, `Accept-Language`, rồi fallback `vi`
   và field core.
+
+## DTO Assembly
+
+- `ProductResponseAssembler` là explicit repository-free component phụ trách dựng đối tượng DTO `ProductResponse` kèm fallback đa ngôn ngữ (`localeCode`), thông tin danh mục, ảnh sản phẩm và giá đại diện (`VariantPricing`). Không dùng MapStruct để đảm bảo quá trình chuyển đổi dữ liệu không gây I/O ẩn hay N+1 query.
 
 ## Storefront catalog
 

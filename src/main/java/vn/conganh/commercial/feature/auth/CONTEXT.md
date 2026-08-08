@@ -22,6 +22,8 @@ Auth exposes public endpoints under `/api/v1/auth`:
 - Refresh token lifetime is configured by `JWT_REFRESH_TOKEN_EXPIRATION`, default `259200` seconds.
 - Production must provide separate `JWT_ACCESS_TOKEN_SECRET_KEY` and `JWT_REFRESH_TOKEN_SECRET_KEY`
   environment variables.
+- Token encoding/decoding is isolated within `AuthTokenCodec`. `AuthTokenCodec` encapsulates access-token encoding (encode-only) and refresh-token encoding/decoding/validation (`type=refresh`, `jti`, `securityVersion`).
+- `AuthTokenCodec` uses `@Qualifier("refreshJwtDecoder")` for decoding refresh tokens; it MUST NOT decode access tokens or copy/duplicate Spring Security's resource-server access decoder (`JwtConfig.jwtDecoder()`).
 - Access tokens are JWTs signed by the access-token `JwtEncoder` with HS512.
 - Refresh tokens are JWTs signed by the refresh-token `JwtEncoder` with HS512.
 - Access and refresh JWTs include `userId` and `securityVersion`. Refresh JWTs also
@@ -97,5 +99,11 @@ See [`docs/RACE_CONDITION_TESTING_VI.md`](../../../../../../../../docs/RACE_COND
 for the real Redis/PostgreSQL concurrency tests.
 
 The complete API flows, Redis keys, limiter thresholds, trusted-proxy setup,
-rollout rules and troubleshooting are documented in
+rollout rollout rules and troubleshooting are documented in
 [`docs/OTP_SECURITY_FLOW_VI.md`](../../../../../../../../docs/OTP_SECURITY_FLOW_VI.md).
+
+## API Error Contract
+
+- Framework and security failures return stable `code` values (`REQUEST_BODY_INVALID`, `INVALID_REQUEST`, `AUTHENTICATION_REQUIRED`, `ACCESS_DENIED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_SERVER_ERROR`).
+- Consumers must branch on `code` and `Retry-After` headers/fields, not on the `message` text.
+- Exceptions never leak root causes or stack traces to the client response.

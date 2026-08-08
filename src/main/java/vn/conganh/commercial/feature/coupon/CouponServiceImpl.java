@@ -85,7 +85,7 @@ public class CouponServiceImpl implements CouponService {
     @Override
     @Transactional
     public CouponResponse updateCoupon(Long id, UpdateCouponRequest request) {
-        Coupon coupon = findCoupon(id);
+        Coupon coupon = findCouponWithLock(id);
         if (!request.endDate().isAfter(request.startDate())) {
             throw new InvalidRequestException("endDate must be after startDate");
         }
@@ -103,11 +103,16 @@ public class CouponServiceImpl implements CouponService {
     @Override
     @Transactional
     public void deleteCoupon(Long id) {
-        couponRepository.delete(findCoupon(id));
+        couponRepository.delete(findCouponWithLock(id));
     }
 
     private Coupon findCoupon(Long id) {
         return couponRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon", "id", id));
+    }
+
+    private Coupon findCouponWithLock(Long id) {
+        return couponRepository.findWithLockById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon", "id", id));
     }
 }

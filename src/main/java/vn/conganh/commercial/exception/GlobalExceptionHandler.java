@@ -130,22 +130,39 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidDataAccessApiUsageException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidDataAccessApiUsage(InvalidDataAccessApiUsageException exception) {
-        String message = exception.getRootCause() != null ? exception.getRootCause().getMessage() : exception.getMessage();
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Invalid query usage: " + message));
+                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "INVALID_REQUEST", "Invalid query usage", null));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException exception) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Invalid argument: " + exception.getMessage()));
+                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "INVALID_REQUEST", "Invalid argument provided", null));
+    }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadable(org.springframework.http.converter.HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "REQUEST_BODY_INVALID", "Malformed JSON or unreadable request body", null));
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(org.springframework.web.HttpRequestMethodNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(ApiResponse.error(HttpStatus.METHOD_NOT_ALLOWED.value(), "METHOD_NOT_ALLOWED", "Unsupported HTTP method", null));
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupported(org.springframework.web.HttpMediaTypeNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ApiResponse.error(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(), "UNSUPPORTED_MEDIA_TYPE", "Unsupported content type", null));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception exception) {
         log.error("Unexpected error: ", exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Internal server error"));
+                .body(ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "INTERNAL_SERVER_ERROR", "Internal server error", null));
     }
 
     @ExceptionHandler(RateLimitExceededException.class)

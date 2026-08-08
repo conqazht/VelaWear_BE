@@ -122,6 +122,16 @@ class FileControllerTest extends AuthenticatedIntegrationTest {
                             .header("Authorization", "Bearer " + noAccessToken()))
                     .andExpect(status().isForbidden());
         }
+
+        @Test
+        @DisplayName("POST /api/v1/files - 403: USER không còn được upload generic folder")
+        void upload_userRole_returnsForbiddenAfterV23() throws Exception {
+            mockMvc.perform(multipart(ENDPOINT)
+                            .file(imageFile("avatar.jpg", "image/jpeg", jpegBytes()))
+                            .param("folder", "avatars")
+                            .header("Authorization", "Bearer " + userToken()))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     private MockMultipartFile imageFile(String originalFileName, String contentType, byte[] content) {

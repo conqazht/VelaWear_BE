@@ -7,8 +7,6 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -16,13 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.security.TokenBlacklistService;
@@ -49,7 +41,6 @@ import vn.conganh.commercial.feature.auth.oauth2.OAuth2LoginCodeService;
 import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
-import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenService;
@@ -67,9 +58,6 @@ import vn.conganh.commercial.util.constant.OtpPurpose;
 @Service
 public class AuthServiceImpl implements AuthService {
 
-    private static final MacAlgorithm JWT_MAC_ALGORITHM = MacAlgorithm.HS512;
-    private static final String REFRESH_TOKEN_TYPE = "refresh";
-
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -77,9 +65,7 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenSessionService refreshTokenSessionService;
     private final PasswordEncoder passwordEncoder;
-    private final JwtEncoder accessJwtEncoder;
-    private final JwtEncoder refreshJwtEncoder;
-    private final JwtDecoder refreshJwtDecoder;
+    private final AuthTokenCodec authTokenCodec;
     private final JwtProperties jwtProperties;
     private final TokenBlacklistService tokenBlacklistService;
     private final OtpService otpService;
@@ -97,9 +83,7 @@ public class AuthServiceImpl implements AuthService {
             RefreshTokenService refreshTokenService,
             RefreshTokenSessionService refreshTokenSessionService,
             PasswordEncoder passwordEncoder,
-            JwtEncoder accessJwtEncoder,
-            @Qualifier("refreshJwtEncoder") JwtEncoder refreshJwtEncoder,
-            @Qualifier("refreshJwtDecoder") JwtDecoder refreshJwtDecoder,
+            AuthTokenCodec authTokenCodec,
             JwtProperties jwtProperties,
             TokenBlacklistService tokenBlacklistService,
             OtpService otpService,
@@ -115,9 +99,7 @@ public class AuthServiceImpl implements AuthService {
         this.refreshTokenService = refreshTokenService;
         this.refreshTokenSessionService = refreshTokenSessionService;
         this.passwordEncoder = passwordEncoder;
-        this.accessJwtEncoder = accessJwtEncoder;
-        this.refreshJwtEncoder = refreshJwtEncoder;
-        this.refreshJwtDecoder = refreshJwtDecoder;
+        this.authTokenCodec = authTokenCodec;
         this.jwtProperties = jwtProperties;
         this.tokenBlacklistService = tokenBlacklistService;
         this.otpService = otpService;
@@ -332,18 +314,7 @@ public class AuthServiceImpl implements AuthService {
             Long userId,
             long securityVersion,
             List<String> roles) {
-        Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .subject(email)
-                .claim("userId", userId)
-                .claim("securityVersion", securityVersion)
-                .claim("roles", roles)
-                .issuedAt(now)
-                .expiresAt(now.plus(jwtProperties.accessTokenExpiration(), ChronoUnit.SECONDS))
-                .build();
-
-        JwsHeader header = JwsHeader.with(JWT_MAC_ALGORITHM).build();
-        return accessJwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return authTokenCodec.generateAccessToken(email, userId, securityVersion, roles);
     }
 
     private String createRefreshToken(User user, String deviceInfo, String ipAddress) {
@@ -402,45 +373,20 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String generateRefreshToken(User user, Instant issuedAt, Instant expiresAt, String jti) {
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .id(jti)
-                .subject(user.getEmail())
-                .claim("userId", user.getId())
-                .claim("securityVersion", user.getSecurityVersion())
-                .claim("type", REFRESH_TOKEN_TYPE)
-                .issuedAt(issuedAt)
-                .expiresAt(expiresAt)
-                .build();
-
-        JwsHeader header = JwsHeader.with(JWT_MAC_ALGORITHM).build();
-        return refreshJwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return authTokenCodec.generateRefreshToken(
+                user.getEmail(), user.getId(), user.getSecurityVersion(), issuedAt, expiresAt, jti);
     }
 
     private Jwt validateRefreshJwt(String rawRefreshToken) {
-        try {
-            Jwt jwt = refreshJwtDecoder.decode(rawRefreshToken);
-            if (!REFRESH_TOKEN_TYPE.equals(jwt.getClaimAsString("type"))) {
-                throw new UnauthorizedException("Refresh token type is invalid");
-            }
-            return jwt;
-        } catch (JwtException exception) {
-            throw new UnauthorizedException("Refresh token is invalid");
-        }
+        return authTokenCodec.validateAndDecodeRefreshJwt(rawRefreshToken);
     }
 
     private String requireJti(Jwt jwt) {
-        if (jwt.getId() == null || jwt.getId().isBlank()) {
-            throw new UnauthorizedException("Refresh token id is invalid");
-        }
-        return jwt.getId();
+        return authTokenCodec.requireJti(jwt);
     }
 
     private long requireSecurityVersion(Jwt jwt) {
-        Object claim = jwt.getClaim("securityVersion");
-        if (claim instanceof Number number && number.longValue() >= 0) {
-            return number.longValue();
-        }
-        throw new SessionRevokedException();
+        return authTokenCodec.requireSecurityVersion(jwt);
     }
 
     private String normalizeEmail(String email) {
@@ -520,5 +466,19 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("[VelaWear/Auth] - CHANGE_PASSWORD: userId: {}, hadPassword: {}", user.getId(), hasPassword);
         securityMetrics.authAttempt("password_change", "success");
+    }
+
+    @Override
+    @Transactional
+    public void deleteMe(String email) {
+        String normalizedEmail = email.toLowerCase().trim();
+        User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedEmail));
+
+        user.setDeletedAt(java.time.Instant.now());
+        sessionRevocationService.revokeAll(user, SessionRevocationReason.ACCOUNT_DELETED);
+        userRepository.save(user);
+
+        log.info("[VelaWear/Auth] - DELETE_ME: userId: {}", user.getId());
     }
 }

@@ -16,6 +16,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -184,20 +186,43 @@ class CustomerSelfScopeIntegrationTest extends AuthenticatedIntegrationTest {
     }
 
     @Test
-    @DisplayName("Legacy generic reads vẫn hoạt động với production ROLE_ADMIN trong expand phase")
-    void legacyGenericReads_realAdminRole_remainAvailable() throws Exception {
-        jdbcTemplate.update("""
-                insert into user_role (user_id, role_id)
-                select ?, id from roles where name = 'ADMIN'
-                on conflict do nothing
-                """, customerA.userId());
-        String adminToken = tokenWithRoles(
-                customerA.email(), customerA.userId(), List.of("ROLE_ADMIN"));
+    @DisplayName("Production ROLE_USER bị từ chối trên generic cross-account reads")
+    void legacyGenericCustomerReads_realUserRole_returnForbidden() throws Exception {
+        String token = tokenFor(customerA);
+
+        mockMvc.perform(get("/api/v1/carts/user/{userId}", customerB.userId())
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/orders/{id}", customerB.orderId())
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/user-addresses/{id}", customerB.addressId())
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/reviews/user/{userId}", customerB.userId())
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/wishlists/{id}", MISSING_ID)
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "MANAGER", "STAFF"})
+    @DisplayName("Generic order read vẫn hoạt động với từng production operator role")
+    void legacyGenericOrderRead_realOperatorRoles_remainsAvailable(String roleName) throws Exception {
+        String operatorToken = tokenForRole(customerA, roleName);
 
         mockMvc.perform(get("/api/v1/orders/{id}", customerB.orderId())
-                        .header("Authorization", bearer(adminToken)))
+                        .header("Authorization", bearer(operatorToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(customerB.orderId()));
+    }
+
+    @Test
+    @DisplayName("Generic address read vẫn hoạt động với production ADMIN mapping")
+    void legacyGenericAddressRead_realAdminRole_remainsAvailable() throws Exception {
+        String adminToken = tokenForRole(customerA, "ADMIN");
 
         mockMvc.perform(get("/api/v1/user-addresses/{id}", customerB.addressId())
                         .header("Authorization", bearer(adminToken)))
@@ -263,6 +288,16 @@ class CustomerSelfScopeIntegrationTest extends AuthenticatedIntegrationTest {
 
     private String tokenFor(CustomerFixture customer) {
         return tokenWithRoles(customer.email(), customer.userId(), List.of("ROLE_USER"));
+    }
+
+    private String tokenForRole(CustomerFixture customer, String roleName) {
+        jdbcTemplate.update("""
+                insert into user_role (user_id, role_id)
+                select ?, id from roles where name = ?
+                on conflict do nothing
+                """, customer.userId(), roleName);
+        return tokenWithRoles(
+                customer.email(), customer.userId(), List.of("ROLE_" + roleName));
     }
 
     private String bearer(String token) {

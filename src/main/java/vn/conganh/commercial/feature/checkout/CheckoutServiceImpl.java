@@ -2,17 +2,15 @@ package vn.conganh.commercial.feature.checkout;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HexFormat;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -86,6 +84,15 @@ public class CheckoutServiceImpl implements CheckoutService {
     private static final Duration PAYMENT_WINDOW = Duration.ofMinutes(15);
     private static final Duration PAYMENT_GRACE = Duration.ofSeconds(30);
 
+    /**
+     * Deterministic image selection: thumbnail first, then lowest sortOrder, then lowest ID.
+     * Shared between bulk prefetch selection and any standalone selection call.
+     */
+    static final Comparator<ProductImage> IMAGE_SELECTION_ORDER = Comparator
+            .comparing((ProductImage image) -> !Boolean.TRUE.equals(image.getIsThumbnail()))
+            .thenComparing(ProductImage::getSortOrder, Comparator.nullsLast(Integer::compareTo))
+            .thenComparing(ProductImage::getId, Comparator.nullsLast(Long::compareTo));
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final ProductVariantRepository variantRepository;
@@ -105,6 +112,8 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final SaleAllocationRepository allocationRepository;
     private final OrderResourceLifecycleService lifecycleService;
     private final CatalogContentLocalizationService localizationService;
+    private final CheckoutFingerprintService fingerprintService;
+    private final CheckoutOrderItemAssembler orderItemAssembler;
 
     @Value("${app.checkout.shipping-fee:30000}")
     private BigDecimal configuredShippingFee;
@@ -396,35 +405,14 @@ public class CheckoutServiceImpl implements CheckoutService {
             List<QuoteLine> lines,
             Order order,
             QuoteLocalization localization) {
-        List<OrderItem> orderItems = new ArrayList<>();
-        for (QuoteLine line : lines) {
-            ProductVariant variant = line.variant();
-            Product product = variant.getProduct();
-            VariantPricing pricing = line.pricing();
-            CatalogContentLocalizationService.LocalizedProduct localizedProduct = localizedProduct(
-                    line,
-                    localization);
-            OrderItem orderItem = new OrderItem();
-            orderItem.setOrder(order);
-            orderItem.setVariantId(variant.getId());
-            orderItem.setProductName(localizedProduct.name());
-            orderItem.setProductSlug(localizedProduct.slug());
-            orderItem.setVariantName(buildVariantName(variant));
-            orderItem.setSku(variant.getSku());
-            orderItem.setImage(resolveItemImage(variant, product));
-            orderItem.setListPrice(pricing.listPrice());
-            orderItem.setPrice(pricing.effectivePrice());
-            orderItem.setPriceSource(pricing.priceSource());
-            orderItem.setSaleCampaignItem(pricing.campaignItem());
-            if (pricing.campaignItem() != null) {
-                orderItem.setSaleCampaignCode(pricing.campaignItem().getCampaign().getCode());
-                orderItem.setSaleCampaignName(localizedCampaignName(pricing, localization));
-            }
-            orderItem.setQuantity(line.item().getQuantity());
-            orderItem.setSubtotal(pricing.effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())));
-            orderItem.setStatus("PENDING");
-            orderItems.add(orderItem);
-        }
+        ImageIndex imageIndex = prefetchImageIndex(lines);
+        List<OrderItem> orderItems = orderItemAssembler.assembleOrderItems(
+                lines,
+                order,
+                line -> localizedProduct(line, localization),
+                pricing -> localizedCampaignName(pricing, localization),
+                this::buildVariantName,
+                variant -> resolveItemImage(variant, imageIndex));
         return orderItemRepository.saveAll(orderItems);
     }
 
@@ -527,50 +515,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             BigDecimal shippingFee,
             BigDecimal discountAmount,
             BigDecimal finalAmount) {
-        String canonical = lines.stream()
-                .sorted(Comparator.comparing(line -> line.variant().getId()))
-                .map(line -> String.join(":",
-                        line.variant().getId().toString(),
-                        Integer.toString(line.item().getQuantity()),
-                        line.pricing().listPrice().toPlainString(),
-                        line.pricing().effectivePrice().toPlainString(),
-                        line.pricing().priceSource().name(),
-                        line.pricing().campaignItem() == null ? "-" : line.pricing().campaignItem().getId().toString()))
-                .collect(Collectors.joining("|"));
-        String couponSnapshot = coupon == null
-                ? "-"
-                : String.join(":",
-                        coupon.getId().toString(),
-                        coupon.getCode(),
-                        coupon.getType().name(),
-                        coupon.getValue().toPlainString(),
-                        coupon.getMaxDiscount() == null ? "-" : coupon.getMaxDiscount().toPlainString(),
-                        coupon.getMinOrderAmount() == null ? "-" : coupon.getMinOrderAmount().toPlainString());
-        return sha256(canonical
-                + "|coupon=" + couponSnapshot
-                + "|eligible=" + eligibleSubtotal.toPlainString()
-                + "|shipping=" + shippingFee.toPlainString()
-                + "|discount=" + discountAmount.toPlainString()
-                + "|final=" + finalAmount.toPlainString());
+        return fingerprintService.computeFingerprint(
+                lines, coupon, eligibleSubtotal, shippingFee, discountAmount, finalAmount);
     }
 
     private String requestHash(CheckoutRequest request) {
-        return sha256(String.join("|",
-                nullSafe(request.receiverName()),
-                nullSafe(request.receiverPhone()),
-                nullSafe(request.receiverAddress()),
-                nullSafe(request.paymentMethod()).toUpperCase(),
-                nullSafe(request.couponCode()),
-                nullSafe(request.pricingFingerprint())));
-    }
-
-    private String sha256(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
+        return fingerprintService.computeRequestHash(request);
     }
 
     private User findUser(String email) {
@@ -614,20 +564,46 @@ public class CheckoutServiceImpl implements CheckoutService {
         return colorName.isEmpty() ? sizeName : colorName;
     }
 
-    private String resolveItemImage(ProductVariant variant, Product product) {
-        Optional<String> variantImage = selectImage(productImageRepository.findByVariantId(variant.getId()));
-        return variantImage.orElseGet(() -> selectImage(productImageRepository.findByProductId(product.getId())).orElse(null));
+    /**
+     * Prefetch all product images for the given checkout lines in a single bulk query,
+     * then build in-memory indexes keyed by variant ID and product ID.
+     */
+    private ImageIndex prefetchImageIndex(List<QuoteLine> lines) {
+        Set<Long> productIds = lines.stream()
+                .map(line -> line.variant().getProduct().getId())
+                .collect(Collectors.toSet());
+        List<ProductImage> allImages = productIds.isEmpty()
+                ? List.of()
+                : productImageRepository.findByProductIdIn(new ArrayList<>(productIds));
+        Map<Long, List<ProductImage>> byVariant = new HashMap<>();
+        Map<Long, List<ProductImage>> byProduct = new HashMap<>();
+        for (ProductImage image : allImages) {
+            byProduct.computeIfAbsent(image.getProduct().getId(), k -> new ArrayList<>()).add(image);
+            if (image.getVariant() != null) {
+                byVariant.computeIfAbsent(image.getVariant().getId(), k -> new ArrayList<>()).add(image);
+            }
+        }
+        return new ImageIndex(byVariant, byProduct);
+    }
+
+    /**
+     * Resolve the best image for an order item using prefetched indexes.
+     * Selection order: variant-specific images first, then product-level fallback.
+     * Within each group: thumbnail first, lowest sortOrder, lowest ID.
+     */
+    private String resolveItemImage(ProductVariant variant, ImageIndex imageIndex) {
+        Optional<String> variantImage = selectImage(
+                imageIndex.byVariant().getOrDefault(variant.getId(), List.of()));
+        return variantImage.orElseGet(() -> selectImage(
+                imageIndex.byProduct().getOrDefault(variant.getProduct().getId(), List.of())).orElse(null));
     }
 
     private Optional<String> selectImage(List<ProductImage> images) {
-        if (images == null) {
+        if (images == null || images.isEmpty()) {
             return Optional.empty();
         }
         return images.stream()
-                .sorted(Comparator
-                        .comparing((ProductImage image) -> !Boolean.TRUE.equals(image.getIsThumbnail()))
-                        .thenComparing(ProductImage::getSortOrder, Comparator.nullsLast(Integer::compareTo))
-                        .thenComparing(ProductImage::getId, Comparator.nullsLast(Long::compareTo)))
+                .sorted(IMAGE_SELECTION_ORDER)
                 .map(ProductImage::getImage)
                 .findFirst();
     }
@@ -651,10 +627,6 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private CodedBusinessException conflict(String code, String message, Map<String, Object> details) {
         return new CodedBusinessException(code, message, HttpStatus.CONFLICT, details);
-    }
-
-    private String nullSafe(String value) {
-        return value == null ? "" : value.trim();
     }
 
     private QuoteLocalization localizeQuote(Quote quote, String localeCode) {
@@ -727,7 +699,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 }).toList());
     }
 
-    private record QuoteLine(CartItem item, ProductVariant variant, VariantPricing pricing) {}
+    record QuoteLine(CartItem item, ProductVariant variant, VariantPricing pricing) {}
 
     private record QuoteLocalization(
             Map<Long, CatalogContentLocalizationService.LocalizedProduct> products,
@@ -744,4 +716,8 @@ public class CheckoutServiceImpl implements CheckoutService {
             BigDecimal shippingFee,
             BigDecimal discountAmount,
             BigDecimal finalAmount) {}
+
+    private record ImageIndex(
+            Map<Long, List<ProductImage>> byVariant,
+            Map<Long, List<ProductImage>> byProduct) {}
 }

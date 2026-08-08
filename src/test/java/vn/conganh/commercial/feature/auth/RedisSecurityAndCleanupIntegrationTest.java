@@ -10,16 +10,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
-import org.springframework.http.MediaType;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 import vn.conganh.commercial.AuthenticatedIntegrationTest;
 import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenRepository;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenCleanupJob;
+import vn.conganh.commercial.feature.role.RoleRepository;
 import vn.conganh.commercial.feature.role.RoleService;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 import vn.conganh.commercial.feature.user.User;
@@ -44,12 +45,12 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
     private RefreshTokenCleanupJob refreshTokenCleanupJob;
 
     @Autowired
-    private vn.conganh.commercial.feature.role.RoleRepository roleRepository;
+    private RoleRepository roleRepository;
 
     @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplate;
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void tearDown() {
         userRepository.findByEmailAndDeletedAtIsNull("user.update@velawear.local")
                 .ifPresent(u -> {

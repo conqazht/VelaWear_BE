@@ -3,10 +3,15 @@ package vn.conganh.commercial.feature.file;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,6 +29,7 @@ public class FileServiceImpl implements FileService {
     private static final String PATH_TRAVERSAL_TOKEN = "..";
     private static final int MAX_SIGNATURE_BYTES = 12;
     private static final int WEBP_FORMAT_OFFSET = 8;
+    static final String AVATAR_FOLDER = "avatars";
     private static final String RESERVED_REVIEW_FOLDER = "reviews";
 
     private final UploadProperties uploadProperties;
@@ -49,6 +55,33 @@ public class FileServiceImpl implements FileService {
                 buildFileUrl(normalizedFolder, storedFileName),
                 file.getSize(),
                 Instant.now());
+    }
+
+    @Override
+    public FileUploadResponse storeAvatar(MultipartFile file) {
+        return store(file, AVATAR_FOLDER);
+    }
+
+    @Override
+    public boolean deleteManagedAvatar(String avatarUrl) {
+        return managedAvatarPath(avatarUrl)
+                .map(this::deleteIfExists)
+                .orElse(false);
+    }
+
+    List<String> managedAvatarUrlsOlderThan(Instant cutoff) {
+        Path directory = folderDirectory(AVATAR_FOLDER);
+        if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
+            return List.of();
+        }
+        try (Stream<Path> files = Files.list(directory)) {
+            return files
+                    .filter(path -> isOldRegularFile(path, cutoff))
+                    .map(path -> buildFileUrl(AVATAR_FOLDER, path.getFileName().toString()))
+                    .toList();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not scan avatar upload directory", exception);
+        }
     }
 
     private void validateFile(MultipartFile file) {
@@ -168,16 +201,11 @@ public class FileServiceImpl implements FileService {
         if (sanitizedFileName.isBlank()) {
             throw new InvalidRequestException("Invalid file name");
         }
-        return System.currentTimeMillis() + FILE_NAME_SEPARATOR + sanitizedFileName;
+        return UUID.randomUUID() + FILE_NAME_SEPARATOR + sanitizedFileName;
     }
 
     private Path buildTargetPath(String folder, String fileName) {
-        Path baseDirectory = Path.of(uploadProperties.baseDir()).toAbsolutePath().normalize();
-        Path folderDirectory = baseDirectory.resolve(folder).normalize();
-        if (!folderDirectory.startsWith(baseDirectory)) {
-            throw new InvalidRequestException("Invalid file path");
-        }
-
+        Path folderDirectory = folderDirectory(folder);
         try {
             Files.createDirectories(folderDirectory);
         } catch (IOException exception) {
@@ -192,9 +220,19 @@ public class FileServiceImpl implements FileService {
     }
 
     private void writeFile(MultipartFile file, Path target) {
+        Path temporaryTarget = target.resolveSibling(target.getFileName() + ".tmp").normalize();
+        if (!temporaryTarget.startsWith(target.getParent())) {
+            throw new InvalidRequestException("Invalid file path");
+        }
         try (InputStream inputStream = file.getInputStream()) {
-            Files.copy(inputStream, target);
+            Files.copy(inputStream, temporaryTarget, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(temporaryTarget, target, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException exception) {
+                Files.move(temporaryTarget, target, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException exception) {
+            deleteIfExists(temporaryTarget);
             throw new IllegalStateException("Could not store file", exception);
         }
     }
@@ -205,5 +243,56 @@ public class FileServiceImpl implements FileService {
                 + folder
                 + URL_SEPARATOR
                 + fileName;
+    }
+
+    private Path folderDirectory(String folder) {
+        Path baseDirectory = Path.of(uploadProperties.baseDir()).toAbsolutePath().normalize();
+        Path folderDirectory = baseDirectory.resolve(folder).normalize();
+        if (!folderDirectory.startsWith(baseDirectory)) {
+            throw new InvalidRequestException("Invalid file path");
+        }
+        return folderDirectory;
+    }
+
+    private java.util.Optional<Path> managedAvatarPath(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isBlank()
+                || avatarUrl.startsWith("http://")
+                || avatarUrl.startsWith("https://")) {
+            return java.util.Optional.empty();
+        }
+        String prefix = uploadProperties.urlPrefix() + URL_SEPARATOR + AVATAR_FOLDER + URL_SEPARATOR;
+        if (!avatarUrl.startsWith(prefix)) {
+            return java.util.Optional.empty();
+        }
+        String fileName = avatarUrl.substring(prefix.length());
+        if (fileName.isBlank()
+                || fileName.contains(PATH_TRAVERSAL_TOKEN)
+                || fileName.contains(URL_SEPARATOR)
+                || fileName.contains("\\")) {
+            return java.util.Optional.empty();
+        }
+        Path directory = folderDirectory(AVATAR_FOLDER);
+        Path path = directory.resolve(fileName).normalize();
+        if (!path.startsWith(directory)) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(path);
+    }
+
+    private boolean deleteIfExists(Path path) {
+        try {
+            return Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
+    private boolean isOldRegularFile(Path path, Instant cutoff) {
+        try {
+            return Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                    && Files.getLastModifiedTime(path).toInstant().isBefore(cutoff);
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 }

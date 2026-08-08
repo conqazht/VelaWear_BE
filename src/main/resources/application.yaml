@@ -184,6 +184,14 @@ app:
               - { limit: 120, window: 1m }
             session:
               - { limit: 120, window: 1m }
+        avatar-upload:
+          dimensions:
+            ip:
+              - { limit: 30, window: 1h }
+            global:
+              - { limit: 300, window: 1m }
+            user:
+              - { limit: 5, window: 1h }
   english-content:
     gemini:
       enabled: ${ENGLISH_CONTENT_ENABLED:false}
@@ -214,6 +222,12 @@ app:
     allowed-folders:
       - avatars
       - products
+    avatar:
+      reconciliation-cron: ${AVATAR_RECONCILIATION_CRON:0 0 */6 * * *}
+      orphan-grace: ${AVATAR_ORPHAN_GRACE:24h}
+  user:
+    retention-days: ${USER_RETENTION_DAYS:45}
+    cleanup-cron: ${USER_CLEANUP_CRON:0 0 3 * * *}
 
 springdoc:
   api-docs:

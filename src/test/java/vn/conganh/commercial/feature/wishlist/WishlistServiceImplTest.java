@@ -35,6 +35,13 @@ import vn.conganh.commercial.feature.wishlist.dto.CreateWishlistRequest;
 import vn.conganh.commercial.feature.wishlist.dto.WishlistResponse;
 import vn.conganh.commercial.util.constant.UserGender;
 
+import vn.conganh.commercial.feature.category.CategoryRepository;
+import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
+import vn.conganh.commercial.feature.product.ProductImageRepository;
+import vn.conganh.commercial.feature.product.ProductTranslationRepository;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Wishlist - WishlistServiceImpl")
 class WishlistServiceImplTest {
@@ -48,11 +55,32 @@ class WishlistServiceImplTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private CategoryRepository categoryRepository;
+
+    @Mock
+    private ProductTranslationRepository productTranslationRepository;
+
+    @Mock
+    private CategoryTranslationRepository categoryTranslationRepository;
+
+    @Mock
+    private ProductImageRepository productImageRepository;
+
+    @Mock
+    private ProductVariantRepository productVariantRepository;
+
+    @Mock
+    private VariantPricingService variantPricingService;
+
     private WishlistServiceImpl wishlistService;
 
     @BeforeEach
     void setUp() {
-        wishlistService = new WishlistServiceImpl(wishlistRepository, userRepository, productRepository);
+        wishlistService = new WishlistServiceImpl(
+                wishlistRepository, userRepository, productRepository, categoryRepository,
+                productTranslationRepository, categoryTranslationRepository,
+                productImageRepository, productVariantRepository, variantPricingService);
     }
 
     @Nested

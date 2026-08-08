@@ -53,7 +53,6 @@ import vn.conganh.commercial.feature.refreshtoken.dto.CreateRefreshTokenRequest;
 import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.role.RoleRepository;
 import vn.conganh.commercial.feature.user.User;
-import vn.conganh.commercial.feature.user.UserHasRole;
 import vn.conganh.commercial.feature.user.UserHasRoleRepository;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
@@ -122,6 +121,11 @@ class AuthServiceImplTest {
     void setUp() {
         JwtProperties jwtProperties = new JwtProperties(SECRET_KEY, REFRESH_SECRET_KEY, 900, 259200);
         JwtConfig jwtConfig = new JwtConfig(jwtProperties);
+        AuthTokenCodec authTokenCodec = new AuthTokenCodec(
+                jwtConfig.jwtEncoder(),
+                jwtConfig.refreshJwtEncoder(),
+                jwtConfig.refreshJwtDecoder(),
+                jwtProperties);
         authService = new AuthServiceImpl(
                 authenticationManager,
                 userRepository,
@@ -130,9 +134,7 @@ class AuthServiceImplTest {
                 refreshTokenService,
                 refreshTokenSessionService,
                 passwordEncoder,
-                jwtConfig.jwtEncoder(),
-                jwtConfig.refreshJwtEncoder(),
-                jwtConfig.refreshJwtDecoder(),
+                authTokenCodec,
                 jwtProperties,
                 tokenBlacklistService,
                 otpService,

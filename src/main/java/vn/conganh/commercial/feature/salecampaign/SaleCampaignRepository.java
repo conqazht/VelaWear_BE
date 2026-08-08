@@ -27,6 +27,10 @@ public interface SaleCampaignRepository
     @Query("select distinct c from SaleCampaign c where lower(c.code) = lower(:code)")
     Optional<SaleCampaign> findDetailedByCode(@Param("code") String code);
 
+    @EntityGraph(attributePaths = {"items", "items.variant", "items.variant.product"})
+    @Query("select distinct c from SaleCampaign c where c.id in :ids")
+    List<SaleCampaign> findAllDetailedByIdIn(@Param("ids") List<Long> ids);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = {"items", "items.variant", "items.variant.product"})
     @Query("select distinct c from SaleCampaign c where c.id = :id")

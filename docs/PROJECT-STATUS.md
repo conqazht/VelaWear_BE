@@ -1,3 +1,123 @@
+### BE-015: Clean backend dependencies and documentation
+
+- **Date/Time**: 2026-08-08 (Asia/Saigon)
+- **Summary of Changes**: Loại bỏ dependency MapStruct không sử dụng khỏi `pom.xml`. Bổ sung `DB_NAME=VelaWear` vào `.env.example` để đồng bộ với cấu hình Docker Compose. Cập nhật `docs/ARCHITECTURE.md` phản ánh đúng thiết kế thực tế đã shipped (Redis session tracking, `securityVersion`, custom `JwtSecurityFilter`, local file storage). Cập nhật link companion trong `docs/STOREFRONT_CATALOG_UX_BACKEND_VI.md` sang URL GitHub chính thức. Đồng bộ trạng thái kiểm thử OpenSpec `add-sandbox-payments-notifications`.
+- **Verification**: `docker compose --env-file .env.example config --quiet` exit 0. `openspec validate --all --strict --no-interactive` (8/8 pass). PowerShell Markdown link checker exit 0. Negative search (`rg -n "org\.mapstruct" src`) exit 1 (0 matches). Focused Maven build `mvnw.cmd clean test` pass 100%. `git diff --check` sạch sẽ và tuân thủ allowlist (`git diff --name-only`).
+
+### BE-014: Refactor product orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách các tác vụ dựng đối tượng DTO và xử lý ghép nối đa ngôn ngữ (`localeCode`), danh mục, ảnh sản phẩm và giá đại diện (`VariantPricing`) từ `ProductServiceImpl` sang collaborator độc lập `ProductResponseAssembler`. Quá trình chuyển đổi dữ liệu không sử dụng MapStruct để giữ sự minh bạch trong thiết kế và tránh N+1 query hay I/O ẩn. `ProductServiceImpl` giữ nguyên toàn bộ giao dịch CRUD (`@Transactional`), các kiểm tra ranh giới dữ liệu, khóa tài nguyên và cơ chế nạp dữ liệu số lượng lớn (batch loading context) từ BE-007.
+- **Verification**: Negative boundary check (`rg -n`) xác nhận `ProductResponseAssembler` là repository-free component (0 phụ thuộc Repository/EntityManager/Transactional). Focused test suite `ProductResponseAssemblerTest,ProductServiceImplTest,ProductResponseTest,ProductControllerTest,ProductTranslationServiceImplTest,StorefrontCatalogServiceImplTest,StorefrontCatalogServiceIntegrationTest` pass 100% (50/50). Full `mvnw.cmd clean verify` pass 100% (770/770). Tuân thủ 100% `git diff --check` và file allowlist (`git diff --name-only`).
+
+### BE-013: Refactor sale-campaign orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách các tác vụ kiểm tra hợp lệ nghiệp vụ và dựng dữ liệu phản hồi từ `SaleCampaignServiceImpl` sang 2 collaborators độc lập: `SaleCampaignValidator` (chịu trách nhiệm kiểm tra hợp lệ thời gian, mã duy nhất, cấu hình giảm giá, và kiểm tra trùng lặp thời gian overlap trong transaction) và `SaleCampaignResponseAssembler` (chịu trách nhiệm dựng đối tượng DTO `SaleCampaignResponse` kèm hỗ trợ đa ngôn ngữ vi/en). `SaleCampaignServiceImpl` giữ nguyên toàn bộ giao dịch vòng đời chiến dịch (`@Transactional`), quản lý phiên bản (optimistic locking `version`), cũng như các query batching tối ưu từ BE-007.
+- **Verification**: Negative boundary check (`rg -n`) xác nhận `SaleCampaignResponseAssembler` là pure component (0 phụ thuộc Repository/EntityManager/Transactional). Focused test suite `SaleCampaignValidatorTest,SaleCampaignResponseAssemblerTest,SaleCampaignControllerIntegrationTest,SaleCampaignServiceImplLocalizationTest,SaleCampaignConcurrencyIntegrationTest,SaleCampaignQueryPerformanceIntegrationTest` pass 100% (29/29). Full `mvnw.cmd clean verify` pass 100% (767/767). Tuân thủ 100% `git diff --check` và file allowlist (`git diff --name-only`).
+
+### BE-012: Refactor checkout orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách các tác vụ tính toán thuần túy từ `CheckoutServiceImpl` sang 2 collaborators độc lập: `CheckoutFingerprintService` (chịu trách nhiệm tính toán canonical pricing fingerprint & request hash SHA-256) và `CheckoutOrderItemAssembler` (chịu trách nhiệm dựng đối tượng snapshot `OrderItem`). `CheckoutServiceImpl` giữ nguyên toàn bộ giao dịch thanh toán (`@Transactional`), thứ tự khóa tài nguyên theo ID tăng dần (`PESSIMISTIC_WRITE`), trừ kho, trừ coupon, trừ quota campaign, cũng như các thông báo lỗi và localization.
+- **Verification**: Extraction boundary verification (`rg -n`) xác nhận 2 collaborator mới là pure component (0 phụ thuộc HTTP/DB/Redis/Transactional). Focused test suite `CheckoutFingerprintServiceTest,CheckoutOrderItemAssemblerTest,CheckoutServiceImplTest,CheckoutControllerTest,CheckoutConcurrencyTest,SaleCampaignConcurrencyIntegrationTest` pass 100% (45/45). Full `mvnw.cmd clean verify` pass 100% (763/763). Tuân thủ 100% `git diff --check` và file allowlist (`git diff --name-only`).
+
+### BE-011: Refactor authentication orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách lớp mã hóa/giải mã và kiểm tra tính hợp lệ của JWT token từ `AuthServiceImpl` sang component độc lập `AuthTokenCodec`. `AuthTokenCodec` đảm nhận việc encode access token (chỉ encode) và encode/decode/validate refresh token (`type=refresh`, `jti`, `securityVersion`), sử dụng `@Qualifier("refreshJwtDecoder")` mà không can thiệp hay duplicate `jwtDecoder` của Spring Security Resource Server. `AuthServiceImpl` giữ nguyên toàn bộ luồng nghiệp vụ xác thực, quản lý DB audit, và Redis session CAS rotation.
+- **Verification**: Extraction boundary verification (`rg -n`) xác nhận `AuthTokenCodec` là pure component (0 phụ thuộc HTTP/DB/Redis). Focused test suite `AuthTokenCodecTest,AuthServiceImplTest,AuthControllerTest,AuthRefreshConcurrencyIntegrationTest,RefreshTokenSessionServiceIntegrationTest,RedisSecurityAndCleanupIntegrationTest` pass (55/55). Full `mvnw.cmd clean verify` pass 100% (757/757). Tuân thủ 100% `git diff --check` và allowlist scope (`git diff --name-only`).
+
+### BE-010: Characterize large orchestration services
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Triển khai bộ characterization test củng cố cho 4 Orchestration Services lớn (Auth, Checkout, Sale Campaign, Product) để bảo vệ các bất biến về public outputs, stable error codes, lock ordering (ASC variant IDs), transaction boundaries, request pricing fingerprint, money/image snapshots, session revocation invariants, localization fallback (vi/en), và campaign phase transitions (`UPCOMING`, `LIVE`, `ENDED`). Không làm thay đổi bất kỳ mã nguồn production (`src/main/java`) hay public contract API nào.
+- **Verification**: Focused characterization test gate `Dtest=AuthServiceImplTest,AuthControllerTest,CheckoutServiceImplTest,SaleCampaignServiceImplLocalizationTest,ProductServiceImplTest,ProductResponseTest` pass (75/75). Full verification `mvnw.cmd clean verify` pass 100% (756/756). Complete compliance with `git diff --check` and allowlist scope (`git diff --name-only`).
+
+### BE-009: Add a wishlist product-summary contract
+
+- **Date/Time**: 2026-07-25 (Asia/Saigon)
+- **Summary of Changes**: Implement `GET /api/v1/wishlists/me` trả về wishlist của current user kèm product summary (`WishlistProductSummary`). Batch load translations, images và pricing để giải quyết vấn đề N+1 queries khi hiển thị danh sách wishlist. Chỉ trả về những sản phẩm `ACTIVE` và chưa bị xoá, `totalElements` của page được đồng bộ với danh sách products hiển thị. Áp dụng locale fallback theo thứ tự: query param `locale` -> header `Accept-Language` -> mặc định `vi`.
+- **Verification**: Thêm integration test `WishlistProductSummaryIntegrationTest` chứng minh query count không đổi kể cả 1 hay nhiều items. Update `WishlistControllerTest` và `WishlistServiceImplTest` để bao phủ locale fallbacks, thiếu image/translation, và logic tie-break của giá (minimum effective price -> lowest variant ID). Full test suite passed (751/751). Contract documented trong `API_SPEC.md` và `feature/product/CONTEXT.md`.
+
+### BE-008: Eliminate admin-list N+1 queries
+- **Date/Time**: 2026-07-25 (Asia/Saigon)
+- **Summary of Changes**: Tối ưu hoá list endpoints của Order, Payment, và Cart trong admin (những endpoint dùng chung `JpaSpecificationExecutor` và trả về `ResultPaginationDTO`) bằng cách thêm phương thức `findAll` override với `@EntityGraph`. Các methods này fetch eagerly các associations to-one (`Order.user`, `Payment.order`, `Cart.user`), loại bỏ vấn đề N+1 lazy loading queries khi mapping sang các DTOs.
+- **Verification**: Viết thêm `AdminCommerceListFetchIntegrationTest` dùng Hibernate Statistics trên PostgreSQL Testcontainers để so sánh query count giữa single-row page và 10-row page. Số lượng query constant (chênh lệch 1) chứng minh N+1 đã được giải quyết. Focused tests và full `mvnw.cmd clean verify` pass.
+
+### BE-007: Batch sale-campaign queries
+
+- **Date/Time**: 2026-07-24 (Asia/Saigon)
+- **Summary of Changes**: Tối ưu hoá page loading của sale-campaign bằng cách lấy ID trước và load detailed items sau (two-phase page loading), loại bỏ fetch join trên pageable query và duy trì pagination order. Tối ưu hoá overlap validation khi publish campaign bằng cách gộp tất cả variants thành 1 câu query duy nhất với `in clause` (`findOverlappingForVariants`). Áp dụng max 100 items per campaign trong API payload để bảo vệ memory.
+- **Verification**: Focused tests `SaleCampaignControllerIntegrationTest,SaleCampaignConcurrencyIntegrationTest,SaleCampaignServiceImplLocalizationTest,SaleCampaignQueryPerformanceIntegrationTest` passed. `SaleCampaignQueryPerformanceIntegrationTest` sử dụng Hibernate Statistics để chứng minh số lượng query không đổi khi tạo/publish campaign có 1 hay 5 items. Full `mvnw.cmd clean verify` passed.
+
+### BE-006: Batch checkout image loading
+
+- **Date/Time**: 2026-07-24 (Asia/Saigon)
+- **Summary of Changes**: Thay thế N+1 image query per line bằng một single bulk `findByProductIdIn(...)` call cho mỗi checkout. Build in-memory index theo variant ID và product ID, giữ nguyên deterministic selection logic (variant-first → product fallback, thumbnail → sortOrder → ID). Centralize image selection comparator thành `IMAGE_SELECTION_ORDER` static constant.
+- **Verification**: Image characterization tests cover variant-specific, product fallback, thumbnail preference, sortOrder/ID tie-break, missing images, và duplicate product lines. `CheckoutImageQueryPerformanceIntegrationTest` dùng Hibernate statistics chứng minh image query count constant (1 vs 5 items). Focused suite pass `40/40` (16 unit + 24 integration); full `mvnw.cmd clean verify` pass `740/740` và build JAR thành công.
+
+### BE-005: Stabilize API error contract
+
+- **Date/Time**: 2026-07-22 (Asia/Saigon)
+- **Summary of Changes**: Updated `GlobalExceptionHandler` and `SecurityConfig` to return stable `code` values for all framework and security exceptions (`REQUEST_BODY_INVALID`, `INVALID_REQUEST`, `AUTHENTICATION_REQUIRED`, `ACCESS_DENIED`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `INTERNAL_SERVER_ERROR`). Exceptions now use explicit handlers instead of falling through to generic 500s or leaking internal stack traces/messages to the client response.
+- **Verification**: `GlobalExceptionHandlerTest` explicitly tests all new handled exceptions. `ApiErrorContractIntegrationTest` validates `INTERNAL_SERVER_ERROR` without details on generic failures. Full `mvnw.cmd clean verify` pass and JAR build successful. Contract changes documented in `API_SPEC.md` and `feature/auth/CONTEXT.md`.
+
+### BE-004: Govern public upload lifecycle cho customer avatar
+
+- **Date/Time**: 2026-07-18 (Asia/Saigon)
+- **Summary of Changes**: Thêm `PUT /api/v1/files/avatar` self-scoped, chỉ nhận
+  `multipart file`; backend lấy user từ JWT, lock row bằng `PESSIMISTIC_WRITE`,
+  lưu avatar vào `/uploads/avatars/*`, cập nhật `users.avatar`, rollback thì xóa
+  file mới và after-commit thì xóa previous managed avatar. Generic
+  `POST /api/v1/files` giữ cho operator/admin flow nhưng V23 thu hồi `UPLOAD_FILE`
+  khỏi `ROLE_USER` và seed permission `UPDATE_MY_AVATAR`.
+- **Security/Correctness**: Avatar upload dùng Redis policy `avatar-upload`
+  (`user 5/1h`, `IP 30/1h`, `global 300/1m`) và trả `AUTH_RATE_LIMITED`.
+  File name dùng UUID, ghi `.tmp` rồi atomic move. Managed deletion chỉ áp dụng
+  `/uploads/avatars/*`; external URL, product image và review image không bị xóa.
+  Background reconciliation scan avatar namespace mỗi 6h, grace 24h, recheck DB
+  trước khi delete orphan và emit metric `security.avatar.cleanup`.
+- **Verification**: Focused Testcontainers suite pass `71/71`:
+  `FileControllerTest,FileServiceImplTest,AvatarUploadIntegrationTest,
+  AvatarReconciliationJobTest,SystemSecurityIntegrationTest`. Full
+  `mvnw.cmd clean verify` pass `723/723` và build JAR thành công.
+
+### BE-003: Serialize coupon counter updates
+
+- **Date/Time**: 2026-07-16 (Asia/Saigon)
+- **Summary of Changes**: Admin update/delete coupon dùng dedicated
+  `PESSIMISTIC_WRITE` lookup trong transaction trước khi mutation toàn entity.
+  Checkout và order lifecycle tiếp tục dùng guarded atomic SQL cho
+  `consumeUsage`/`releaseUsage`; không đổi entity, schema hoặc lock order checkout.
+- **Correctness**: PostgreSQL serialize admin whole-row mutation với coupon counter
+  update trên cùng row, đóng lost-update window có thể làm `usedCount` bị ghi đè.
+- **Verification**: Focused suite pass `12/12`; concurrency pair
+  `CouponConcurrencyIntegrationTest,CheckoutConcurrencyTest` pass 3 vòng liên tiếp;
+  full `mvnw.cmd clean verify` pass `712/712` và build JAR thành công.
+
+### BE-002: Thu hồi legacy cross-account permissions của ROLE_USER
+
+- **Date/Time**: 2026-07-16 (Asia/Saigon)
+- **Summary of Changes**: Thêm Flyway V22 để xóa đúng 27 mapping
+  `permission_role` của production role `USER` trên các generic
+  cart/order/address/payment/review/wishlist routes. Migration match bằng
+  `api_path + method` để chịu được permission name từng bị repeatable dev seed
+  đổi tên; không xóa permission, controller hoặc mapping của role khác.
+- **Security/Compatibility**: Customer tiếp tục dùng principal-bound `/me`, self
+  cart/wishlist/coupon, checkout và verified review creation. Generic route trả
+  `403` cho `ROLE_USER`; `ADMIN`, `MANAGER`, `STAFF` giữ đúng mapping riêng đã
+  seed, không mặc định có quyền như nhau.
+- **Rollout**: Chuỗi contract **BE-001 `c3b1361` → FE-001 `4c2767b` → BE-002**
+  đã hoàn tất ở source. Frontend không còn customer caller phụ thuộc route bị
+  thu hồi.
+- **Verification**: Focused Testcontainers suite pass `56/56`; full
+  `mvnw.cmd clean verify` pass `709/709` và build JAR thành công. Fresh database
+  apply đủ 29 versioned/repeatable migrations tới V22; long-lived dev database
+  upgrade từ V19 lên V22 thành công. Playwright full-stack pass `7/7`, gồm hai
+  customer account không thể đọc chéo self-service resource; production
+  `ADMIN`/`MANAGER`/`STAFF` matrix được xác nhận trong integration suite.
+
 ### BE-001: Customer self-service contract theo principal
 
 - **Date/Time**: 2026-07-16 (Asia/Saigon)
@@ -7,13 +127,13 @@
   owner ID. Self-create address không nhận `userId`; self-profile DTO chỉ có
   `fullName`, `birthDate`, `gender` và không thể thay đổi `avatar`.
 - **Security/Compatibility**: Foreign và missing order ID/code/history hoặc address
-  ID cùng trả `404`. V21 seed additive đủ 10 method/path permissions cho
-  `ADMIN`, `MANAGER`, `STAFF`, `USER`; generic customer routes/permissions vẫn được
-  giữ trong expand phase. Default address cũ được flush trước khi persist/promote
-  default mới để giữ partial unique-index invariant.
-- **Rollout**: Thứ tự bắt buộc là **BE-001 → FE-001 → BE-002**. FE-001 phải chuyển
-  toàn bộ customer caller sang `/me` trước khi BE-002 thu hồi generic `ROLE_USER`
-  permissions.
+  ID cùng trả `404`. V21 seed đủ 10 method/path permissions cho `ADMIN`,
+  `MANAGER`, `STAFF`, `USER`. Generic mappings từng được giữ tạm trong expand
+  phase và đã bị V22 supersede đối với `USER`. Default address cũ được flush trước
+  khi persist/promote default mới để giữ partial unique-index invariant.
+- **Rollout**: Đây là expand phase lịch sử của chuỗi **BE-001 → FE-001 → BE-002**;
+  contract phase BE-002 đã thu hồi generic `ROLE_USER` permissions sau khi FE-001
+  chuyển customer caller sang `/me`.
 - **Verification**: Focused Testcontainers suite pass `116/116`; Flyway áp dụng đủ
   28 versioned/repeatable migrations và schema đạt V21. `mvnw.cmd clean verify`
   pass `703/703`, không failure/error/skipped và đóng gói JAR thành công.

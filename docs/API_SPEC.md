@@ -171,10 +171,24 @@ Common application errors:
 | `401 Unauthorized` | Missing, expired, or invalid token |
 | `403 Forbidden` | Authenticated user lacks RBAC permission |
 | `404 Not Found` | Resource does not exist or was soft-deleted |
+| `405 Method Not Allowed` | Unsupported HTTP method |
 | `409 Conflict` | Duplicate or invalid business state |
+| `415 Unsupported Media Type` | Unsupported content type |
 | `429 Too Many Requests` | Auth/OTP quota exceeded; always includes `Retry-After` and `data.retryAfterSeconds` |
 | `503 Service Unavailable` | Security state/email provider unavailable; Auth/OTP fails closed |
 | `500 Internal Server Error` | Unexpected server error |
+
+Framework and Security Error Codes (present in the `code` field):
+
+| Code | HTTP status | Meaning |
+|---|---|---|
+| `REQUEST_BODY_INVALID` | 400 | Malformed JSON or unreadable request body |
+| `INVALID_REQUEST` | 400 | Invalid argument, missing part, or type mismatch |
+| `AUTHENTICATION_REQUIRED` | 401 | Unauthenticated or invalid token |
+| `ACCESS_DENIED` | 403 | Authenticated user lacks RBAC permission |
+| `METHOD_NOT_ALLOWED` | 405 | Unsupported HTTP method |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | Unsupported content type |
+| `INTERNAL_SERVER_ERROR` | 500 | Unexpected server failure |
 
 Stable Auth/OTP codes are `OTP_INVALID_OR_EXPIRED`,
 `OTP_ATTEMPTS_EXHAUSTED`, `OTP_RATE_LIMITED`,
@@ -237,6 +251,7 @@ Supported filters:
 | `GET /reviews/me` | `orderId` tùy chọn; luôn scope theo JWT principal |
 | `GET /storefront/products` | `q`, `categorySlugs`, `colorIds`, `sizeIds`, `minPrice`, `maxPrice`, `sort`, `page`, `size`, `locale` |
 | `GET /wishlists` | `userId`, `productId`, `createdFrom`, `createdTo` |
+| `GET /api/v1/wishlists/me` | `locale` (query), `Accept-Language` (header) - for `WishlistProductSummary` locale |
 
 ---
 
@@ -772,7 +787,7 @@ Request dùng riêng `UpdateMyProfileRequest`:
 
 Ba field trên đều bắt buộc và `birthDate` phải ở quá khứ. DTO này không có
 `avatar`; field `avatar` gửi thừa không được bind và không thể thay đổi avatar đang
-lưu. Customer avatar upload được quản lý ở contract file riêng trong BE-004.
+lưu. Customer tự đổi avatar dùng `PUT /api/v1/files/avatar`.
 
 **Success Response (200):** `UserResponse`
 
@@ -790,8 +805,9 @@ lưu. Customer avatar upload được quản lý ở contract file riêng trong 
 ### PUT /users/{id}
 
 Generic operator endpoint kept for compatibility. Email and password are not
-updated here; unlike `/api/v1/users/me`, its legacy `UpdateUserRequest` still
-contains `avatar` during the BE-001 expand phase.
+updated here; unlike `/api/v1/users/me`, its operator `UpdateUserRequest` still
+contains `avatar` for admin/operator-managed user records. Customer self-profile
+must use `PUT /api/v1/files/avatar` for avatar changes.
 
 **Request Body:**
 
@@ -1213,7 +1229,8 @@ Tài liệu contract, thuật toán và response đầy đủ xem
 
 ### POST /files
 
-Upload an image file for later use as a user avatar or company logo.
+Upload ảnh generic cho các luồng operator/admin có quyền `UPLOAD_FILE`.
+Customer tự đổi avatar không dùng endpoint này nữa; dùng `PUT /files/avatar`.
 
 **Auth:** Bearer
 
@@ -1232,9 +1249,9 @@ Upload an image file for later use as a user avatar or company logo.
 {
   "statusCode": 201,
   "data": {
-    "fileName": "1709123456789_photo.jpg",
+    "fileName": "7f2f9b7a-5488-4c1a-b2f7-1cbd9e37f21e_photo.jpg",
     "folder": "avatars",
-    "fileUrl": "/uploads/avatars/1709123456789_photo.jpg",
+    "fileUrl": "/uploads/avatars/7f2f9b7a-5488-4c1a-b2f7-1cbd9e37f21e_photo.jpg",
     "size": 24576,
     "uploadedAt": "2026-06-26T09:00:00Z"
   },
@@ -1249,10 +1266,70 @@ Upload an image file for later use as a user avatar or company logo.
 |--------|------|
 | 400 | Missing file/folder, invalid folder, invalid extension, invalid file name, or business size validation failed |
 | 401 | Missing or invalid JWT |
-| 403 | Authenticated user does not have `UPLOAD_FILE` permission |
+| 403 | Authenticated user does not have `UPLOAD_FILE` permission; `ROLE_USER` mặc định bị từ chối |
 | 413 | Servlet multipart size limit exceeded |
 
-Client uses the returned `fileName` to update the related entity, for example `avatar` on `PUT /users/{id}`.
+File name dùng UUID prefix và write qua `.tmp` trước khi move vào thư mục đích.
+Endpoint này không cập nhật `users.avatar` trực tiếp.
+
+### PUT /files/avatar
+
+Self-scoped customer avatar upload. Backend lấy user từ JWT, không nhận `userId`,
+`folder` hoặc avatar URL từ request.
+
+**Auth:** Bearer
+
+**Content-Type:** `multipart/form-data`
+
+**Form Data:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | File | Yes | Image file. Allowed extensions, content type, signature and size follow `app.upload`. |
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "id": 42,
+    "fullName": "Nguyen Van A",
+    "email": "a@example.com",
+    "birthDate": "1995-01-01",
+    "avatar": "/uploads/avatars/7f2f9b7a-5488-4c1a-b2f7-1cbd9e37f21e_avatar.jpg",
+    "gender": "OTHER",
+    "roles": ["USER"]
+  },
+  "message": "Success",
+  "timestamp": "2026-07-18T12:00:00"
+}
+```
+
+**Lifecycle và security:**
+
+- Rate limit Redis policy `avatar-upload`: `user 5/1h`, `IP 30/1h`,
+  `global 300/1m`; reject trả `429 AUTH_RATE_LIMITED` kèm `Retry-After`.
+- Backend lock row user bằng `PESSIMISTIC_WRITE`, lưu file mới, cập nhật
+  `users.avatar` trong transaction.
+- Nếu DB rollback sau khi file đã lưu, backend xóa file mới.
+- Sau commit, backend chỉ xóa previous managed avatar nằm trong
+  `/uploads/avatars/*`. External URL, product image hoặc review image cũ không
+  bị xóa.
+- Background reconciliation scan `/uploads/avatars/*` mỗi 6h, grace 24h, recheck
+  DB reference trước khi delete orphan và emit metric
+  `security.avatar.cleanup`.
+
+**Errors:**
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `INVALID_REQUEST` | Missing/invalid file, invalid extension/content type/signature/size |
+| 401 | `UNAUTHORIZED` | Missing or invalid JWT |
+| 403 | `FORBIDDEN` | Missing `UPDATE_MY_AVATAR` permission |
+| 404 | `USER_NOT_FOUND` | JWT user no longer exists or is soft-deleted |
+| 429 | `AUTH_RATE_LIMITED` | Avatar upload policy exceeded |
+| 503 | `SERVICE_UNAVAILABLE` | Redis/rate-limit dependency unavailable |
 
 ---
 
@@ -1554,11 +1631,11 @@ Sale Campaign; there is no standalone `salePrice` field.
 | POST | `/api/v1/user-addresses/me` | Create for the authenticated user; body has no `userId` |
 | PUT | `/api/v1/user-addresses/me/{id}` | Update an owned address; foreign/missing ID is `404` |
 | DELETE | `/api/v1/user-addresses/me/{id}` | Delete an owned address; foreign/missing ID is `404` |
-| GET | `/user-addresses` | List addresses, optionally filter by `userId` |
-| GET | `/user-addresses/{id}` | Get address |
-| POST | `/user-addresses` | Create address |
-| PUT | `/user-addresses/{id}` | Update address |
-| DELETE | `/user-addresses/{id}` | Delete address |
+| GET | `/user-addresses` | Operator-only: list addresses, optionally filter by `userId` |
+| GET | `/user-addresses/{id}` | Operator-only: get address |
+| POST | `/user-addresses` | Operator-only: create address for a selected user |
+| PUT | `/user-addresses/{id}` | Operator-only: update address by ID |
+| DELETE | `/user-addresses/{id}` | Operator-only: delete address by ID |
 
 `POST /api/v1/user-addresses/me` dùng `CreateMyUserAddressRequest`:
 
@@ -1586,15 +1663,15 @@ default cũ chỉ bị gỡ trong cùng user; invariant mỗi user tối đa m�
 | POST | `/coupons` | Create coupon |
 | PUT | `/coupons/{id}` | Update coupon |
 | DELETE | `/coupons/{id}` | Delete coupon |
-| GET | `/carts` | List carts |
-| GET | `/carts/{id}` | Get cart |
-| GET | `/carts/user/{userId}` | Get cart by user |
-| POST | `/carts` | Create cart |
-| DELETE | `/carts/{id}` | Delete cart |
-| GET | `/wishlists` | List wishlists, optionally filter by `userId` and `productId` |
-| GET | `/wishlists/{id}` | Get wishlist item |
-| POST | `/wishlists` | Create wishlist item |
-| DELETE | `/wishlists/{id}` | Delete wishlist item |
+| GET | `/carts` | Operator-only: list carts |
+| GET | `/carts/{id}` | Operator-only: get cart |
+| GET | `/carts/user/{userId}` | Operator-only: get cart by selected user |
+| POST | `/carts` | Operator-only: create cart for a selected user |
+| DELETE | `/carts/{id}` | Operator-only: delete cart by ID |
+| GET | `/wishlists` | Operator-only: list wishlists by arbitrary filters |
+| GET | `/wishlists/{id}` | Operator-only: get wishlist item by ID |
+| POST | `/wishlists` | Operator-only: create wishlist item for a selected user |
+| DELETE | `/wishlists/{id}` | Operator-only: delete wishlist item by ID |
 
 ### Orders, Payments, Reviews
 
@@ -1604,33 +1681,53 @@ default cũ chỉ bị gỡ trong cùng user; invariant mỗi user tối đa m�
 | GET | `/api/v1/orders/me/{id}` | Owned order detail; foreign/missing ID is `404` |
 | GET | `/api/v1/orders/me/code/{orderCode}` | Owned order detail by business code; foreign/missing code is `404` |
 | GET | `/api/v1/orders/me/{id}/status-histories` | History of an owned order; foreign/missing order ID is `404` |
-| GET | `/orders` | List orders |
-| GET | `/orders/{id}` | Get order by id |
-| GET | `/orders/code/{orderCode}` | Get order by business code |
-| GET | `/orders/user/{userId}` | List orders by user |
-| GET | `/orders/{id}/status-histories` | List status history of an order |
-| POST | `/orders` | Create order |
-| PUT | `/orders/{id}` | Update order |
-| DELETE | `/orders/{id}` | Delete order |
-| GET | `/payments` | List payments |
-| GET | `/payments/{id}` | Get payment |
-| POST | `/payments` | Create payment |
-| PUT | `/payments/{id}` | Update payment |
-| DELETE | `/payments/{id}` | Delete payment |
-| GET | `/reviews` | List reviews |
-| GET | `/reviews/user/{userId}` | List reviews by user |
+| GET | `/orders` | Operator-only: list orders |
+| GET | `/orders/{id}` | Operator-only: get order by ID |
+| GET | `/orders/code/{orderCode}` | Operator-only: get order by business code |
+| GET | `/orders/user/{userId}` | Operator-only: list orders by selected user |
+| GET | `/orders/{id}/status-histories` | Operator-only: list status history of an order |
+| POST | `/orders` | Operator-only legacy create; customer checkout uses `/api/v1/checkout` |
+| PUT | `/orders/{id}` | Operator-only: update order |
+| DELETE | `/orders/{id}` | Operator-only: delete order |
+| GET | `/payments` | Operator-only: list payments |
+| GET | `/payments/{id}` | Operator-only: get payment |
+| POST | `/payments` | Operator-only: create payment |
+| PUT | `/payments/{id}` | Operator-only: update payment |
+| DELETE | `/payments/{id}` | Operator-only: delete payment |
+| GET | `/reviews` | Operator-only: list reviews with arbitrary filters |
+| GET | `/reviews/user/{userId}` | Operator-only: list reviews by selected user |
 | GET | `/reviews/product/{productId}` | List public product reviews with rating/sort/page |
 | GET | `/reviews/product/{productId}/summary` | Get public rating summary |
 | GET | `/reviews/me` | List current principal reviews, optional `orderId` |
-| GET | `/reviews/order/{orderId}` | List reviews by order |
-| GET | `/reviews/order-item/{orderItemId}` | List reviews by order item |
+| GET | `/reviews/order/{orderId}` | Operator-only: list reviews by order |
+| GET | `/reviews/order-item/{orderItemId}` | Operator-only: list reviews by order item |
 | POST | `/reviews` | Create verified review using multipart JSON and optional images |
 
 Các customer route `/orders/me/**` và `/user-addresses/me/**` bind ownership ở
 service/repository bằng principal + identifier, không load unscoped rồi authorize ở
-controller. BE-001 giữ các generic route/permission để tương thích migration window.
-Thứ tự rollout bắt buộc là **BE-001 → FE-001 → BE-002**; chỉ BE-002 mới thu hồi
-generic `ROLE_USER` permissions sau khi frontend đã chuyển hết sang `/me`.
+controller. Rollout **BE-001 → FE-001 → BE-002** đã hoàn tất: customer client phải
+dùng route `/me` và không được quay lại generic ID/user route. Request không có token
+trả `401`; `ROLE_USER` gọi một route generic đã contract trả `403`; foreign hoặc
+missing resource qua `/me` trả `404` để không lộ ownership.
+
+V22 chỉ thu hồi 27 mapping dưới đây khỏi production role `USER`; permission row,
+controller và mapping của role khác vẫn tồn tại. “Operator-only” nghĩa là access phụ
+thuộc exact RBAC mapping của từng `ADMIN`, `MANAGER` hoặc `STAFF`, không có nghĩa mọi
+operator role đều được gọi mọi route.
+
+| Module | Method/path bị thu hồi khỏi `ROLE_USER` |
+|--------|------------------------------------------|
+| Cart | `GET /api/v1/carts`; `POST /api/v1/carts/items`; `DELETE /api/v1/carts/items/{id}`; `POST /api/v1/carts`; `DELETE /api/v1/carts/{id}`; `GET /api/v1/carts/{id}`; `GET /api/v1/carts/user/{userId}` |
+| User address | `GET /api/v1/user-addresses`; `POST /api/v1/user-addresses`; `GET`, `PUT`, `DELETE /api/v1/user-addresses/{id}` |
+| Order | `POST /api/v1/orders`; `GET /api/v1/orders/{id}`; `GET /api/v1/orders/code/{orderCode}`; `GET /api/v1/orders/user/{userId}`; `GET /api/v1/orders/{id}/status-histories` |
+| Payment | `POST /api/v1/payments` |
+| Review | `PUT`, `DELETE /api/v1/reviews/{id}`; `GET /api/v1/reviews/user/{userId}`; `GET /api/v1/reviews/order/{orderId}`; `GET /api/v1/reviews/order-item/{orderItemId}` |
+| Wishlist | `GET`, `POST /api/v1/wishlists`; `GET`, `DELETE /api/v1/wishlists/{id}` |
+
+V22 giữ nguyên catalog reads, `/api/v1/checkout`, `POST /api/v1/reviews`, self cart,
+self wishlist, self coupon và toàn bộ permission `/me` của V21. Migration match bằng
+`api_path + method`, không dựa riêng vào permission name, nên vẫn thu hồi đúng mapping
+trên database development đã từng rename permission bằng repeatable seed.
 
 ### Sale Campaign Admin
 
@@ -1719,7 +1816,7 @@ thúc; campaign `CANCELLED`/`ENDED` là lịch sử chỉ đọc.
 ```
 
 For `STANDARD`, `quota` and `maxPerCustomer` must be null. One campaign may
-contain variants from one or many products.
+contain variants from one or many products. A campaign can contain a maximum of 100 items.
 
 **Detail Response:**
 
@@ -1882,6 +1979,10 @@ Flash quota.
 
 ## Endpoint Summary
 
+Giá trị `Bearer` chỉ cho biết endpoint cần access token; authorization thực tế vẫn
+theo exact method/path RBAC. Với generic customer-resource route đã contract ở V22,
+`ROLE_USER` nhận `403`, còn operator access phụ thuộc mapping của từng production role.
+
 | Method | Endpoint | Auth | Status | Description |
 |--------|----------|------|--------|-------------|
 | POST | `/api/v1/auth/login` | Public | Implemented | Login |
@@ -1924,7 +2025,8 @@ Flash quota.
 | POST | `/products` | Bearer | Implemented | Create product |
 | PUT | `/products/{id}` | Bearer | Implemented | Update product |
 | DELETE | `/products/{id}` | Bearer | Implemented | Soft archive product |
-| POST | `/files` | Bearer | Implemented | Upload image file |
+| POST | `/files` | Bearer | Implemented | Generic operator image upload; `ROLE_USER` denied |
+| PUT | `/api/v1/files/avatar` | Bearer | Implemented | Principal-scoped avatar upload with managed cleanup |
 | GET | `/brands` | Bearer | Implemented | List brands |
 | GET | `/brands/{id}` | Bearer | Implemented | Get brand |
 | POST | `/brands` | Bearer | Implemented | Create brand |
@@ -1982,6 +2084,7 @@ Flash quota.
 | GET | `/wishlists/{id}` | Bearer | Implemented | Get wishlist item |
 | POST | `/wishlists` | Bearer | Implemented | Create wishlist item |
 | DELETE | `/wishlists/{id}` | Bearer | Implemented | Delete wishlist item |
+| GET | `/api/v1/wishlists/me` | Bearer | Implemented | List principal-owned wishlists with `WishlistProductSummary`. Supports `locale` / `Accept-Language` for fallbacks. Returns ACTIVE products with totalElements synced to visible rows. |
 | GET | `/api/v1/orders/me` | Bearer | Implemented | List principal-owned orders |
 | GET | `/api/v1/orders/me/{id}` | Bearer | Implemented | Get principal-owned order; foreign ID is 404 |
 | GET | `/api/v1/orders/me/code/{orderCode}` | Bearer | Implemented | Get principal-owned order by code; foreign code is 404 |

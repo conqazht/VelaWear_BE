@@ -1,13 +1,17 @@
 package vn.conganh.commercial.feature.user;
 
+import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.feature.permission.Permission;
 import vn.conganh.commercial.feature.role.Role;
@@ -16,6 +20,9 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
 
+    @Query("SELECT u FROM User u WHERE u.deletedAt < :cutoffTime AND u.email NOT LIKE 'deleted_%@anonymized.local'")
+    Page<User> findExpiredDeletedUsersToAnonymize(@Param("cutoffTime") Instant cutoffTime, Pageable pageable);
+
     Page<User> findAllByDeletedAtIsNull(Pageable pageable);
 
     boolean existsByEmail(String email);
@@ -23,6 +30,15 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     Optional<User> findByEmail(String email);
 
     Optional<User> findByEmailAndDeletedAtIsNull(String email);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select u
+            from User u
+            where u.id = :id
+              and u.deletedAt is null
+            """)
+    Optional<User> findByIdAndDeletedAtIsNullWithLock(Long id);
 
     @Modifying(clearAutomatically = false, flushAutomatically = true)
     @Transactional
@@ -40,6 +56,16 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
               and u.deletedAt is null
             """)
     Optional<Long> findSecurityVersionByIdAndDeletedAtIsNull(Long userId);
+
+    boolean existsByAvatar(String avatar);
+
+    @Query("""
+            select u.avatar
+            from User u
+            where u.avatar is not null
+              and u.deletedAt is null
+            """)
+    List<String> findManagedAvatarReferences();
 
     @Query("""
             select uhr.role
