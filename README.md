@@ -1,7 +1,5 @@
 # Vela Wear Backend
 
-[![GitHub Repo](https://img.shields.io/badge/GitHub-conqazht/VelaWear__BE-blue)](https://github.com/conqazht/VelaWear_BE)
-
 RESTful API backend cho ứng dụng thương mại điện tử thời trang cao cấp Vela Wear.
 
 ## Tech Stack
