@@ -141,76 +141,84 @@ sequenceDiagram
 
 ## Environment Variables
 
-Cấu hình các biến môi trường thiết yếu dựa trên `.env.example`:
+Tạo file `.env` từ template `.env.example` và thiết lập các giá trị phù hợp:
 
-### 1. Spring Profile & Server Port
-| Biến | Ý nghĩa |
-| --- | --- |
-| `SPRING_PROFILES_ACTIVE` | Kích hoạt profile (dev, prod, test) |
-| `SERVER_PORT` | Cổng chạy ứng dụng |
+```env
+# Spring Profile & Server Port
+SPRING_PROFILES_ACTIVE=dev                        # Profile kích hoạt: dev, prod, test
+SERVER_PORT=8080                                  # Cổng chạy ứng dụng Backend
 
-### 2. Database
-| Biến | Ý nghĩa |
-| --- | --- |
-| `DB_NAME` | Tên database |
-| `DB_URL` | JDBC URL kết nối PostgreSQL |
-| `DB_USERNAME` | Tên đăng nhập DB |
-| `DB_PASSWORD` | Mật khẩu DB |
+# Database Settings (PostgreSQL 16)
+DB_NAME=VelaWear                                  # Tên cơ sở dữ liệu
+DB_URL=jdbc:postgresql://localhost:5432/VelaWear  # JDBC URL kết nối PostgreSQL
+DB_USERNAME=postgres                              # Tên đăng nhập DB
+DB_PASSWORD=your_db_password                      # Mật khẩu DB
 
-### 3. Redis
-| Biến | Ý nghĩa |
-| --- | --- |
-| `REDIS_HOST` | Host của Redis server |
-| `REDIS_PORT` | Port của Redis |
-| `REDIS_PASSWORD` | Mật khẩu truy cập Redis |
+# Redis Settings (Session tracking, Token Revocation, OTP, Rate Limiting)
+REDIS_HOST=localhost                              # Host Redis server
+REDIS_PORT=6379                                   # Port Redis server
+REDIS_PASSWORD=                                   # Mật khẩu Redis (để trống nếu dev)
 
-### 4. Security, Rate Limiting & OTP Settings
-| Biến | Ý nghĩa |
-| --- | --- |
-| `SECURITY_HMAC_KEY` | Khóa HMAC dùng cho bảo mật nội bộ |
-| `FORWARD_HEADERS_STRATEGY` | Chiến lược xử lý forward headers |
-| `RATE_LIMIT_...` | Các cấu hình giới hạn số lượng request |
-| `OTP_...` | Cấu hình cho tính năng gửi OTP (cooldown, max attempts, v.v.) |
+# Security, Rate Limiting & OTP
+SECURITY_HMAC_SECRET=generate_random_secret_32b  # Khóa HMAC bảo mật nội bộ (tối thiểu 32 bytes)
+SERVER_FORWARD_HEADERS_STRATEGY=NONE              # Chiến lược forward headers (NONE / NATIVE)
+TRUSTED_PROXY_REGEX=(?!)                          # Regex IP proxy tin cậy (khi NATIVE)
+AUTH_RATE_LIMIT_ENABLED=true                      # Bật/tắt rate limit tính năng auth
+OTP_REQUEST_COOLDOWN=60s                          # Thời gian chờ giữa 2 lần gửi OTP
+OTP_MAX_ATTEMPTS=5                                # Số lần nhập sai OTP tối đa
+OTP_ATTEMPTS_LOCK=10m                             # Thời gian khóa khi nhập sai quá hạn
 
-### 5. JWT Keys & Expiration
-| Biến | Ý nghĩa |
-| --- | --- |
-| `JWT_SECRET` | Khóa bí mật ký JWT (HS512) |
-| `JWT_EXPIRATION` | Thời gian sống của JWT Access Token |
-| `JWT_REFRESH_EXPIRATION` | Thời gian sống của JWT Refresh Token |
+# JWT Security (Khóa HS512 tối thiểu 64 ký tự)
+JWT_ACCESS_TOKEN_SECRET_KEY=generate_access_key_64c   # Khóa bí mật ký Access Token
+JWT_REFRESH_TOKEN_SECRET_KEY=generate_refresh_key_64c # Khóa bí mật ký Refresh Token
+JWT_ACCESS_TOKEN_EXPIRATION=900                       # Thời gian sống Access Token (15 phút)
+JWT_REFRESH_TOKEN_EXPIRATION=259200                   # Thời gian sống Refresh Token (3 ngày)
 
-### 6. File Upload Settings
-| Biến | Ý nghĩa |
-| --- | --- |
-| `FILE_UPLOAD_DIR` | Thư mục lưu trữ file upload |
-| `MAX_FILE_SIZE` | Giới hạn dung lượng file tải lên |
+# File Upload Settings
+UPLOAD_BASE_DIR=uploads                           # Thư mục lưu trữ file
+UPLOAD_URL_PREFIX=/uploads                        # Prefix URL truy cập file
+UPLOAD_MAX_SIZE_BYTES=5242880                     # Dung lượng tối đa: 5MB
+UPLOAD_MAX_FILE_SIZE=5MB                          # Giới hạn file tải lên
+UPLOAD_MAX_REQUEST_SIZE=6MB                       # Giới hạn tổng request
+UPLOAD_ALLOWED_EXTENSIONS=jpg,jpeg,png,gif,webp   # Định dạng file cho phép
+UPLOAD_ALLOWED_FOLDERS=avatars,logos              # Thư mục con cho phép
 
-### 7. Swagger
-| Biến | Ý nghĩa |
-| --- | --- |
-| `SWAGGER_ENABLED` | Bật/tắt giao diện Swagger UI |
+# Swagger Documentation (dev profile)
+SWAGGER_UI_ENABLED=true                           # Bật/tắt giao diện Swagger UI
+OPENAPI_DOCS_ENABLED=true                         # Bật/tắt OpenAPI docs
 
-### 8. Resend Email
-| Biến | Ý nghĩa |
-| --- | --- |
-| `RESEND_API_KEY` | API key để tích hợp với Resend gửi email |
+# Resend Email Settings
+RESEND_API_KEY=your_resend_api_key_here           # API Key dịch vụ Resend gửi email OTP
+RESEND_FROM_EMAIL=onboarding@resend.dev           # Địa chỉ email người gửi
 
-### 9. Gemini AI Content
-| Biến | Ý nghĩa |
-| --- | --- |
-| `GEMINI_API_KEY` | API key kết nối tới Gemini AI (dịch nội dung tiếng Việt -> Anh) |
+# Gemini AI Content Translation (VI -> EN)
+ENGLISH_CONTENT_ENABLED=false                     # Bật/tắt gợi ý dịch thuật bằng AI
+GEMINI_API_KEY=your_gemini_api_key_here           # API Key Gemini
+GEMINI_DEFAULT_MODEL=gemini-3.1-flash-lite        # Model Gemini mặc định
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_CONNECT_TIMEOUT=3s                         # Timeout kết nối
+GEMINI_READ_TIMEOUT=30s                           # Timeout đọc phản hồi
+ENGLISH_CONTENT_MAX_INPUT_CHARACTERS=30000        # Giới hạn ký tự đầu vào
+ENGLISH_CONTENT_MAX_OUTPUT_TOKENS=16384           # Giới hạn token đầu ra
 
-### 10. SePay Payment Gateway
-| Biến | Ý nghĩa |
-| --- | --- |
-| `SEPAY_API_KEY` | Khóa API tích hợp thanh toán qua SePay |
-| `SEPAY_WEBHOOK_SECRET` | Secret xác thực Webhook từ SePay |
+# SePay Payment Gateway
+SEPAY_ENABLED=false                               # Bật/tắt cổng thanh toán SePay
+SEPAY_ENVIRONMENT=production                      # Môi trường SePay (sandbox / production)
+SEPAY_MERCHANT_ID=SP-LIVE-your-merchant-id        # Merchant ID SePay
+SEPAY_SECRET_KEY=spsk_live_your-secret-key        # Secret Key SePay
+SEPAY_CHECKOUT_URL=https://pay.sepay.vn/v1/checkout/init
+SEPAY_SUCCESS_URL=https://your-frontend-domain/payment/success
+SEPAY_ERROR_URL=https://your-frontend-domain/payment/error
+SEPAY_CANCEL_URL=https://your-frontend-domain/payment/cancel
 
-### 11. Google OAuth2
-| Biến | Ý nghĩa |
-| --- | --- |
-| `GOOGLE_CLIENT_ID` | Client ID của Google OAuth2 |
-| `GOOGLE_CLIENT_SECRET` | Client Secret của Google OAuth2 |
+# Google OAuth2 Login
+GOOGLE_CLIENT_ID=your_google_oauth_client_id       # Google OAuth2 Client ID
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret # Google OAuth2 Client Secret
+OAUTH2_FRONTEND_SUCCESS_URL=http://localhost:3000/auth/oauth2/callback
+OAUTH2_FRONTEND_FAILURE_URL=http://localhost:3000/sign-in
+OAUTH2_LOGIN_CODE_TTL_SECONDS=120                 # Thời gian sống code login (2 phút)
+OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS=180      # Thời gian sống request auth (3 phút)
+```
 
 ## Setup Instructions
 
@@ -247,11 +255,11 @@ Các tài liệu chi tiết được lưu trong thư mục `docs/`:
 - [Sale campaign backend](docs/SALE_CAMPAIGN_BACKEND.md)
 - [Hướng dẫn i18n catalog](docs/I18N_CATALOG_SALE_VI.md)
 
-## Implementation Plans
+## Lộ Trình Cải Tiến & Refactoring (Improvement Plans)
 
-Theo dõi lộ trình phát triển và các giai đoạn triển khai tại thư mục `plans/`:
+Các kế hoạch trong thư mục `plans/` được tạo ra từ đợt audit nâng cao chất lượng codebase, dùng để quản lý các đợt refactoring, tối ưu hiệu năng, thắt chặt bảo mật và bảo trì hệ thống qua 5 đợt (waves):
 
-- [Lộ trình triển khai Backend (tiếng Việt)](plans/README.vi.md)
-- [Implementation Plans (English)](plans/README.md)
+- [Lộ trình cải tiến Backend (tiếng Việt)](plans/README.vi.md)
+- [Improvement Plans Index (English)](plans/README.md)
 
-Các kế hoạch bao gồm 15 bản kế hoạch (plans) được chia làm 5 làn sóng (waves) chính: security hardening → performance optimization → orchestration refactoring → maintenance.
+*Lưu ý: Thư mục `plans/` tập trung vào lộ trình refactoring và tối ưu hóa hệ thống, các tài liệu đặc tả nghiệp vụ chính nằm trong thư mục `docs/`.*
