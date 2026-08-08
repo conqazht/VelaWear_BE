@@ -7,8 +7,6 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -16,13 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.security.TokenBlacklistService;
@@ -49,7 +41,6 @@ import vn.conganh.commercial.feature.auth.oauth2.OAuth2LoginCodeService;
 import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
-import vn.conganh.commercial.feature.refreshtoken.RefreshToken;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenService;
@@ -66,9 +57,6 @@ import vn.conganh.commercial.util.constant.OtpPurpose;
 @Slf4j
 @Service
 public class AuthServiceImpl implements AuthService {
-
-    private static final MacAlgorithm JWT_MAC_ALGORITHM = MacAlgorithm.HS512;
-    private static final String REFRESH_TOKEN_TYPE = "refresh";
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;

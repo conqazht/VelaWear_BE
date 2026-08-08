@@ -1,3 +1,9 @@
+### BE-015: Clean backend dependencies and documentation
+
+- **Date/Time**: 2026-08-08 (Asia/Saigon)
+- **Summary of Changes**: Loại bỏ dependency MapStruct không sử dụng khỏi `pom.xml`. Bổ sung `DB_NAME=VelaWear` vào `.env.example` để đồng bộ với cấu hình Docker Compose. Cập nhật `docs/ARCHITECTURE.md` phản ánh đúng thiết kế thực tế đã shipped (Redis session tracking, `securityVersion`, custom `JwtSecurityFilter`, local file storage). Cập nhật link companion trong `docs/STOREFRONT_CATALOG_UX_BACKEND_VI.md` sang URL GitHub chính thức. Đồng bộ trạng thái kiểm thử OpenSpec `add-sandbox-payments-notifications`.
+- **Verification**: `docker compose --env-file .env.example config --quiet` exit 0. `openspec validate --all --strict --no-interactive` (8/8 pass). PowerShell Markdown link checker exit 0. Negative search (`rg -n "org\.mapstruct" src`) exit 1 (0 matches). Focused Maven build `mvnw.cmd clean test` pass 100%. `git diff --check` sạch sẽ và tuân thủ allowlist (`git diff --name-only`).
+
 ### BE-014: Refactor product orchestration
 
 - **Date/Time**: 2026-08-07 (Asia/Saigon)

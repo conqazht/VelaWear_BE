@@ -53,7 +53,6 @@ import vn.conganh.commercial.feature.refreshtoken.dto.CreateRefreshTokenRequest;
 import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.role.RoleRepository;
 import vn.conganh.commercial.feature.user.User;
-import vn.conganh.commercial.feature.user.UserHasRole;
 import vn.conganh.commercial.feature.user.UserHasRoleRepository;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.user.dto.UserResponse;

@@ -142,9 +142,9 @@ Dependency rules:
 ## Cross-Cutting Concerns
 
 ### Security
-- JWT via Spring Security's oauth2-resource-server — no custom filter
+- JWT via Spring Security's oauth2-resource-server + custom security filters (`JwtSecurityFilter`, rate-limiting, and `securityVersion` validation)
 - Algorithm: HS512 (symmetric secret key)
-- Access token: 15 min / Refresh token: 3 days
+- Access token: 15 min / Refresh token: 3 days (backed by Redis session CAS rotation & token revocation)
 - Secret key loaded from environment variable, never hardcoded
 - Permission-based authorization: each Permission maps an API path + HTTP method to roles
 
@@ -160,21 +160,21 @@ Dependency rules:
 ### DTO Strategy
 - Request/Response DTOs are Java Records
 - Entity never exposed outside Service layer
-- Response DTO has `static fromEntity()` factory method
+- Dedicated assembler/converter classes (`ProductResponseAssembler`, `SaleCampaignResponseAssembler`, `CheckoutFingerprintService`, etc.) handle DTO creation
 - Feature-specific DTOs live inside feature's `dto/` sub-package
 
 ---
 
 ## Scalability Notes
 
-### Current Design (MVP)
-- Single Spring Boot instance
-- Single PostgreSQL database
-- Stateless JWT — no server-side session storage
+### Current Design
+- Single Spring Boot instance with Redis session tracking & token revocation
+- Single PostgreSQL database with Flyway migrations & Testcontainers integration
+- Local file storage for avatar/product/review uploads (`FileStorageServiceImpl`)
 - Suitable for: < 10k users, single region deployment
 
 ### Future Considerations (not implemented yet)
-- Horizontal scaling: stateless design already supports multiple instances behind load balancer
-- Caching: Spring Cache + Redis for frequently accessed data (roles, permissions)
-- File storage: if avatar/logo upload needed, use external storage (S3) with presigned URLs
-- Search: if full-text search needed, consider Elasticsearch for user/company search
+- Horizontal scaling: stateless JWT token validation + Redis session revocation cluster behind load balancer
+- Caching: Spring Cache + Redis for frequently accessed data (roles, permissions, storefront catalog)
+- Cloud file storage: optional S3 / Object Storage integration with presigned URLs when scaling beyond local volume storage
+- Search: if full-text search needed, consider Elasticsearch for user/product search

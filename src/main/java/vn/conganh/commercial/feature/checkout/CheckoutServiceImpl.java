@@ -2,15 +2,11 @@ package vn.conganh.commercial.feature.checkout;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -631,10 +627,6 @@ public class CheckoutServiceImpl implements CheckoutService {
 
     private CodedBusinessException conflict(String code, String message, Map<String, Object> details) {
         return new CodedBusinessException(code, message, HttpStatus.CONFLICT, details);
-    }
-
-    private String nullSafe(String value) {
-        return value == null ? "" : value.trim();
     }
 
     private QuoteLocalization localizeQuote(Quote quote, String localeCode) {
