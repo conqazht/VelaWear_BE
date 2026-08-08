@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -58,9 +57,6 @@ import vn.conganh.commercial.util.constant.OtpPurpose;
 @Slf4j
 @Service
 public class AuthServiceImpl implements AuthService {
-
-    private static final MacAlgorithm JWT_MAC_ALGORITHM = MacAlgorithm.HS512;
-    private static final String REFRESH_TOKEN_TYPE = "refresh";
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;

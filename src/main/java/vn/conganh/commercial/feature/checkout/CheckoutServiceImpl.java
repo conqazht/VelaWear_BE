@@ -629,10 +629,6 @@ public class CheckoutServiceImpl implements CheckoutService {
         return new CodedBusinessException(code, message, HttpStatus.CONFLICT, details);
     }
 
-    private String nullSafe(String value) {
-        return value == null ? "" : value.trim();
-    }
-
     private QuoteLocalization localizeQuote(Quote quote, String localeCode) {
         Map<Long, CatalogContentLocalizationService.LocalizedProduct> products =
                 localizationService.localizeProducts(

@@ -48,9 +48,7 @@ class SaleCampaignServiceImplLocalizationTest {
         service = new SaleCampaignServiceImpl(
                 campaignRepository,
                 itemRepository,
-                variantRepository,
                 productImageRepository,
-                productRepository,
                 productTranslationRepository,
                 campaignTranslationRepository,
                 userRepository,

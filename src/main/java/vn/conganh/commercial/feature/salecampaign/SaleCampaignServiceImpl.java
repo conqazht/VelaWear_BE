@@ -19,10 +19,8 @@ import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.product.ProductTranslation;
 import vn.conganh.commercial.feature.product.ProductTranslationRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
-import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
-import vn.conganh.commercial.feature.product.ProductRepository;
 import vn.conganh.commercial.feature.salecampaign.dto.CreateSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.EndAndCloneSaleCampaignRequest;
 import vn.conganh.commercial.feature.salecampaign.dto.IncreaseQuotaRequest;
@@ -41,9 +39,7 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
 
     private final SaleCampaignRepository campaignRepository;
     private final SaleCampaignItemRepository itemRepository;
-    private final ProductVariantRepository variantRepository;
     private final ProductImageRepository productImageRepository;
-    private final ProductRepository productRepository;
     private final ProductTranslationRepository productTranslationRepository;
     private final SaleCampaignTranslationRepository campaignTranslationRepository;
     private final UserRepository userRepository;
@@ -396,41 +392,6 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
             upsertDefaultTranslation(target);
         }
         campaignTranslationRepository.flush();
-    }
-
-    private int compareLocales(String left, String right) {
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(left)) {
-            return CatalogLocaleResolver.DEFAULT_LOCALE.equals(right) ? 0 : -1;
-        }
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(right)) {
-            return 1;
-        }
-        return left.compareTo(right);
-    }
-
-    private String firstValue(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private String resolveImage(ProductVariant variant, Map<Long, List<ProductImage>> imagesByProduct) {
-        List<ProductImage> images = imagesByProduct.getOrDefault(variant.getProduct().getId(), List.of());
-        return images.stream()
-                .filter(image -> image.getVariant() != null && image.getVariant().getId().equals(variant.getId()))
-                .map(ProductImage::getImage)
-                .findFirst()
-                .orElseGet(() -> images.stream()
-                        .filter(image -> image.getVariant() == null)
-                        .sorted(java.util.Comparator.comparing(
-                                ProductImage::getSortOrder,
-                                java.util.Comparator.nullsLast(Integer::compareTo)))
-                        .map(ProductImage::getImage)
-                        .findFirst()
-                        .orElse(null));
     }
 
     private SaleCampaign findDetailed(Long id) {
