@@ -13,6 +13,10 @@ quản trị `/api/v1/products`.
 - Nội dung storefront (Storefront Catalog, Wishlist Self List) resolve theo `locale`, `Accept-Language`, rồi fallback `vi`
   và field core.
 
+## DTO Assembly
+
+- `ProductResponseAssembler` là explicit repository-free component phụ trách dựng đối tượng DTO `ProductResponse` kèm fallback đa ngôn ngữ (`localeCode`), thông tin danh mục, ảnh sản phẩm và giá đại diện (`VariantPricing`). Không dùng MapStruct để đảm bảo quá trình chuyển đổi dữ liệu không gây I/O ẩn hay N+1 query.
+
 ## Storefront catalog
 
 API công khai mới nằm ở package sibling `feature.storefrontcatalog`:

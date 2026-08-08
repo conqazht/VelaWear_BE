@@ -1,3 +1,9 @@
+### BE-014: Refactor product orchestration
+
+- **Date/Time**: 2026-08-07 (Asia/Saigon)
+- **Summary of Changes**: Tách các tác vụ dựng đối tượng DTO và xử lý ghép nối đa ngôn ngữ (`localeCode`), danh mục, ảnh sản phẩm và giá đại diện (`VariantPricing`) từ `ProductServiceImpl` sang collaborator độc lập `ProductResponseAssembler`. Quá trình chuyển đổi dữ liệu không sử dụng MapStruct để giữ sự minh bạch trong thiết kế và tránh N+1 query hay I/O ẩn. `ProductServiceImpl` giữ nguyên toàn bộ giao dịch CRUD (`@Transactional`), các kiểm tra ranh giới dữ liệu, khóa tài nguyên và cơ chế nạp dữ liệu số lượng lớn (batch loading context) từ BE-007.
+- **Verification**: Negative boundary check (`rg -n`) xác nhận `ProductResponseAssembler` là repository-free component (0 phụ thuộc Repository/EntityManager/Transactional). Focused test suite `ProductResponseAssemblerTest,ProductServiceImplTest,ProductResponseTest,ProductControllerTest,ProductTranslationServiceImplTest,StorefrontCatalogServiceImplTest,StorefrontCatalogServiceIntegrationTest` pass 100% (50/50). Full `mvnw.cmd clean verify` pass 100% (770/770). Tuân thủ 100% `git diff --check` và file allowlist (`git diff --name-only`).
+
 ### BE-013: Refactor sale-campaign orchestration
 
 - **Date/Time**: 2026-08-07 (Asia/Saigon)
