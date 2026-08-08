@@ -3,6 +3,7 @@ package vn.conganh.commercial.feature.order;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.FilterSpecifications;
 import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
+import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailOutboxService;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 
 @Service
@@ -33,6 +35,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemRepository orderItemRepository;
     private final OrderResourceLifecycleService resourceLifecycleService;
     private final PaymentRepository paymentRepository;
+    private final OrderCompletedEmailOutboxService orderCompletedEmailOutboxService;
 
     @Override
     @Transactional(readOnly = true)
@@ -160,6 +163,7 @@ public class OrderServiceImpl implements OrderService {
 
         String previousStatus = order.getStatus();
         assertCheckoutManagedFieldsAreImmutable(order, request);
+        assertCompletedEmailFieldsAreImmutable(order, request);
         if ("CANCELLED".equals(request.status()) && !"CANCELLED".equals(previousStatus)) {
             if (!java.util.Set.of("PENDING", "CONFIRMED").contains(previousStatus)) {
                 throw new InvalidRequestException(
@@ -207,7 +211,28 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
         recordStatusHistory(savedOrder, previousStatus, request.status());
+        if (!"COMPLETED".equals(previousStatus) && "COMPLETED".equals(savedOrder.getStatus())) {
+            orderCompletedEmailOutboxService.enqueue(savedOrder);
+        }
         return toDetailedResponse(savedOrder);
+    }
+
+    private void assertCompletedEmailFieldsAreImmutable(Order order, UpdateOrderRequest request) {
+        if (!"COMPLETED".equals(order.getStatus())) {
+            return;
+        }
+        boolean changesRenderedEmailData = (request.finalAmount() != null
+                        && request.finalAmount().compareTo(order.getFinalAmount()) != 0)
+                || (request.receiverName() != null
+                        && !Objects.equals(request.receiverName(), order.getReceiverName()))
+                || (request.receiverAddress() != null
+                        && !Objects.equals(request.receiverAddress(), order.getReceiverAddress()))
+                || (request.paymentMethod() != null
+                        && !Objects.equals(request.paymentMethod(), order.getPaymentMethod()));
+        if (changesRenderedEmailData) {
+            throw new InvalidRequestException(
+                    "Completed order receipt fields cannot be changed after the delivery email is queued");
+        }
     }
 
     private void assertCheckoutManagedFieldsAreImmutable(Order order, UpdateOrderRequest request) {

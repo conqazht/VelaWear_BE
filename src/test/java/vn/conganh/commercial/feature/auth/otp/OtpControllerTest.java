@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.hasLength;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -81,8 +80,6 @@ class OtpControllerTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("request returns challenge metadata without exposing OTP state")
     void requestOtpRegisterSuccess() throws Exception {
-        doNothing().when(emailProvider).sendEmail(anyString(), anyString(), anyString());
-
         mockMvc.perform(post("/api/v1/auth/otp/request")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new OtpRequest(
@@ -279,7 +276,6 @@ class OtpControllerTest extends AbstractIntegrationTest {
     }
 
     private IssuedOtp requestOtp(String email, OtpPurpose purpose) throws Exception {
-        doNothing().when(emailProvider).sendEmail(anyString(), anyString(), anyString());
         MvcResult requestResult = mockMvc.perform(post("/api/v1/auth/otp/request")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new OtpRequest(email, purpose))))
@@ -291,7 +287,7 @@ class OtpControllerTest extends AbstractIntegrationTest {
         ArgumentCaptor<String> contentCaptor = ArgumentCaptor.forClass(String.class);
         verify(emailProvider).sendEmail(eq(email), anyString(), contentCaptor.capture());
         String code = contentCaptor.getValue().replaceAll(
-                "(?s).*letter-spacing: 5px; color: #1a1a1a;\">(\\d{6})</span>.*",
+                "(?s).*(\\d{6})</span>.*",
                 "$1");
         assertThat(code).matches("\\d{6}");
         return new IssuedOtp(challengeId, code);

@@ -4,6 +4,7 @@ import com.resend.Resend;
 import com.resend.core.exception.ResendException;
 import com.resend.services.emails.model.CreateEmailOptions;
 import com.resend.services.emails.model.CreateEmailResponse;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,8 +25,8 @@ public class ResendEmailProvider implements EmailProvider {
     }
 
     @Override
-    public void sendEmail(String to, String subject, String contentHtml) {
-        log.info("[ResendEmailProvider] Sending verification email");
+    public String sendEmail(String to, String subject, String contentHtml, String idempotencyKey) {
+        log.info("event=email_delivery outcome=started provider=resend");
 
         CreateEmailOptions params = CreateEmailOptions.builder()
                 .from(fromEmail)
@@ -35,22 +36,52 @@ public class ResendEmailProvider implements EmailProvider {
                 .build();
 
         try {
-            CreateEmailResponse response = resend.emails().send(params);
+            CreateEmailResponse response = idempotencyKey == null || idempotencyKey.isBlank()
+                    ? resend.emails().send(params)
+                    : resend.emails().send(params, Map.of("Idempotency-Key", idempotencyKey));
             if (response == null || response.getId() == null) {
-                log.error("[ResendEmailProvider] Verification email provider returned an empty response");
-                throw new ServiceUnavailableException("Failed to send verification email");
+                log.error("event=email_delivery outcome=empty_response provider=resend");
+                throw new ServiceUnavailableException("Failed to send email");
             }
-            log.info("[ResendEmailProvider] Verification email accepted by provider");
+            log.info("event=email_delivery outcome=accepted provider=resend");
+            return response.getId();
         } catch (ResendException e) {
-            log.error("[ResendEmailProvider] Verification email provider rejected the request; errorType={}",
-                    e.getClass().getSimpleName());
-            throw new ServiceUnavailableException("Verification email provider is currently unavailable");
+            boolean retryable = isRetryable(e);
+            log.error(
+                    "event=email_delivery outcome=rejected provider=resend status={} errorName={} retryable={}",
+                    e.getStatusCode(),
+                    e.getErrorName(),
+                    retryable);
+            throw new EmailDeliveryException(providerErrorMessage(e), retryable);
         } catch (ServiceUnavailableException e) {
             throw e;
         } catch (RuntimeException e) {
-            log.error("[ResendEmailProvider] Unexpected verification email failure; errorType={}",
+            log.error("event=email_delivery outcome=unexpected_failure provider=resend errorType={}",
                     e.getClass().getSimpleName());
-            throw new ServiceUnavailableException("Verification email provider is currently unavailable");
+            throw new ServiceUnavailableException("Email provider is currently unavailable");
         }
+    }
+
+    private boolean isRetryable(ResendException exception) {
+        Integer statusCode = exception.getStatusCode();
+        if (statusCode == null || statusCode <= 0) {
+            return true;
+        }
+        if ("concurrent_idempotent_requests".equals(exception.getErrorName())) {
+            return true;
+        }
+        return statusCode == 408 || statusCode == 429 || statusCode >= 500;
+    }
+
+    private String providerErrorMessage(ResendException exception) {
+        StringBuilder message = new StringBuilder("Email provider rejected the request");
+        if (exception.getStatusCode() != null) {
+            message.append(" (status=").append(exception.getStatusCode());
+            if (exception.getErrorName() != null && !exception.getErrorName().isBlank()) {
+                message.append(", error=").append(exception.getErrorName());
+            }
+            message.append(')');
+        }
+        return message.toString();
     }
 }

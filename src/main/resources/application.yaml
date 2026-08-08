@@ -92,6 +92,16 @@ payment:
     cancel-url: ${SEPAY_CANCEL_URL:}
 
 app:
+  email:
+    storefront-base-url: ${STOREFRONT_BASE_URL:http://localhost:3000}
+    outbox:
+      enabled: ${EMAIL_OUTBOX_ENABLED:true}
+      scan-ms: ${EMAIL_OUTBOX_SCAN_MS:10000}
+      batch-size: ${EMAIL_OUTBOX_BATCH_SIZE:50}
+      max-attempts: ${EMAIL_OUTBOX_MAX_ATTEMPTS:5}
+      lease-duration: ${EMAIL_OUTBOX_LEASE_DURATION:2m}
+      retry-base-delay: ${EMAIL_OUTBOX_RETRY_BASE_DELAY:1m}
+      retry-max-delay: ${EMAIL_OUTBOX_RETRY_MAX_DELAY:1h}
   security:
     hmac-secret: ${SECURITY_HMAC_SECRET:development-only-security-hmac-secret-change-before-production}
     rate-limit:

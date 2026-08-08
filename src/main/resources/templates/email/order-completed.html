@@ -1,0 +1,146 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="vi" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Đơn hàng {{orderCode}} đã được giao thành công</title>
+    <style type="text/css">
+      @media only screen and (max-width: 620px) {
+        .email-shell { width: 100% !important; }
+        .email-padding { padding-left: 22px !important; padding-right: 22px !important; }
+        .summary-column { display: block !important; width: 100% !important; text-align: left !important; padding-top: 10px !important; }
+      }
+    </style>
+  </head>
+  <body dir="ltr" lang="vi" style="background-color:#f5f3ef;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1c1a18;">
+    <div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0;">
+      Đơn hàng {{orderCode}} của bạn đã được giao thành công. Cảm ơn bạn đã mua sắm tại VelaWear.
+    </div>
+    <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#f5f3ef;">
+      <tbody>
+        <tr>
+          <td align="center" style="padding:24px 12px;">
+            <table class="email-shell" border="0" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;max-width:100%;background-color:#ffffff;border:1px solid #e5e1da;">
+              <tbody>
+                <tr>
+                  <td class="email-padding" style="background-color:#f7f7f5;padding:18px 40px;">
+                    <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                      <tbody>
+                        <tr>
+                          <td style="font-size:12px;line-height:18px;color:#68645f;text-transform:uppercase;letter-spacing:1.2px;">
+                            Mã đơn hàng
+                            <br />
+                            <strong style="font-size:14px;color:#1c1a18;letter-spacing:0;">{{orderCode}}</strong>
+                          </td>
+                          <td class="summary-column" align="right" style="font-size:12px;line-height:18px;color:#68645f;">
+                            Hoàn tất lúc
+                            <br />
+                            <strong style="font-size:14px;color:#1c1a18;">{{completedAt}}</strong>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="email-padding" align="center" style="padding:42px 40px 34px;">
+                    <p style="margin:0;font-size:22px;line-height:28px;font-weight:800;letter-spacing:5px;color:#1c1a18;">
+                      VELAWEAR
+                    </p>
+                    <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:26px auto 18px;">
+                      <tbody>
+                        <tr>
+                          <td align="center" valign="middle" width="54" height="54" style="width:54px;height:54px;border-radius:27px;background-color:#1f7a4f;color:#ffffff;font-size:28px;font-weight:700;">
+                            ✓
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <h1 style="margin:0;font-size:30px;line-height:39px;font-weight:750;letter-spacing:-0.7px;color:#1c1a18;">
+                      Đơn hàng đã được giao thành công
+                    </h1>
+                    <p style="margin:18px 0 0;font-size:15px;line-height:25px;color:#68645f;">
+                      Xin chào <strong style="color:#1c1a18;">{{customerName}}</strong>,<br />
+                      cảm ơn bạn đã lựa chọn VelaWear. Mong rằng những sản phẩm trong đơn hàng này sẽ đồng hành thật lâu cùng bạn.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="border-top:1px solid #ece8e2;"></td>
+                </tr>
+                <tr>
+                  <td class="email-padding" style="padding:32px 40px 16px;">
+                    <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                      <tbody>
+                        <tr>
+                          <td style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#1c1a18;">
+                            Sản phẩm ({{itemCount}})
+                          </td>
+                          <td align="right" style="font-size:12px;color:#777;">Số lượng &nbsp;&nbsp; Thành tiền</td>
+                        </tr>
+                        {{itemRows}}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="email-padding" style="padding:8px 40px 30px;">
+                    <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#f7f7f5;">
+                      <tbody>
+                        <tr>
+                          <td style="padding:20px 22px;font-size:13px;line-height:21px;color:#68645f;">
+                            Phương thức thanh toán<br />
+                            <strong style="color:#1c1a18;">{{paymentMethod}}</strong>
+                          </td>
+                          <td align="right" style="padding:20px 22px;font-size:13px;line-height:21px;color:#68645f;">
+                            Tổng thanh toán<br />
+                            <strong style="font-size:18px;color:#1c1a18;">{{finalAmount}}</strong>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="border-top:1px solid #ece8e2;"></td>
+                </tr>
+                <tr>
+                  <td class="email-padding" style="padding:30px 40px;">
+                    <p style="margin:0 0 10px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:#1c1a18;">
+                      Thông tin nhận hàng
+                    </p>
+                    <p style="margin:0;font-size:14px;line-height:23px;color:#68645f;">
+                      <strong style="color:#1c1a18;">{{receiverName}}</strong><br />
+                      {{receiverAddress}}
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="email-padding" align="center" style="padding:4px 40px 42px;">
+                    <a href="{{orderUrl}}" target="_blank" style="display:inline-block;background-color:#1c1a18;color:#ffffff;text-decoration:none;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;padding:15px 28px;border:1px solid #1c1a18;">
+                      Xem đơn hàng &amp; đánh giá sản phẩm
+                    </a>
+                    <p style="margin:18px 0 0;font-size:12px;line-height:20px;color:#8a867f;">
+                      Chia sẻ đánh giá của bạn để giúp VelaWear phục vụ tốt hơn trong những lần mua sắm tiếp theo.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background-color:#1c1a18;padding:28px 40px;text-align:center;">
+                    <p style="margin:0;color:#ffffff;font-size:15px;font-weight:800;letter-spacing:3px;">VELAWEAR</p>
+                    <p style="margin:12px 0 0;color:#aaa6a0;font-size:12px;line-height:19px;">
+                      Đây là email tự động xác nhận đơn hàng đã hoàn tất.<br />
+                      Nếu cần hỗ trợ, vui lòng liên hệ VelaWear qua website.
+                    </p>
+                    <p style="margin:14px 0 0;color:#77736e;font-size:11px;">© VelaWear. All rights reserved.</p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>
