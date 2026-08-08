@@ -2,7 +2,7 @@
 
 > Ngày cập nhật: **2026-07-16**<br>
 > OpenSpec change ID: **`complete-storefront-catalog-ux`**<br>
-> Tài liệu companion phía Frontend: [STOREFRONT_CATALOG_UX_FRONTEND_VI.md](../../commercial-fe-storefront-catalog-ux/docs/STOREFRONT_CATALOG_UX_FRONTEND_VI.md)
+> Tài liệu companion phía Frontend: [STOREFRONT_CATALOG_UX_FRONTEND_VI.md](https://github.com/conqazht/VelaWear_FE/blob/main/docs/STOREFRONT_CATALOG_UX_FRONTEND_VI.md)
 
 Tài liệu này mô tả contract và hành vi đã có trong code Backend cho catalog storefront, giá hiệu lực và review đã xác minh. Tên class, field, endpoint và đoạn mã được giữ bằng tiếng Anh; phần giải thích dùng tiếng Việt để thuận tiện bàn giao.
 
