@@ -33,7 +33,6 @@ import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignTranslation;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignTranslationRepository;
-import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 
 @Service
 @RequiredArgsConstructor
