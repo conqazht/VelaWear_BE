@@ -67,7 +67,7 @@ class EmailOutboxStoreIntegrationTest extends AbstractIntegrationTest {
                 .getFirst();
         assertThat(retryClaim.attemptCount()).isEqualTo(2);
         assertThat(retryClaim.claimToken()).isNotEqualTo(firstClaim.claimToken());
-        assertThat(store.markSent(outboxId, retryClaim.claimToken(), "resend-message-id", retryAt.plusSeconds(1)))
+        assertThat(store.markSent(outboxId, retryClaim.claimToken(), "provider-message-id", retryAt.plusSeconds(1)))
                 .isTrue();
 
         Map<String, Object> row = jdbcTemplate.queryForMap(
@@ -80,7 +80,7 @@ class EmailOutboxStoreIntegrationTest extends AbstractIntegrationTest {
                 outboxId);
         assertThat(row.get("status")).isEqualTo("SENT");
         assertThat(row.get("attempt_count")).isEqualTo(2);
-        assertThat(row.get("provider_message_id")).isEqualTo("resend-message-id");
+        assertThat(row.get("provider_message_id")).isEqualTo("provider-message-id");
         assertThat(row.get("sent_at")).isNotNull();
         assertThat(row.get("claim_token")).isNull();
         assertThat(row.get("lease_expires_at")).isNull();

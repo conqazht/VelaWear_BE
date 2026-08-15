@@ -1,3 +1,9 @@
+### BE-017: Migrate email provider to Gmail SMTP (Spring Boot Starter Mail)
+
+- **Date/Time**: 2026-08-15 (Asia/Saigon)
+- **Summary of Changes**: Chuyển đổi toàn bộ hệ thống gửi email sang **Gmail SMTP** qua `spring-boot-starter-mail` và Spring `JavaMailSender` (`GmailSmtpEmailProvider`). Hỗ trợ cấu hình `spring.mail` chuẩn (host `smtp.gmail.com`, port `587`, TLS starttls) kết hợp `SmtpMailProperties` (`app.mail.from-email`, `app.mail.from-name`). Tạo email định dạng UTF-8 HTML qua `MimeMessageHelper`, đính kèm display name và header `X-Idempotency-Key`. Gỡ bỏ dependency `resend-java`. Viết bộ unit test toàn diện `GmailSmtpEmailProviderTest`.
+- **Verification**: `mvnw.cmd test` pass 100% (792/792 tests, 0 failures, 0 errors).
+
 ### BE-016: Deliver order-completed email outbox and brand-consistent OTP HTML template
 
 - **Date/Time**: 2026-08-08 (Asia/Saigon)

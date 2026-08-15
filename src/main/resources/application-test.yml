@@ -20,11 +20,10 @@ jwt:
   access-token-expiration: 900
   refresh-token-expiration: 259200
 
-resend:
-  api-key: test-resend-api-key
-  from-email: onboarding@resend.dev
-
 app:
+  mail:
+    from-email: test@example.com
+    from-name: Vela Wear
   email:
     storefront-base-url: http://localhost:3000
     outbox:
