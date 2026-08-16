@@ -20,7 +20,7 @@ INSERT INTO user_role (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 JOIN roles r ON r.name = 'ADMIN'
-WHERE u.email IN ('admin@gmail.com', 'admin@example.com', 'admin@velawear.local')
+WHERE u.email IN ('admin@gmail.com', 'admin@example.com', 'admin@velawear.local', 'user@velawear.local')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO user_role (user_id, role_id)

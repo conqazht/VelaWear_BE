@@ -814,6 +814,21 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
         assertThat(mismatchedUsers).isZero();
     }
 
+    @Test
+    @DisplayName("Công Anh account - được gán role ADMIN full quyền hệ thống")
+    void devSeedData_congAnhHasAdminRoleWithFullPermissions() {
+        Integer adminRoleCount = jdbcTemplate.queryForObject("""
+                select count(*)
+                from user_role ur
+                join users u on u.id = ur.user_id
+                join roles r on r.id = ur.role_id
+                where r.name = 'ADMIN'
+                  and (u.email = 'user@velawear.local' or lower(trim(u.full_name)) like '%công anh%')
+                """, Integer.class);
+
+        assertThat(adminRoleCount).isNotNull().isGreaterThanOrEqualTo(1);
+    }
+
     private Integer mockOrderItemCount() {
         return jdbcTemplate.queryForObject("""
                 select count(*)

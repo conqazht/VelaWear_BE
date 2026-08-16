@@ -23,6 +23,19 @@ ORDER BY
     u.id
 LIMIT 1;
 
+-- Ensure Công Anh and user@velawear.local accounts have ADMIN role with full permissions
+INSERT INTO user_role (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+CROSS JOIN roles r
+WHERE r.name = 'ADMIN'
+  AND (
+      u.email = 'user@velawear.local'
+      OR LOWER(TRIM(u.full_name)) LIKE '%công anh%'
+      OR LOWER(TRIM(u.full_name)) LIKE '%cong anh%'
+  )
+ON CONFLICT DO NOTHING;
+
 INSERT INTO coupons (
     code,
     type,
@@ -406,6 +419,12 @@ BEGIN
     IF NEW.email <> 'user@velawear.local'
        AND (LOWER(TRIM(NEW.full_name)) LIKE '%công anh%'
             OR LOWER(TRIM(NEW.full_name)) LIKE '%cong anh%') THEN
+        INSERT INTO user_role (user_id, role_id)
+        SELECT NEW.id, r.id
+        FROM roles r
+        WHERE r.name = 'ADMIN'
+        ON CONFLICT DO NOTHING;
+
         UPDATE orders
         SET user_id = NEW.id,
             receiver_name = NEW.full_name
