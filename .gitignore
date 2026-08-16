@@ -39,3 +39,10 @@ build/
 
 # Environment variables
 .env
+
+# Third-party agent skills (keep custom skills only)
+.agents/skills/*
+!.agents/skills/flyway/
+!.agents/skills/new-feature/
+!.agents/skills/review-pr/
+skills-lock.json

@@ -12,17 +12,17 @@ Dự án được xây dựng dựa trên các công nghệ và thư viện hi�
 | **Spring Boot** | 4.0.7 |
 | **Spring Framework** | 7 |
 | **Spring Security** | 7 + oauth2-resource-server (JWT HS512) |
-| **Spring Data JPA** | + PostgreSQL 16 |
-| **Redis** | session tracking, token revocation, OTP, rate limiting |
-| **Flyway** | database migrations |
+| **Spring Data JPA** | + PostgreSQL 16 / 17 |
+| **Redis** | session tracking, token revocation, OTP challenge/proof, rate limiting |
+| **Flyway** | Database migrations & versioning |
+| **Spring Mail** | `spring-boot-starter-mail` (Gmail SMTP / JavaMailSender) gửi OTP & Hóa đơn HTML |
 | **Lombok** | Giảm thiểu boilerplate code |
-| **SpringDoc OpenAPI** | 3.0.2 (Swagger) |
-| **Resend** | email OTP |
-| **Testcontainers** | 2.0.5 (PostgreSQL for tests) |
+| **SpringDoc OpenAPI** | 3.0.2 (Swagger UI / OpenAPI v3) |
+| **Testcontainers** | 2.0.5 (PostgreSQL test containers) |
 | **Testing** | JUnit 6 + Mockito + MockMvc |
-| **Build Tool** | Maven |
-| **Google OAuth2** | social login |
-| **SePay** | payment gateway |
+| **Build Tool** | Maven Wrapper |
+| **Google OAuth2** | Social login (Authorization code exchange + PKCE state) |
+| **SePay** | Payment gateway (VietQR / Chuyển khoản tự động) |
 | **Gemini API** | AI-powered Vietnamese → English content translation |
 
 ## Infrastructure
@@ -30,12 +30,12 @@ Dự án được xây dựng dựa trên các công nghệ và thư viện hi�
 - `docker-compose.yml` cung cấp PostgreSQL 16-alpine và Redis 8.8.0.
 - Spring Boot Docker Compose support tự động khởi chạy các containers trong môi trường dev.
 - Profiles hỗ trợ: `dev`, `prod`, `test`.
-- Flyway quản lý toàn bộ schema migrations, các script nằm tại thư mục `src/main/resources/db/`.
+- Flyway quản lý toàn bộ schema migrations, các script nằm tại thư mục `src/main/resources/db/migration/`.
 
 ## Feature Modules
 
-Hệ thống được chia thành 25 package nghiệp vụ (features) bên trong thư mục `feature/`:
-`auth`, `brand`, `cart`, `catalog`, `category`, `checkout`, `color`, `coupon`, `file`, `home`, `order`, `payment`, `permission`, `product`, `productvariant`, `refreshtoken`, `review`, `role`, `salecampaign`, `size`, `socialaccount`, `storefrontcatalog`, `user`, `useraddress`, `wishlist`.
+Hệ thống được chia thành các package nghiệp vụ độc lập (features) bên trong thư mục `feature/`:
+`auth`, `brand`, `cart`, `catalog`, `category`, `checkout`, `color`, `coupon`, `emailoutbox`, `file`, `home`, `order`, `payment`, `permission`, `product`, `productvariant`, `refreshtoken`, `review`, `role`, `salecampaign`, `size`, `socialaccount`, `storefrontcatalog`, `user`, `useraddress`, `wishlist`.
 
 ## Package Structure
 
@@ -46,7 +46,7 @@ vn.conganh.commercial/
 ├── security/        # SecurityUtil, CustomUserDetailsService, JwtSecurityFilter
 ├── exception/       # GlobalExceptionHandler, AppException hierarchy
 ├── dto/             # ApiResponse<T>, ResultPaginationDTO<T>, shared DTOs
-├── feature/         # 25 business feature modules
+├── feature/         # Business feature modules
 │   └── {feature}/
 │       ├── {Feature}Controller.java
 │       ├── {Feature}Service.java (interface)
@@ -63,7 +63,8 @@ vn.conganh.commercial/
     ├── application-prod.yml
     ├── application-test.yml
     ├── db/           # Flyway migrations
-    └── redis/        # Redis Lua scripts
+    ├── email/        # Branded HTML email templates (OTP, Order Completed)
+    └── redis/        # Redis Lua scripts (OTP rate limiting, CAS session rotation)
 ```
 
 ## Security Architecture
@@ -72,6 +73,7 @@ vn.conganh.commercial/
 - **Thời gian sống của token**: Access token (15 phút), refresh token (3 ngày).
 - **Refresh Token**: Lưu trữ trong Redis, sử dụng cơ chế CAS rotation và revocation. Cookie HttpOnly được thiết lập cho refresh token tại `Path=/api/v1/auth`.
 - **OTP**: Cơ chế challenge/proof với rate limiting, cooldown và max attempts lock để chống brute-force.
+- **Email Delivery**: Gửi email qua Spring `JavaMailSender` (Gmail SMTP) hỗ trợ mẫu HTML nhận diện thương hiệu Vela Wear (`otp.html`, `order-completed.html`).
 - **RBAC**: Entity Permission ánh xạ (`apiPath` + `httpMethod`) sang Role tương ứng.
 - **Social Login**: Hỗ trợ Google OAuth2 thông qua luồng authorization code exchange.
 
@@ -134,7 +136,7 @@ sequenceDiagram
 
     FE->>PG: Chuyển hướng người dùng sang trang thanh toán SePay
     PG-->>BE: Gửi Webhook cập nhật trạng thái thanh toán (PAID)
-    Note over BE: Cập nhật trạng thái Đơn hàng sang PAID & hoàn tất
+    Note over BE: Cập nhật trạng thái Đơn hàng sang PAID & gửi email hóa đơn qua Outbox
 ```
 
 ## Environment Variables
@@ -185,9 +187,13 @@ UPLOAD_ALLOWED_FOLDERS=avatars,logos              # Thư mục con cho phép
 SWAGGER_UI_ENABLED=true                           # Bật/tắt giao diện Swagger UI
 OPENAPI_DOCS_ENABLED=true                         # Bật/tắt OpenAPI docs
 
-# Resend Email Settings
-RESEND_API_KEY=your_resend_api_key_here           # API Key dịch vụ Resend gửi email OTP
-RESEND_FROM_EMAIL=onboarding@resend.dev           # Địa chỉ email người gửi
+# Gmail SMTP Settings (Gửi OTP & Hóa đơn HTML)
+MAIL_HOST=smtp.gmail.com                          # Máy chủ SMTP (mặc định smtp.gmail.com)
+MAIL_PORT=587                                     # Cổng TLS SMTP (587)
+MAIL_USERNAME=your_email@gmail.com                # Email Gmail dùng để gửi
+MAIL_PASSWORD=your_16_char_google_app_password    # Mật khẩu ứng dụng Google (16 ký tự)
+MAIL_FROM_EMAIL=your_email@gmail.com              # Địa chỉ email hiển thị người gửi
+MAIL_FROM_NAME=Vela Wear                          # Tên thương hiệu hiển thị
 
 # Gemini AI Content Translation (VI -> EN)
 ENGLISH_CONTENT_ENABLED=false                     # Bật/tắt gợi ý dịch thuật bằng AI
@@ -222,7 +228,7 @@ OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS=180      # Thời gian sống request a
 
 1. **Yêu cầu hệ thống**: Cài đặt Java 25, Maven, và Docker (dùng để chạy PostgreSQL + Redis).
 2. **Clone repo**: Clone mã nguồn dự án từ GitHub.
-3. **Cấu hình môi trường**: Copy file `.env.example` thành `.env`, điền đầy đủ các thông tin credentials.
+3. **Cấu hình môi trường**: Copy file `.env.example` thành `.env`, điền đầy đủ các thông tin credentials (bao gồm mật khẩu ứng dụng Gmail 16 ký tự).
 4. **Khởi chạy Infrastructure**: Docker compose sẽ được tự động khởi chạy nhờ Spring Boot Docker Compose support. Nếu muốn chạy thủ công: `docker compose up -d`.
 5. **Chạy ứng dụng**: Chạy lệnh `./mvnw spring-boot:run` trên terminal hoặc chạy trực tiếp thông qua IntelliJ IDEA.
 6. **Truy cập Swagger UI**: Khám phá và test API tại `http://localhost:8080/swagger-ui.html`.
@@ -230,7 +236,7 @@ OAUTH2_AUTHORIZATION_REQUEST_TTL_SECONDS=180      # Thời gian sống request a
 
 ## Testing
 
-- Dự án có tổng cộng 94 test files trải dài trên các tính năng.
+- Dự án có toàn diện **791+ bài test** trải dài trên toàn bộ các tính năng.
 - **Unit tests**: Sử dụng `@ExtendWith(MockitoExtension.class)` và Mockito.
 - **Integration tests**: Sử dụng `@SpringBootTest` kết hợp MockMvc, `@ActiveProfiles("test")`, và Testcontainers (PostgreSQL).
 - **Chạy tests**: Dùng lệnh `./mvnw test`.
@@ -252,6 +258,8 @@ Các tài liệu chi tiết được lưu trong thư mục `docs/`:
 - [Kiểm thử race condition](docs/RACE_CONDITION_TESTING_VI.md)
 - [Sale campaign backend](docs/SALE_CAMPAIGN_BACKEND.md)
 - [Hướng dẫn i18n catalog](docs/I18N_CATALOG_SALE_VI.md)
+- [Kế hoạch Hardening OTP/Auth v1](docs/PLAN_HARDENING_OTP_AUTH_VI.md)
+- [Kế hoạch triển khai Sale Campaign end-to-end](docs/PLAN_SALE_CAMPAIGN_END_TO_END_VI.md)
 
 ## Lộ Trình Cải Tiến & Refactoring (Improvement Plans)
 

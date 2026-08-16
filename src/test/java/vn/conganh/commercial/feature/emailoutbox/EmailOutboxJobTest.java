@@ -70,11 +70,11 @@ class EmailOutboxJobTest {
                 "Subject",
                 "<p>Body</p>",
                 "order-completed/10"))
-                .thenReturn("resend-message-id");
+                .thenReturn("provider-message-id");
         when(emailOutboxStore.markSent(
                 eq(100L),
                 eq(claim.claimToken()),
-                eq("resend-message-id"),
+                eq("provider-message-id"),
                 any(Instant.class)))
                 .thenReturn(true);
 
@@ -83,7 +83,7 @@ class EmailOutboxJobTest {
         verify(emailOutboxStore).markSent(
                 eq(100L),
                 eq(claim.claimToken()),
-                eq("resend-message-id"),
+                eq("provider-message-id"),
                 any(Instant.class));
         verify(emailOutboxStore, never()).markFailure(
                 any(), any(), anyBoolean(), any(), any(), any());

@@ -51,6 +51,22 @@ spring:
               - email
               - profile
 
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 10000
+          writetimeout: 10000
+
 server:
   port: ${SERVER_PORT}
   forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:NONE}
@@ -69,16 +85,15 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    mail:
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:false}
 
 jwt:
   access-token-secret-key: ${JWT_ACCESS_TOKEN_SECRET_KEY}
   refresh-token-secret-key: ${JWT_REFRESH_TOKEN_SECRET_KEY}
   access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
-
-resend:
-  api-key: ${RESEND_API_KEY}
-  from-email: ${RESEND_FROM_EMAIL:onboarding@resend.dev}
 
 payment:
   sepay:
@@ -92,6 +107,9 @@ payment:
     cancel-url: ${SEPAY_CANCEL_URL:}
 
 app:
+  mail:
+    from-email: ${MAIL_FROM_EMAIL:${spring.mail.username:conganhtruongw@gmail.com}}
+    from-name: ${MAIL_FROM_NAME:Vela Wear}
   email:
     storefront-base-url: ${STOREFRONT_BASE_URL:http://localhost:3000}
     outbox:
