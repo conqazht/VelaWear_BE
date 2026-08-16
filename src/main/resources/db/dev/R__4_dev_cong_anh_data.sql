@@ -23,18 +23,24 @@ ORDER BY
     u.id
 LIMIT 1;
 
--- Ensure Công Anh and user@velawear.local accounts have ADMIN role with full permissions
+-- Ensure Công Anh (conganhtruongw@gmail.com) has ADMIN role with full permissions, while user@velawear.local remains customer-only
 INSERT INTO user_role (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 CROSS JOIN roles r
 WHERE r.name = 'ADMIN'
   AND (
-      u.email = 'user@velawear.local'
-      OR LOWER(TRIM(u.full_name)) LIKE '%công anh%'
-      OR LOWER(TRIM(u.full_name)) LIKE '%cong anh%'
+      u.email = 'conganhtruongw@gmail.com'
+      OR (
+          u.email <> 'user@velawear.local'
+          AND (LOWER(TRIM(u.full_name)) LIKE '%công anh%' OR LOWER(TRIM(u.full_name)) LIKE '%cong anh%')
+      )
   )
 ON CONFLICT DO NOTHING;
+
+DELETE FROM user_role
+WHERE user_id IN (SELECT id FROM users WHERE email = 'user@velawear.local')
+  AND role_id IN (SELECT id FROM roles WHERE name = 'ADMIN');
 
 INSERT INTO coupons (
     code,
@@ -417,7 +423,8 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     IF NEW.email <> 'user@velawear.local'
-       AND (LOWER(TRIM(NEW.full_name)) LIKE '%công anh%'
+       AND (NEW.email = 'conganhtruongw@gmail.com'
+            OR LOWER(TRIM(NEW.full_name)) LIKE '%công anh%'
             OR LOWER(TRIM(NEW.full_name)) LIKE '%cong anh%') THEN
         INSERT INTO user_role (user_id, role_id)
         SELECT NEW.id, r.id
