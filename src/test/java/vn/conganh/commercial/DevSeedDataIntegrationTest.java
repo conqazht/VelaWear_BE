@@ -814,6 +814,47 @@ class DevSeedDataIntegrationTest extends AbstractIntegrationTest {
         assertThat(mismatchedUsers).isZero();
     }
 
+    @Test
+    @DisplayName("User seed role - user@velawear.local chỉ có role USER, không có role ADMIN")
+    void devSeedData_userVelawearLocalHasOnlyCustomerRole() {
+        Integer adminCountForCustomer = jdbcTemplate.queryForObject("""
+                select count(*)
+                from user_role ur
+                join users u on u.id = ur.user_id
+                join roles r on r.id = ur.role_id
+                where u.email = 'user@velawear.local'
+                  and r.name = 'ADMIN'
+                """, Integer.class);
+
+        assertThat(adminCountForCustomer).isZero();
+    }
+
+    @Test
+    @DisplayName("Công Anh account - conganhtruongw@gmail.com được gán role ADMIN full quyền")
+    void devSeedData_congAnhHasAdminRoleWithFullPermissions() {
+        jdbcTemplate.update("""
+                insert into users (email, full_name, password)
+                values ('conganhtruongw@gmail.com', 'Công Anh', 'dummy_hash')
+                on conflict (email) do update set full_name = excluded.full_name
+                """);
+        jdbcTemplate.update("""
+                delete from flyway_schema_history
+                where script = 'R__4_dev_cong_anh_data.sql'
+                """);
+        flyway.migrate();
+
+        Integer adminRoleCount = jdbcTemplate.queryForObject("""
+                select count(*)
+                from user_role ur
+                join users u on u.id = ur.user_id
+                join roles r on r.id = ur.role_id
+                where r.name = 'ADMIN'
+                  and u.email = 'conganhtruongw@gmail.com'
+                """, Integer.class);
+
+        assertThat(adminRoleCount).isEqualTo(1);
+    }
+
     private Integer mockOrderItemCount() {
         return jdbcTemplate.queryForObject("""
                 select count(*)

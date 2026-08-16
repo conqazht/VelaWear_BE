@@ -4,9 +4,7 @@ SET full_name = CASE
     WHEN EXISTS (
         SELECT 1
         FROM users actual_user
-        WHERE (LOWER(TRIM(actual_user.full_name)) LIKE '%công anh%'
-               OR LOWER(TRIM(actual_user.full_name)) LIKE '%cong anh%')
-          AND actual_user.email <> 'user@velawear.local'
+        WHERE actual_user.email = 'conganhtruongw@gmail.com'
     ) THEN 'Demo Customer'
     ELSE 'Công Anh'
 END
@@ -15,13 +13,25 @@ WHERE email = 'user@velawear.local';
 CREATE TEMP TABLE dev_cong_anh_user ON COMMIT DROP AS
 SELECT u.id
 FROM users u
-WHERE LOWER(TRIM(u.full_name)) LIKE '%công anh%'
-   OR LOWER(TRIM(u.full_name)) LIKE '%cong anh%'
+WHERE u.email = 'conganhtruongw@gmail.com'
    OR u.email = 'user@velawear.local'
 ORDER BY
     CASE WHEN u.email = 'user@velawear.local' THEN 1 ELSE 0 END,
     u.id
 LIMIT 1;
+
+-- Ensure Công Anh (conganhtruongw@gmail.com) has ADMIN role with full permissions, while user@velawear.local remains customer-only
+INSERT INTO user_role (user_id, role_id)
+SELECT u.id, r.id
+FROM users u
+CROSS JOIN roles r
+WHERE r.name = 'ADMIN'
+  AND u.email = 'conganhtruongw@gmail.com'
+ON CONFLICT DO NOTHING;
+
+DELETE FROM user_role
+WHERE user_id IN (SELECT id FROM users WHERE email = 'user@velawear.local')
+  AND role_id IN (SELECT id FROM roles WHERE name = 'ADMIN');
 
 INSERT INTO coupons (
     code,
@@ -403,9 +413,13 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF NEW.email <> 'user@velawear.local'
-       AND (LOWER(TRIM(NEW.full_name)) LIKE '%công anh%'
-            OR LOWER(TRIM(NEW.full_name)) LIKE '%cong anh%') THEN
+    IF NEW.email = 'conganhtruongw@gmail.com' THEN
+        INSERT INTO user_role (user_id, role_id)
+        SELECT NEW.id, r.id
+        FROM roles r
+        WHERE r.name = 'ADMIN'
+        ON CONFLICT DO NOTHING;
+
         UPDATE orders
         SET user_id = NEW.id,
             receiver_name = NEW.full_name
@@ -447,6 +461,6 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_assign_dev_fixtures_to_cong_anh ON users;
 CREATE TRIGGER trg_assign_dev_fixtures_to_cong_anh
-AFTER INSERT OR UPDATE OF full_name ON users
+AFTER INSERT OR UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION assign_dev_fixtures_to_cong_anh();

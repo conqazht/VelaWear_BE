@@ -1,3 +1,9 @@
+### BE-018: Grant ADMIN role to Công Anh (conganhtruongw@gmail.com) and keep user@velawear.local as customer
+
+- **Date/Time**: 2026-08-16 (Asia/Saigon)
+- **Summary of Changes**: Cấp quyền `ADMIN` toàn quyền hệ thống cho tài khoản Công Anh (`conganhtruongw@gmail.com` hoặc user tên Công Anh) trong dev seed data (`R__4_dev_cong_anh_data.sql`). Đảm bảo `user@velawear.local` giữ vai trò khách hàng storefront (`ROLE_USER`), không nhận `ROLE_ADMIN`. Cập nhật PostgreSQL trigger `assign_dev_fixtures_to_cong_anh` để tự động gán role `ADMIN` khi tài khoản Công Anh đăng nhập Google OAuth. Bổ sung test case `devSeedData_userVelawearLocalHasOnlyCustomerRole` và `devSeedData_congAnhHasAdminRoleWithFullPermissions`.
+- **Verification**: `DevSeedDataIntegrationTest` pass 100% (17/17 tests).
+
 ### BE-017: Migrate email provider to Gmail SMTP (Spring Boot Starter Mail)
 
 - **Date/Time**: 2026-08-15 (Asia/Saigon)
