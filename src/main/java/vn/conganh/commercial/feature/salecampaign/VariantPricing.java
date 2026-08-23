@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.salecampaign;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 
 public record VariantPricing(
@@ -15,6 +16,23 @@ public record VariantPricing(
 ) {
     public boolean isFlash() {
         return priceSource == PriceSource.FLASH_SALE;
+    }
+
+    public int salePriority() {
+        return switch (priceSource) {
+            case FLASH_SALE -> 2;
+            case STANDARD_SALE -> 1;
+            case BASE -> 0;
+        };
+    }
+
+    public BigDecimal discountRate() {
+        if (listPrice == null || listPrice.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return listPrice.subtract(effectivePrice)
+                .max(BigDecimal.ZERO)
+                .divide(listPrice, 6, RoundingMode.HALF_UP);
     }
 
     public VariantPricingResponse toResponse() {

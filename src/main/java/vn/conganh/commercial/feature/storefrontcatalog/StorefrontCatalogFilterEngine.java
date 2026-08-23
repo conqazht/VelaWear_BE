@@ -1,7 +1,6 @@
 package vn.conganh.commercial.feature.storefrontcatalog;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -51,9 +50,9 @@ class StorefrontCatalogFilterEngine {
                     .min(Comparator.comparing((Offer offer) -> offer.pricing().effectivePrice())
                             .thenComparing(offer -> offer.variant().getId()))
                     .orElseThrow();
-            int priority = matchingOffers.stream().mapToInt(this::salePriority).max().orElse(0);
+            int priority = matchingOffers.stream().mapToInt(o -> o.pricing().salePriority()).max().orElse(0);
             BigDecimal discountRate = matchingOffers.stream()
-                    .map(this::discountRate)
+                    .map(o -> o.pricing().discountRate())
                     .max(BigDecimal::compareTo)
                     .orElse(BigDecimal.ZERO);
             candidates.add(new Candidate(item, matchingOffers, representative, priority, discountRate));
@@ -217,23 +216,6 @@ class StorefrontCatalogFilterEngine {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
-    private int salePriority(Offer offer) {
-        return switch (offer.pricing().priceSource()) {
-            case FLASH_SALE -> 2;
-            case STANDARD_SALE -> 1;
-            case BASE -> 0;
-        };
-    }
-
-    private BigDecimal discountRate(Offer offer) {
-        BigDecimal listPrice = offer.pricing().listPrice();
-        if (listPrice == null || listPrice.signum() <= 0) {
-            return BigDecimal.ZERO;
-        }
-        return listPrice.subtract(offer.pricing().effectivePrice())
-                .max(BigDecimal.ZERO)
-                .divide(listPrice, 6, RoundingMode.HALF_UP);
-    }
 
     private Comparator<Candidate> comparator(StorefrontProductSort sort) {
         Comparator<Candidate> newest = Comparator
