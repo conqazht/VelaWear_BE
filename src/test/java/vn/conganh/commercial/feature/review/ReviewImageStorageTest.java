@@ -17,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 import vn.conganh.commercial.config.UploadProperties;
 import vn.conganh.commercial.exception.InvalidRequestException;
+import vn.conganh.commercial.feature.file.ImageFileWriter;
 
 @DisplayName("Module Review - ReviewImageStorage")
 class ReviewImageStorageTest {
@@ -34,7 +35,7 @@ class ReviewImageStorageTest {
                 10,
                 List.of("jpg", "jpeg", "png", "webp"),
                 List.of("avatars", "products"));
-        reviewImageStorage = new ReviewImageStorage(properties);
+        reviewImageStorage = new ReviewImageStorage(properties, new ImageFileWriter(properties));
     }
 
     @Test
@@ -71,7 +72,7 @@ class ReviewImageStorageTest {
         assertThatThrownBy(() -> reviewImageStorage.store(List.of(
                 image("large.jpg", "image/jpeg", new byte[11]))))
                 .isInstanceOf(InvalidRequestException.class)
-                .hasMessageContaining("5 MB");
+                .hasMessageContaining("exceeds");
         assertThatThrownBy(() -> reviewImageStorage.store(List.of(
                 image("review.jpg", "image/png", jpegBytes()))))
                 .isInstanceOf(InvalidRequestException.class)

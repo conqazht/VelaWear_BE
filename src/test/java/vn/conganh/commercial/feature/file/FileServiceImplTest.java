@@ -26,7 +26,8 @@ class FileServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        fileService = new FileServiceImpl(uploadProperties(10));
+        UploadProperties properties = uploadProperties(10);
+        fileService = new FileServiceImpl(properties, new ImageFileWriter(properties));
     }
 
     @Nested
@@ -89,7 +90,8 @@ class FileServiceImplTest {
         @DisplayName("store - nem InvalidRequestException khi file vuot qua gioi han")
         void store_oversizedFile_throwsInvalidRequestException() {
             // Arrange
-            FileServiceImpl smallLimitService = new FileServiceImpl(uploadProperties(3));
+            UploadProperties properties = uploadProperties(3);
+            FileServiceImpl smallLimitService = new FileServiceImpl(properties, new ImageFileWriter(properties));
             MockMultipartFile file = imageFile("avatar.jpg", jpegBytes());
 
             // Act & Assert
