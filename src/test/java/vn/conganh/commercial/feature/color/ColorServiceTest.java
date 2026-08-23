@@ -31,17 +31,17 @@ import vn.conganh.commercial.feature.color.dto.CreateColorRequest;
 import vn.conganh.commercial.feature.color.dto.UpdateColorRequest;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Module Color - ColorServiceImpl")
-class ColorServiceImplTest {
+@DisplayName("ColorService")
+class ColorServiceTest {
 
     @Mock
     private ColorRepository colorRepository;
 
-    private ColorServiceImpl colorService;
+    private ColorService colorService;
 
     @BeforeEach
     void setUp() {
-        colorService = new ColorServiceImpl(colorRepository);
+        colorService = new ColorService(colorRepository);
     }
 
     @Nested

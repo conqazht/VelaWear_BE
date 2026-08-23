@@ -31,17 +31,17 @@ import vn.conganh.commercial.feature.size.dto.SizeResponse;
 import vn.conganh.commercial.feature.size.dto.UpdateSizeRequest;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Module Size - SizeServiceImpl")
-class SizeServiceImplTest {
+@DisplayName("SizeService")
+class SizeServiceTest {
 
     @Mock
     private SizeRepository sizeRepository;
 
-    private SizeServiceImpl sizeService;
+    private SizeService sizeService;
 
     @BeforeEach
     void setUp() {
-        sizeService = new SizeServiceImpl(sizeRepository);
+        sizeService = new SizeService(sizeRepository);
     }
 
     @Nested
