@@ -54,4 +54,11 @@ public record StorefrontProductQuery(
     public int resolvedSize() {
         return size == null ? 12 : size;
     }
+
+    public void assertPriceRangeValid() {
+        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+            throw new vn.conganh.commercial.exception.InvalidRequestException(
+                    "Minimum price must not be greater than maximum price");
+        }
+    }
 }

@@ -31,17 +31,17 @@ import vn.conganh.commercial.feature.brand.dto.CreateBrandRequest;
 import vn.conganh.commercial.feature.brand.dto.UpdateBrandRequest;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Module Brand - BrandServiceImpl")
-class BrandServiceImplTest {
+@DisplayName("BrandService")
+class BrandServiceTest {
 
     @Mock
     private BrandRepository brandRepository;
 
-    private BrandServiceImpl brandService;
+    private BrandService brandService;
 
     @BeforeEach
     void setUp() {
-        brandService = new BrandServiceImpl(brandRepository);
+        brandService = new BrandService(brandRepository);
     }
 
     @Nested
