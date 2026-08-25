@@ -107,6 +107,8 @@ payment:
     cancel-url: ${SEPAY_CANCEL_URL:}
 
 app:
+  checkout:
+    shipping-fee: ${APP_CHECKOUT_SHIPPING_FEE:0}
   mail:
     from-email: ${MAIL_FROM_EMAIL:${spring.mail.username:conganhtruongw@gmail.com}}
     from-name: ${MAIL_FROM_NAME:Vela Wear}
