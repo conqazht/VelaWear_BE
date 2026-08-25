@@ -263,7 +263,7 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'VW-TEE-BLK-M', 249000.00, 80, c.id, s.id, 'ACTIVE'
+SELECT p.id, 'VW-TEE-BLK-M', 1000.00, 80, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
@@ -279,7 +279,7 @@ SET
     status = EXCLUDED.status;
 
 INSERT INTO product_variants (product_id, sku, price, stock_quantity, color_id, size_id, status)
-SELECT p.id, 'VW-TEE-RED-L', 249000.00, 55, c.id, s.id, 'ACTIVE'
+SELECT p.id, 'VW-TEE-RED-L', 1000.00, 55, c.id, s.id, 'ACTIVE'
 FROM products p
 CROSS JOIN colors c
 CROSS JOIN sizes s
