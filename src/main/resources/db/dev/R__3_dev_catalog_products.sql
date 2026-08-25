@@ -198,15 +198,20 @@ SELECT
         ELSE 'Sợi tự nhiên pha'
     END::VARCHAR(255) AS material_vi,
     (
-        CASE fixture.category_slug
-            WHEN 'ao' THEN 390000
-            WHEN 'quan' THEN 690000
-            WHEN 'vay' THEN 790000
-            WHEN 'dam' THEN 1090000
-            WHEN 'ao-khoac' THEN 1490000
-            WHEN 'giay' THEN 1190000
-            WHEN 'phu-kien' THEN 290000
-        END + fixture.position * 5000
+        CASE
+            WHEN fixture.slug = 'brass-ring-key-hook' THEN 1000
+            ELSE (
+                CASE fixture.category_slug
+                    WHEN 'ao' THEN 390000
+                    WHEN 'quan' THEN 690000
+                    WHEN 'vay' THEN 790000
+                    WHEN 'dam' THEN 1090000
+                    WHEN 'ao-khoac' THEN 1490000
+                    WHEN 'giay' THEN 1190000
+                    WHEN 'phu-kien' THEN 290000
+                END + fixture.position * 5000
+            )
+        END
     )::NUMERIC(15, 2) AS price
 FROM dev_catalog_product_fixture fixture;
 
