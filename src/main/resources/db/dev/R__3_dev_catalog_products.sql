@@ -199,7 +199,7 @@ SELECT
     END::VARCHAR(255) AS material_vi,
     (
         CASE
-            WHEN fixture.slug IN ('essential-cotton-tee', 'brass-ring-key-hook') THEN 1000
+            WHEN fixture.slug = 'brass-ring-key-hook' THEN 1000
             ELSE (
                 CASE fixture.category_slug
                     WHEN 'ao' THEN 390000
