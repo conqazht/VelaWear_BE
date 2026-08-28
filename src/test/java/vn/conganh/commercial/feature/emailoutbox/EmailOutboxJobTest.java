@@ -20,7 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import vn.conganh.commercial.feature.auth.email.EmailDeliveryException;
 import vn.conganh.commercial.feature.auth.email.EmailProvider;
 import vn.conganh.commercial.feature.emailoutbox.EmailOutboxStore.Claim;
-import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailTemplateRenderer.RenderedEmail;
+import vn.conganh.commercial.feature.emailoutbox.CommerceEmailTemplateRenderer.RenderedEmail;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("EmailOutboxJob")
@@ -30,7 +30,7 @@ class EmailOutboxJobTest {
     private EmailOutboxStore emailOutboxStore;
 
     @Mock
-    private OrderCompletedEmailTemplateRenderer templateRenderer;
+    private CommerceEmailTemplateRenderer templateRenderer;
 
     @Mock
     private EmailProvider emailProvider;

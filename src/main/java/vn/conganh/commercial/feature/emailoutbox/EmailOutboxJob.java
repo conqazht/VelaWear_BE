@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import vn.conganh.commercial.feature.auth.email.EmailDeliveryException;
 import vn.conganh.commercial.feature.auth.email.EmailProvider;
 import vn.conganh.commercial.feature.emailoutbox.EmailOutboxStore.Claim;
-import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailTemplateRenderer.RenderedEmail;
+import vn.conganh.commercial.feature.emailoutbox.CommerceEmailTemplateRenderer.RenderedEmail;
 
 @Slf4j
 @Component
@@ -24,7 +24,7 @@ public class EmailOutboxJob {
     private static final int MAX_ERROR_LENGTH = 2000;
 
     private final EmailOutboxStore emailOutboxStore;
-    private final OrderCompletedEmailTemplateRenderer templateRenderer;
+    private final CommerceEmailTemplateRenderer templateRenderer;
     private final EmailProvider emailProvider;
     private final EmailNotificationProperties properties;
 
@@ -67,7 +67,7 @@ public class EmailOutboxJob {
                     claim.recipientEmail(),
                     renderedEmail.subject(),
                     renderedEmail.html(),
-                    "order-completed/" + claim.orderId());
+                    claim.templateKey().name().toLowerCase(java.util.Locale.ROOT).replace('_', '-') + "/" + claim.orderId());
         } catch (RuntimeException exception) {
             handleDeliveryFailure(claim, exception);
             return;

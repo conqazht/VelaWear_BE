@@ -63,6 +63,10 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/api/v1/payments/sepay/ipn",
+            "/api/v1/payments/vnpay/**",
+            "/api/v1/payments/momo/**",
+            "/api/v1/payments/stripe/**",
+            "/api/v1/payments/simulate/**",
             "/uploads/**"
     };
 

@@ -26,10 +26,12 @@ class OrderCompletedEmailOutboxServiceTest {
     private EmailOutboxRepository emailOutboxRepository;
 
     private OrderCompletedEmailOutboxService service;
+    private CommerceEmailOutboxService commerceEmailOutboxService;
 
     @BeforeEach
     void setUp() {
-        service = new OrderCompletedEmailOutboxService(emailOutboxRepository);
+        commerceEmailOutboxService = new CommerceEmailOutboxService(emailOutboxRepository);
+        service = new OrderCompletedEmailOutboxService(commerceEmailOutboxService);
     }
 
     @Test
