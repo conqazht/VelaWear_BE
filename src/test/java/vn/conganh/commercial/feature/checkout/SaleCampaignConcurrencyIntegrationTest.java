@@ -50,6 +50,7 @@ import vn.conganh.commercial.feature.checkout.dto.CheckoutResponse;
 import vn.conganh.commercial.feature.coupon.Coupon;
 import vn.conganh.commercial.feature.coupon.CouponRepository;
 import vn.conganh.commercial.feature.order.Order;
+import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
 import vn.conganh.commercial.feature.order.OrderRepository;
@@ -113,7 +114,7 @@ class SaleCampaignConcurrencyIntegrationTest {
     private static final long RACE_TIMEOUT_SECONDS = 15;
 
     @Autowired CheckoutService checkoutService;
-    @Autowired OrderResourceLifecycleService lifecycleService;
+    @Autowired OrderFulfillmentService lifecycleService;
     @Autowired SePayService sePayService;
     @Autowired UserRepository userRepository;
     @Autowired ProductRepository productRepository;
@@ -477,7 +478,7 @@ class SaleCampaignConcurrencyIntegrationTest {
         createFlash(variant, 5, 1);
 
         org.junit.jupiter.api.Assertions.assertThrows(
-                vn.conganh.commercial.exception.InvalidRequestException.class,
+                InvalidRequestException.class,
                 () -> productService.deleteProduct(product.getId()));
 
         assertThat(productRepository.findById(product.getId()).orElseThrow().getDeletedAt()).isNull();
@@ -515,12 +516,12 @@ class SaleCampaignConcurrencyIntegrationTest {
                 request("SEPAY", fingerprint), firstUser.getEmail(), "payment-guard");
 
         org.junit.jupiter.api.Assertions.assertThrows(
-                vn.conganh.commercial.exception.InvalidRequestException.class,
+                InvalidRequestException.class,
                 () -> orderService.updateOrder(
                         checkout.orderId(),
                         new UpdateOrderRequest(null, null, null, null, null, null, null, null, "PAID")));
         org.junit.jupiter.api.Assertions.assertThrows(
-                vn.conganh.commercial.exception.InvalidRequestException.class,
+                InvalidRequestException.class,
                 () -> orderService.updateOrder(
                         checkout.orderId(),
                         new UpdateOrderRequest("CONFIRMED", null, null, null, null, null, null, null, null)));

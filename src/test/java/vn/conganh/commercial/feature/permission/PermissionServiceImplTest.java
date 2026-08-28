@@ -19,6 +19,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,7 @@ import vn.conganh.commercial.feature.permission.dto.CreatePermissionRequest;
 import vn.conganh.commercial.feature.permission.dto.PermissionResponse;
 import vn.conganh.commercial.feature.permission.dto.UpdatePermissionRequest;
 import vn.conganh.commercial.feature.role.Role;
+import vn.conganh.commercial.feature.role.RoleRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Permission - PermissionServiceImpl")
@@ -40,13 +42,13 @@ class PermissionServiceImplTest {
     private PermissionRepository permissionRepository;
 
     @Mock
-    private org.springframework.cache.CacheManager cacheManager;
+    private CacheManager cacheManager;
 
     @Mock
     private Cache rolePermissionsCache;
 
     @Mock
-    private vn.conganh.commercial.feature.role.RoleRepository roleRepository;
+    private RoleRepository roleRepository;
 
     private PermissionServiceImpl permissionService;
 

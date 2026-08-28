@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleHelper;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.product.dto.ProductTranslationRequest;
 import vn.conganh.commercial.feature.product.dto.ProductTranslationResponse;
@@ -65,9 +66,7 @@ public class ProductTranslationServiceImpl implements ProductTranslationService 
     public void deleteTranslation(Long productId, String localeCode) {
         findProductWithLock(productId);
         String resolvedLocale = localeResolver.requireEnabledLocale(localeCode);
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
-            throw new InvalidRequestException("The default locale translation cannot be deleted");
-        }
+        CatalogLocaleHelper.assertNotDefaultLocale(resolvedLocale);
         ProductTranslation translation = translationRepository
                 .findByProductIdAndLocaleCode(productId, resolvedLocale)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -109,20 +108,10 @@ public class ProductTranslationServiceImpl implements ProductTranslationService 
 
     private ProductTranslationsResponse response(Long productId) {
         List<ProductTranslationResponse> translations = translationRepository.findByProductId(productId).stream()
-                .sorted((left, right) -> compareLocales(left.getLocaleCode(), right.getLocaleCode()))
+                .sorted((left, right) -> CatalogLocaleHelper.compareLocales(left.getLocaleCode(), right.getLocaleCode()))
                 .map(ProductTranslationResponse::fromEntity)
                 .toList();
         return new ProductTranslationsResponse(translations);
-    }
-
-    private int compareLocales(String left, String right) {
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(left)) {
-            return CatalogLocaleResolver.DEFAULT_LOCALE.equals(right) ? 0 : -1;
-        }
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(right)) {
-            return 1;
-        }
-        return left.compareTo(right);
     }
 
     private Product findProduct(Long productId) {

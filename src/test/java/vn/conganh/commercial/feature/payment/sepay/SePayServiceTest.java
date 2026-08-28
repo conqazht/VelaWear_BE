@@ -27,7 +27,7 @@ import vn.conganh.commercial.feature.payment.PaymentTransactionRepository;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 import vn.conganh.commercial.util.constant.PaymentTransactionStatus;
-import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
+import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 
 @ExtendWith(MockitoExtension.class)
 class SePayServiceTest {
@@ -41,7 +41,7 @@ class SePayServiceTest {
     @Mock
     private ObjectMapper objectMapper;
     @Mock
-    private OrderResourceLifecycleService resourceLifecycleService;
+    private OrderFulfillmentService resourceLifecycleService;
 
     private SePayService service;
     private Order order;

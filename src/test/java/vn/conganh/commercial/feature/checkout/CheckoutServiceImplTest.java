@@ -52,17 +52,15 @@ import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.productvariant.InventoryLogRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
+import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
-import vn.conganh.commercial.feature.user.User;
-import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.feature.salecampaign.CampaignReservationService;
 import vn.conganh.commercial.feature.salecampaign.PriceSource;
-import vn.conganh.commercial.feature.salecampaign.SaleAllocationRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaignRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleCustomerUsageRepository;
+import vn.conganh.commercial.feature.salecampaign.SaleCampaign;
 import vn.conganh.commercial.feature.salecampaign.VariantPricing;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaign;
+import vn.conganh.commercial.feature.user.User;
+import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus;
 import vn.conganh.commercial.util.constant.CouponStatus;
@@ -100,21 +98,13 @@ class CheckoutServiceImplTest {
     @Mock
     private VariantPricingService pricingService;
     @Mock
-    private SaleCampaignItemRepository campaignItemRepository;
+    private CampaignReservationService campaignReservationService;
     @Mock
-    private SaleCampaignRepository campaignRepository;
-    @Mock
-    private SaleCustomerUsageRepository customerUsageRepository;
-    @Mock
-    private SaleAllocationRepository allocationRepository;
-    @Mock
-    private OrderResourceLifecycleService lifecycleService;
+    private OrderFulfillmentService lifecycleService;
     @Mock
     private CatalogContentLocalizationService localizationService;
     @Spy
     private CheckoutFingerprintService fingerprintService = new CheckoutFingerprintService();
-    @Spy
-    private CheckoutOrderItemAssembler orderItemAssembler = new CheckoutOrderItemAssembler();
 
     @InjectMocks
     private CheckoutServiceImpl checkoutService;
@@ -299,7 +289,6 @@ class CheckoutServiceImplTest {
                 new CatalogContentLocalizationService.LocalizedProduct("English product", "english-product")));
         when(localizationService.localizeCampaignNames(any(), eq("en")))
                 .thenReturn(Map.of(2L, "English sale"));
-        when(campaignRepository.findAllStatesWithLockByIdIn(List.of(2L))).thenReturn(List.of(campaign));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order saved = invocation.getArgument(0);
             ReflectionTestUtils.setField(saved, "id", 100L);

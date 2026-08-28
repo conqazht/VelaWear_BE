@@ -37,7 +37,6 @@ import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.UserGender;
-import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
 import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailOutboxService;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 
@@ -56,7 +55,7 @@ class OrderServiceImplTest {
     @Mock
     private OrderItemRepository orderItemRepository;
     @Mock
-    private OrderResourceLifecycleService resourceLifecycleService;
+    private OrderFulfillmentService resourceLifecycleService;
     @Mock
     private PaymentRepository paymentRepository;
     @Mock

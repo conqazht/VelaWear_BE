@@ -58,6 +58,7 @@ import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
 import vn.conganh.commercial.security.monitoring.SecurityEventLogger;
 import vn.conganh.commercial.security.monitoring.SecurityMetrics;
+import vn.conganh.commercial.security.session.UserSessionService;
 import vn.conganh.commercial.security.ratelimit.AuthRateLimitService;
 import vn.conganh.commercial.security.session.SessionRevocationReason;
 import vn.conganh.commercial.security.session.SessionRevocationService;
@@ -126,17 +127,20 @@ class AuthServiceImplTest {
                 jwtConfig.refreshJwtEncoder(),
                 jwtConfig.refreshJwtDecoder(),
                 jwtProperties);
+        UserSessionService userSessionService =
+                new UserSessionService(
+                        authTokenCodec,
+                        refreshTokenService,
+                        refreshTokenSessionService,
+                        tokenBlacklistService,
+                        jwtProperties);
         authService = new AuthServiceImpl(
                 authenticationManager,
                 userRepository,
                 roleRepository,
                 userHasRoleRepository,
-                refreshTokenService,
-                refreshTokenSessionService,
+                userSessionService,
                 passwordEncoder,
-                authTokenCodec,
-                jwtProperties,
-                tokenBlacklistService,
                 otpService,
                 oauth2LoginCodeService,
                 rateLimitService,

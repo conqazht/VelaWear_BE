@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.List;
+import vn.conganh.commercial.exception.InvalidRequestException;
 
 public record StorefrontProductQuery(
         @Size(max = 120, message = "Search query must not exceed 120 characters")
@@ -57,7 +58,7 @@ public record StorefrontProductQuery(
 
     public void assertPriceRangeValid() {
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
-            throw new vn.conganh.commercial.exception.InvalidRequestException(
+            throw new InvalidRequestException(
                     "Minimum price must not be greater than maximum price");
         }
     }

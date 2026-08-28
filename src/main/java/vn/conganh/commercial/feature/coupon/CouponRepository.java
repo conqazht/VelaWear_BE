@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import vn.conganh.commercial.util.constant.CouponStatus;
 
 public interface CouponRepository extends JpaRepository<Coupon, Long>, JpaSpecificationExecutor<Coupon> {
 
@@ -22,7 +23,7 @@ public interface CouponRepository extends JpaRepository<Coupon, Long>, JpaSpecif
     Optional<Coupon> findWithLockById(@Param("id") Long id);
 
     List<Coupon> findAllByStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByEndDateAsc(
-            vn.conganh.commercial.util.constant.CouponStatus status,
+            CouponStatus status,
             Instant startDate,
             Instant endDate);
 

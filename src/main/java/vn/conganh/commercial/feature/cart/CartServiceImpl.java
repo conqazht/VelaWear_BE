@@ -1,25 +1,26 @@
 package vn.conganh.commercial.feature.cart;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.data.jpa.domain.Specification;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.dto.ResultPaginationDTO;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.cart.dto.CartFilterRequest;
-import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CartItemResponse;
+import vn.conganh.commercial.feature.cart.dto.CartResponse;
 import vn.conganh.commercial.feature.cart.dto.CreateCartRequest;
 import vn.conganh.commercial.feature.cart.dto.ReplaceCartItemsRequest;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogContentLocalizationService;
@@ -29,7 +30,9 @@ import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricing;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 
@@ -186,8 +189,8 @@ public class CartServiceImpl implements CartService {
                 .findAllByIdInAndDeletedAtIsNull(cartItems.stream().map(CartItem::getVariantId).toList())
                 .stream()
                 .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
-        Map<Long, vn.conganh.commercial.feature.salecampaign.VariantPricing> pricingByVariant =
-                variantPricingService.resolve(variants.values(), java.time.Instant.now(), cart.getUser().getId());
+        Map<Long, VariantPricing> pricingByVariant =
+                variantPricingService.resolve(variants.values(), Instant.now(), cart.getUser().getId());
         Map<Long, CatalogContentLocalizationService.LocalizedProduct> localizedProducts =
                 localizationService.localizeProducts(
                         variants.values().stream().map(ProductVariant::getProduct).toList(),
@@ -200,7 +203,7 @@ public class CartServiceImpl implements CartService {
                 localeCode);
         List<Long> productIds = variants.values().stream()
                 .map(ProductVariant::getProduct)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(Product::getId)
                 .distinct()
                 .toList();
@@ -250,8 +253,8 @@ public class CartServiceImpl implements CartService {
         return CartResponse.fromEntity(cart, itemResponses);
     }
 
-    private vn.conganh.commercial.feature.salecampaign.dto.VariantPricingResponse localizedPricing(
-            vn.conganh.commercial.feature.salecampaign.VariantPricing pricing,
+    private VariantPricingResponse localizedPricing(
+            VariantPricing pricing,
             Map<Long, String> campaignNames) {
         if (pricing == null) {
             return null;

@@ -1,30 +1,20 @@
 package vn.conganh.commercial.feature.auth;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
-import java.util.UUID;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import vn.conganh.commercial.security.TokenBlacklistService;
-import vn.conganh.commercial.security.ClientIpResolver;
-import vn.conganh.commercial.security.monitoring.SecurityEventLogger;
-import vn.conganh.commercial.security.monitoring.SecurityMetrics;
-import vn.conganh.commercial.security.ratelimit.AuthRateLimitService;
-import vn.conganh.commercial.security.session.SessionRevocationReason;
-import vn.conganh.commercial.security.session.SessionRevocationService;
-import vn.conganh.commercial.config.JwtProperties;
 import vn.conganh.commercial.exception.DuplicateResourceException;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.RefreshTokenSessionNotFoundException;
@@ -37,14 +27,11 @@ import vn.conganh.commercial.feature.auth.dto.ForgotPasswordResetRequest;
 import vn.conganh.commercial.feature.auth.dto.LoginRequest;
 import vn.conganh.commercial.feature.auth.dto.OAuth2ExchangeRequest;
 import vn.conganh.commercial.feature.auth.dto.RefreshTokenRequest;
-import vn.conganh.commercial.feature.auth.oauth2.OAuth2LoginCodeService;
-import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.auth.dto.RegisterRequest;
 import vn.conganh.commercial.feature.auth.dto.TokenResponse;
+import vn.conganh.commercial.feature.auth.oauth2.OAuth2LoginCodeService;
+import vn.conganh.commercial.feature.auth.otp.OtpService;
 import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSession;
-import vn.conganh.commercial.feature.refreshtoken.RefreshTokenSessionService;
-import vn.conganh.commercial.feature.refreshtoken.RefreshTokenService;
-import vn.conganh.commercial.feature.refreshtoken.dto.CreateRefreshTokenRequest;
 import vn.conganh.commercial.feature.role.Role;
 import vn.conganh.commercial.feature.role.RoleRepository;
 import vn.conganh.commercial.feature.user.User;
@@ -52,6 +39,13 @@ import vn.conganh.commercial.feature.user.UserHasRole;
 import vn.conganh.commercial.feature.user.UserHasRoleRepository;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.feature.user.dto.UserResponse;
+import vn.conganh.commercial.security.ClientIpResolver;
+import vn.conganh.commercial.security.monitoring.SecurityEventLogger;
+import vn.conganh.commercial.security.monitoring.SecurityMetrics;
+import vn.conganh.commercial.security.ratelimit.AuthRateLimitService;
+import vn.conganh.commercial.security.session.SessionRevocationReason;
+import vn.conganh.commercial.security.session.SessionRevocationService;
+import vn.conganh.commercial.security.session.UserSessionService;
 import vn.conganh.commercial.util.constant.OtpPurpose;
 
 @Slf4j
@@ -62,12 +56,8 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final UserHasRoleRepository userHasRoleRepository;
-    private final RefreshTokenService refreshTokenService;
-    private final RefreshTokenSessionService refreshTokenSessionService;
+    private final UserSessionService userSessionService;
     private final PasswordEncoder passwordEncoder;
-    private final AuthTokenCodec authTokenCodec;
-    private final JwtProperties jwtProperties;
-    private final TokenBlacklistService tokenBlacklistService;
     private final OtpService otpService;
     private final OAuth2LoginCodeService oauth2LoginCodeService;
     private final AuthRateLimitService rateLimitService;
@@ -80,12 +70,8 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             RoleRepository roleRepository,
             UserHasRoleRepository userHasRoleRepository,
-            RefreshTokenService refreshTokenService,
-            RefreshTokenSessionService refreshTokenSessionService,
+            UserSessionService userSessionService,
             PasswordEncoder passwordEncoder,
-            AuthTokenCodec authTokenCodec,
-            JwtProperties jwtProperties,
-            TokenBlacklistService tokenBlacklistService,
             OtpService otpService,
             OAuth2LoginCodeService oauth2LoginCodeService,
             AuthRateLimitService rateLimitService,
@@ -96,12 +82,8 @@ public class AuthServiceImpl implements AuthService {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.userHasRoleRepository = userHasRoleRepository;
-        this.refreshTokenService = refreshTokenService;
-        this.refreshTokenSessionService = refreshTokenSessionService;
+        this.userSessionService = userSessionService;
         this.passwordEncoder = passwordEncoder;
-        this.authTokenCodec = authTokenCodec;
-        this.jwtProperties = jwtProperties;
-        this.tokenBlacklistService = tokenBlacklistService;
         this.otpService = otpService;
         this.oauth2LoginCodeService = oauth2LoginCodeService;
         this.rateLimitService = rateLimitService;
@@ -144,7 +126,7 @@ public class AuthServiceImpl implements AuthService {
             List<String> roles = authentication.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
                     .toList();
-            TokenResponse response = issueTokens(user, roles, deviceInfo, ipAddress);
+            TokenResponse response = userSessionService.issueTokens(user, roles, deviceInfo, ipAddress);
 
             rateLimitService.clear("login", identityLimits);
             securityMetrics.authAttempt("login", "success");
@@ -201,7 +183,7 @@ public class AuthServiceImpl implements AuthService {
         List<String> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
-        TokenResponse response = issueTokens(user, roles, deviceInfo, ipAddress);
+        TokenResponse response = userSessionService.issueTokens(user, roles, deviceInfo, ipAddress);
         log.info("[VelaWear/Auth] - OAUTH2_EXCHANGE: userId: {}", user.getId());
         securityMetrics.authAttempt("oauth_exchange", "success");
         return response;
@@ -210,32 +192,27 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public TokenResponse refreshToken(RefreshTokenRequest request) {
-        Jwt currentRefreshJwt = validateRefreshJwt(request.refreshToken());
-        String currentJti = requireJti(currentRefreshJwt);
-        long tokenSecurityVersion = requireSecurityVersion(currentRefreshJwt);
+        Jwt currentRefreshJwt = userSessionService.validateRefreshJwt(request.refreshToken());
+        String currentJti = userSessionService.requireJti(currentRefreshJwt);
+        long tokenSecurityVersion = userSessionService.requireSecurityVersion(currentRefreshJwt);
         rateLimitService.enforce(
                 "refresh",
                 "AUTH_RATE_LIMITED",
                 Map.of("session", currentJti));
 
-        RefreshTokenSession currentSession = refreshTokenSessionService.find(currentJti)
+        RefreshTokenSession currentSession = userSessionService.findSession(currentJti)
                 .orElseThrow(() -> {
-                    refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
+                    userSessionService.markRevoked(request.refreshToken());
                     return new RefreshTokenSessionNotFoundException("Refresh session is expired or revoked");
                 });
 
-        String currentTokenHash = refreshTokenService.hashToken(request.refreshToken());
-        if (!currentTokenHash.equals(currentSession.tokenHash())
-                || currentSession.securityVersion() != tokenSecurityVersion) {
-            refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
-            throw new RefreshTokenSessionNotFoundException("Refresh session is expired or revoked");
-        }
+        userSessionService.validateSessionIntegrity(currentSession, request.refreshToken(), tokenSecurityVersion);
 
         User user = userRepository.findByIdAndDeletedAtIsNull(currentSession.userId())
                 .orElseThrow(() -> new UnauthorizedException("Refresh token user is invalid"));
         if (user.getSecurityVersion() != tokenSecurityVersion) {
-            refreshTokenSessionService.delete(currentJti);
-            refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
+            userSessionService.deleteSession(currentJti);
+            userSessionService.markRevoked(request.refreshToken());
             securityMetrics.authAttempt("refresh", "session_revoked");
             throw new SessionRevokedException();
         }
@@ -243,14 +220,13 @@ public class AuthServiceImpl implements AuthService {
         List<String> roles = userRepository.findRolesByUserId(user.getId()).stream()
                 .map(role -> "ROLE_" + role.getName())
                 .toList();
-        String refreshToken = rotateRefreshToken(request.refreshToken(), user, currentSession);
-        String accessToken = generateAccessToken(
-                user.getEmail(), user.getId(), user.getSecurityVersion(), roles);
+        TokenResponse response = userSessionService.rotateAndIssueTokens(
+                request.refreshToken(), currentSession, user, roles);
 
         log.info("[VelaWear/Auth] - REFRESH_TOKEN: userId: {}", user.getId());
         securityMetrics.authAttempt("refresh", "success");
 
-        return new TokenResponse(accessToken, refreshToken, jwtProperties.accessTokenExpiration());
+        return response;
     }
 
     @Override
@@ -266,23 +242,17 @@ public class AuthServiceImpl implements AuthService {
                         "AUTH_RATE_LIMITED",
                         Map.of("user", String.valueOf(number.longValue())));
             }
-            if (jwt.getExpiresAt() != null) {
-                long remainingSeconds = jwt.getExpiresAt().getEpochSecond() - Instant.now().getEpochSecond();
-                if (remainingSeconds > 0) {
-                    // Chỉ blacklist theo thời gian còn lại của token để khóa Redis không sống lâu hơn cần thiết.
-                    tokenBlacklistService.blacklistToken(jwt.getTokenValue(), remainingSeconds);
-                }
-            }
+            userSessionService.blacklistAccessToken(jwt.getTokenValue(), jwt.getExpiresAt());
         }
         if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
-            Jwt refreshJwt = validateRefreshJwt(request.refreshToken());
-            String refreshJti = requireJti(refreshJwt);
+            Jwt refreshJwt = userSessionService.validateRefreshJwt(request.refreshToken());
+            String refreshJti = userSessionService.requireJti(refreshJwt);
             rateLimitService.enforce(
                     "auth-session",
                     "AUTH_RATE_LIMITED",
                     Map.of("session", refreshJti));
-            refreshTokenSessionService.delete(refreshJti);
-            refreshTokenService.markRefreshTokenRevoked(request.refreshToken());
+            userSessionService.deleteSession(refreshJti);
+            userSessionService.markRevoked(request.refreshToken());
         }
     }
 
@@ -300,97 +270,6 @@ public class AuthServiceImpl implements AuthService {
                 .map(UserResponse.RoleSummaryResponse::fromEntity)
                 .toList();
         return UserResponse.fromEntity(user, roles);
-    }
-
-    private TokenResponse issueTokens(User user, List<String> roles, String deviceInfo, String ipAddress) {
-        String accessToken = generateAccessToken(
-                user.getEmail(), user.getId(), user.getSecurityVersion(), roles);
-        String refreshToken = createRefreshToken(user, deviceInfo, ipAddress);
-        return new TokenResponse(accessToken, refreshToken, jwtProperties.accessTokenExpiration());
-    }
-
-    private String generateAccessToken(
-            String email,
-            Long userId,
-            long securityVersion,
-            List<String> roles) {
-        return authTokenCodec.generateAccessToken(email, userId, securityVersion, roles);
-    }
-
-    private String createRefreshToken(User user, String deviceInfo, String ipAddress) {
-        Instant now = Instant.now();
-        Instant expiresAt = now.plus(jwtProperties.refreshTokenExpiration(), ChronoUnit.SECONDS);
-        String jti = UUID.randomUUID().toString();
-        String refreshToken = generateRefreshToken(user, now, expiresAt, jti);
-        refreshTokenService.createRefreshToken(new CreateRefreshTokenRequest(
-                user.getId(),
-                refreshToken,
-                expiresAt,
-                deviceInfo,
-                ipAddress
-        ));
-        refreshTokenSessionService.create(new RefreshTokenSession(
-                jti,
-                user.getId(),
-                user.getSecurityVersion(),
-                refreshTokenService.hashToken(refreshToken),
-                deviceInfo,
-                ipAddress,
-                now,
-                expiresAt));
-        return refreshToken;
-    }
-
-    private String rotateRefreshToken(
-            String currentRefreshToken,
-            User user,
-            RefreshTokenSession currentSession) {
-        Instant now = Instant.now();
-        Instant expiresAt = now.plus(jwtProperties.refreshTokenExpiration(), ChronoUnit.SECONDS);
-        String newJti = UUID.randomUUID().toString();
-        String newRefreshToken = generateRefreshToken(user, now, expiresAt, newJti);
-        refreshTokenService.markRefreshTokenRevoked(currentRefreshToken);
-        refreshTokenService.createRefreshToken(new CreateRefreshTokenRequest(
-                user.getId(),
-                newRefreshToken,
-                expiresAt,
-                currentSession.deviceInfo(),
-                currentSession.ipAddress()
-        ));
-        RefreshTokenSession replacementSession = new RefreshTokenSession(
-                newJti,
-                user.getId(),
-                currentSession.securityVersion(),
-                refreshTokenService.hashToken(newRefreshToken),
-                currentSession.deviceInfo(),
-                currentSession.ipAddress(),
-                now,
-                expiresAt);
-        if (!refreshTokenSessionService.rotateIfCurrent(currentSession, replacementSession)) {
-            throw new RefreshTokenSessionNotFoundException("Refresh session is expired or revoked");
-        }
-        return newRefreshToken;
-    }
-
-    private String generateRefreshToken(User user, Instant issuedAt, Instant expiresAt, String jti) {
-        return authTokenCodec.generateRefreshToken(
-                user.getEmail(), user.getId(), user.getSecurityVersion(), issuedAt, expiresAt, jti);
-    }
-
-    private Jwt validateRefreshJwt(String rawRefreshToken) {
-        return authTokenCodec.validateAndDecodeRefreshJwt(rawRefreshToken);
-    }
-
-    private String requireJti(Jwt jwt) {
-        return authTokenCodec.requireJti(jwt);
-    }
-
-    private long requireSecurityVersion(Jwt jwt) {
-        return authTokenCodec.requireSecurityVersion(jwt);
-    }
-
-    private String normalizeEmail(String email) {
-        return email.trim().toLowerCase(Locale.ROOT);
     }
 
     @Override
@@ -475,10 +354,14 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmailAndDeletedAtIsNull(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", normalizedEmail));
 
-        user.setDeletedAt(java.time.Instant.now());
+        user.setDeletedAt(Instant.now());
         sessionRevocationService.revokeAll(user, SessionRevocationReason.ACCOUNT_DELETED);
         userRepository.save(user);
 
         log.info("[VelaWear/Auth] - DELETE_ME: userId: {}", user.getId());
+    }
+
+    private String normalizeEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 }

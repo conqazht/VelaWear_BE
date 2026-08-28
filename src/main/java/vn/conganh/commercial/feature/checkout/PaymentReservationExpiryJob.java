@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 import vn.conganh.commercial.feature.order.OrderRepository;
 
 @Slf4j
@@ -14,7 +15,7 @@ import vn.conganh.commercial.feature.order.OrderRepository;
 public class PaymentReservationExpiryJob {
 
     private final OrderRepository orderRepository;
-    private final OrderResourceLifecycleService lifecycleService;
+    private final OrderFulfillmentService lifecycleService;
 
     @Scheduled(fixedDelayString = "${app.checkout.expiry-scan-ms:30000}")
     public void expireReservations() {
