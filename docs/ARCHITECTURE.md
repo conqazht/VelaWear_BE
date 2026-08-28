@@ -105,10 +105,12 @@ Each business feature is self-contained:
 
 ```
 feature/
-├── auth/                    # Authentication & token management (AuthTokenCodec)
-├── checkout/                # Checkout orchestration (CheckoutFingerprintService, CheckoutOrderItemAssembler)
-├── salecampaign/            # Sale campaign orchestration (SaleCampaignValidator, SaleCampaignResponseAssembler)
-├── product/                 # Product CRUD & DTO assembly (ProductResponseAssembler)
+├── auth/                    # Authentication & registration (AuthTokenCodec, UserSessionService)
+├── checkout/                # Checkout quote & preview orchestration (CheckoutFingerprintService)
+├── order/                   # Authoritative fulfillment & resource lifecycle (OrderFulfillmentService)
+├── salecampaign/            # Sale campaign management & quota engine (CampaignReservationService, SaleCampaignValidator)
+├── catalog/                 # Unified catalog display, thumbnail resolution & localization (CatalogDisplayService, CatalogLocaleHelper)
+├── product/                 # Product CRUD
 ├── user/                    # User CRUD + profile
 ├── company/                 # Company CRUD
 ├── role/                    # Role CRUD + assign permissions
@@ -135,18 +137,19 @@ Dependency rules:
 - `role` depends on `permission`
 - `user` depends on `role` and `company`
 - `auth` depends on `user`
+- `order` owns post-checkout fulfillment & release transitions (0 dependency on `checkout`)
 - **No circular dependencies allowed**
 
 ---
 
-## Cross-Cutting Concerns
+## Key Design Patterns
 
-### Security
-- JWT via Spring Security's oauth2-resource-server + custom security filters (`JwtSecurityFilter`, rate-limiting, and `securityVersion` validation)
-- Algorithm: HS512 (symmetric secret key)
-- Access token: 15 min / Refresh token: 3 days (backed by Redis session CAS rotation & token revocation)
-- Secret key loaded from environment variable, never hardcoded
-- Permission-based authorization: each Permission maps an API path + HTTP method to roles
+### Service Layer Deepening
+- Deep domain engines encapsulate transaction boundaries, locks, and complex subsystems:
+  - `OrderFulfillmentService`: Authoritative confirmation and atomic rollback engine for inventory, coupons, and flash quotas across all order cancellation/timeout pathways.
+  - `CampaignReservationService`: Quota reservations, customer limits, and standard sale validity verification with pessimistic locks.
+  - `CatalogDisplayService`: Unified projections for product detail, storefront, cart items, wishlist summaries, and canonical image thumbnail resolution.
+  - `UserSessionService`: Encapsulates Redis Lua script sessions + PostgreSQL audit dual-store lifecycle, rotation, and blacklisting.
 
 ### Exception Handling
 - `GlobalExceptionHandler` (`@RestControllerAdvice`) catches all exceptions
@@ -160,7 +163,7 @@ Dependency rules:
 ### DTO Strategy
 - Request/Response DTOs are Java Records
 - Entity never exposed outside Service layer
-- Dedicated assembler/converter classes (`ProductResponseAssembler`, `SaleCampaignResponseAssembler`, `CheckoutFingerprintService`, etc.) handle DTO creation
+- Dedicated engine services (`CatalogDisplayService`, `CheckoutFingerprintService`, etc.) handle DTO creation
 - Feature-specific DTOs live inside feature's `dto/` sub-package
 
 ---

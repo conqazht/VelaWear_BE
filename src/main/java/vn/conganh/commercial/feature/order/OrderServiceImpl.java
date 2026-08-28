@@ -20,7 +20,6 @@ import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.FilterSpecifications;
-import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailOutboxService;
 import vn.conganh.commercial.util.constant.PaymentStatus;
@@ -33,7 +32,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
     private final OrderItemRepository orderItemRepository;
-    private final OrderResourceLifecycleService resourceLifecycleService;
+    private final OrderFulfillmentService resourceLifecycleService;
     private final PaymentRepository paymentRepository;
     private final OrderCompletedEmailOutboxService orderCompletedEmailOutboxService;
 

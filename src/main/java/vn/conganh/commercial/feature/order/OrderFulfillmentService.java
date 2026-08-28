@@ -1,4 +1,4 @@
-package vn.conganh.commercial.feature.checkout;
+package vn.conganh.commercial.feature.order;
 
 import java.time.Instant;
 import java.util.List;
@@ -9,27 +9,17 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.feature.coupon.CouponRepository;
 import vn.conganh.commercial.feature.coupon.CouponUsageRepository;
-import vn.conganh.commercial.feature.order.Order;
-import vn.conganh.commercial.feature.order.OrderItem;
-import vn.conganh.commercial.feature.order.OrderItemRepository;
-import vn.conganh.commercial.feature.order.OrderRepository;
-import vn.conganh.commercial.feature.order.OrderStatusHistory;
-import vn.conganh.commercial.feature.order.OrderStatusHistoryRepository;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 import vn.conganh.commercial.feature.productvariant.InventoryLog;
 import vn.conganh.commercial.feature.productvariant.InventoryLogRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleAllocation;
-import vn.conganh.commercial.feature.salecampaign.SaleAllocationRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleAllocationStatus;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleCustomerUsageRepository;
+import vn.conganh.commercial.feature.salecampaign.CampaignReservationService;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class OrderResourceLifecycleService {
+public class OrderFulfillmentService {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -38,9 +28,7 @@ public class OrderResourceLifecycleService {
     private final InventoryLogRepository inventoryLogRepository;
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
-    private final SaleAllocationRepository allocationRepository;
-    private final SaleCampaignItemRepository campaignItemRepository;
-    private final SaleCustomerUsageRepository usageRepository;
+    private final CampaignReservationService campaignReservationService;
     private final PaymentRepository paymentRepository;
 
     @Transactional
@@ -80,21 +68,7 @@ public class OrderResourceLifecycleService {
             releaseLockedOrder(order, "FAILED", "PAYMENT_TIMEOUT");
             return false;
         }
-        for (SaleAllocation allocation : allocationRepository.findWithLockByOrderId(order.getId())) {
-            if (allocation.getStatus() != SaleAllocationStatus.RESERVED) {
-                continue;
-            }
-            int quantity = allocation.getQuantity();
-            Long itemId = allocation.getCampaignItem().getId();
-            Long userId = allocation.getUser().getId();
-            if (campaignItemRepository.confirmQuota(itemId, quantity) != 1
-                    || usageRepository.confirm(itemId, userId, quantity) != 1) {
-                throw new IllegalStateException("Cannot confirm flash allocation " + allocation.getId());
-            }
-            allocation.setStatus(SaleAllocationStatus.CONFIRMED);
-            allocation.setConfirmedAt(now);
-        }
-        allocationRepository.flush();
+        campaignReservationService.confirmAllocationsForOrder(order.getId(), now);
         return true;
     }
 
@@ -104,28 +78,7 @@ public class OrderResourceLifecycleService {
             return false;
         }
         Instant now = Instant.now();
-        List<SaleAllocation> allocations = allocationRepository.findWithLockByOrderId(order.getId());
-        for (SaleAllocation allocation : allocations) {
-            int quantity = allocation.getQuantity();
-            Long itemId = allocation.getCampaignItem().getId();
-            Long userId = allocation.getUser().getId();
-            if (allocation.getStatus() == SaleAllocationStatus.RESERVED) {
-                if (campaignItemRepository.releaseQuota(itemId, quantity) != 1
-                        || usageRepository.release(itemId, userId, quantity) != 1) {
-                    throw new IllegalStateException("Cannot release flash allocation " + allocation.getId());
-                }
-                allocation.setStatus(SaleAllocationStatus.RELEASED);
-                allocation.setReleasedAt(now);
-            } else if (allocation.getStatus() == SaleAllocationStatus.CONFIRMED) {
-                if (campaignItemRepository.reverseSoldQuota(itemId, quantity) != 1
-                        || usageRepository.reverse(itemId, userId, quantity) != 1) {
-                    throw new IllegalStateException("Cannot reverse flash allocation " + allocation.getId());
-                }
-                allocation.setStatus(SaleAllocationStatus.REVERSED);
-                allocation.setReversedAt(now);
-            }
-        }
-        allocationRepository.saveAll(allocations);
+        campaignReservationService.releaseAllocationsForOrder(order.getId(), now);
 
         for (OrderItem item : orderItemRepository.findByOrderId(order.getId())) {
             if (variantRepository.restoreStock(item.getVariantId(), item.getQuantity()) != 1) {

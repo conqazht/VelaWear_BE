@@ -25,6 +25,7 @@ import vn.conganh.commercial.feature.auth.otp.dto.OtpVerifyRequest;
 import vn.conganh.commercial.feature.auth.otp.dto.OtpVerifyResponse;
 import vn.conganh.commercial.security.ClientIpResolver;
 import vn.conganh.commercial.security.ratelimit.AuthRateLimitService;
+import vn.conganh.commercial.util.constant.OtpPurpose;
 
 @RestController
 @RequestMapping("/api/v1/auth/otp")
@@ -49,7 +50,7 @@ public class OtpController {
         subjects.put("recipient-purpose", normalizedEmail + ':' + request.purpose().name());
         subjects.put("recipient", normalizedEmail);
         subjects.put("ip-recipient", ipPrefix + ':' + normalizedEmail);
-        if (request.purpose() == vn.conganh.commercial.util.constant.OtpPurpose.CHANGE_EMAIL
+        if (request.purpose() == OtpPurpose.CHANGE_EMAIL
                 && actorUserId != null) {
             subjects.put("user", String.valueOf(actorUserId));
         }

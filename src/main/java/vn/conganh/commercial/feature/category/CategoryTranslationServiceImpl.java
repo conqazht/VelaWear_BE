@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
+import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleHelper;
 import vn.conganh.commercial.feature.catalog.i18n.CatalogLocaleResolver;
 import vn.conganh.commercial.feature.category.dto.CategoryTranslationRequest;
 import vn.conganh.commercial.feature.category.dto.CategoryTranslationResponse;
@@ -64,9 +65,7 @@ public class CategoryTranslationServiceImpl implements CategoryTranslationServic
     public void deleteTranslation(Long categoryId, String localeCode) {
         findCategoryWithLock(categoryId);
         String resolvedLocale = localeResolver.requireEnabledLocale(localeCode);
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(resolvedLocale)) {
-            throw new InvalidRequestException("The default locale translation cannot be deleted");
-        }
+        CatalogLocaleHelper.assertNotDefaultLocale(resolvedLocale);
         CategoryTranslation translation = translationRepository
                 .findByCategoryIdAndLocaleCode(categoryId, resolvedLocale)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -105,20 +104,10 @@ public class CategoryTranslationServiceImpl implements CategoryTranslationServic
 
     private CategoryTranslationsResponse response(Long categoryId) {
         List<CategoryTranslationResponse> translations = translationRepository.findByCategoryId(categoryId).stream()
-                .sorted((left, right) -> compareLocales(left.getLocaleCode(), right.getLocaleCode()))
+                .sorted((left, right) -> CatalogLocaleHelper.compareLocales(left.getLocaleCode(), right.getLocaleCode()))
                 .map(CategoryTranslationResponse::fromEntity)
                 .toList();
         return new CategoryTranslationsResponse(translations);
-    }
-
-    private int compareLocales(String left, String right) {
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(left)) {
-            return CatalogLocaleResolver.DEFAULT_LOCALE.equals(right) ? 0 : -1;
-        }
-        if (CatalogLocaleResolver.DEFAULT_LOCALE.equals(right)) {
-            return 1;
-        }
-        return left.compareTo(right);
     }
 
     private Category findCategory(Long categoryId) {

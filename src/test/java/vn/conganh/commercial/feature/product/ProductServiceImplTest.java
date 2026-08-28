@@ -21,6 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import vn.conganh.commercial.exception.InvalidRequestException;
 import vn.conganh.commercial.exception.ResourceNotFoundException;
 import vn.conganh.commercial.dto.UpdateStatusRequest;
+import vn.conganh.commercial.feature.catalog.CatalogDisplayService;
 import vn.conganh.commercial.feature.category.CategoryRepository;
 import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
 import vn.conganh.commercial.feature.product.dto.CreateProductRequest;
@@ -61,21 +62,23 @@ class ProductServiceImplTest {
     private SaleCampaignTranslationRepository saleCampaignTranslationRepository;
 
     private ProductServiceImpl productService;
+    private CatalogDisplayService catalogDisplayService;
 
     @BeforeEach
     void setUp() {
-        ProductResponseAssembler responseAssembler = new ProductResponseAssembler();
+        catalogDisplayService = new CatalogDisplayService(
+                productTranslationRepository,
+                categoryTranslationRepository,
+                categoryRepository,
+                productImageRepository,
+                productVariantRepository,
+                variantPricingService,
+                saleCampaignTranslationRepository);
         productService = new ProductServiceImpl(
                 productRepository,
                 productTranslationRepository,
-                productImageRepository,
-                categoryRepository,
-                categoryTranslationRepository,
-                productVariantRepository,
-                variantPricingService,
                 saleCampaignItemRepository,
-                saleCampaignTranslationRepository,
-                responseAssembler);
+                catalogDisplayService);
         lenient().when(productVariantRepository.findByProductIdInAndDeletedAtIsNull(any())).thenReturn(List.of());
     }
 

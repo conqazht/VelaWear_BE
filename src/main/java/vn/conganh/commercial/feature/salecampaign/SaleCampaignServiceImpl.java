@@ -33,18 +33,18 @@ import vn.conganh.commercial.feature.salecampaign.dto.UpdateSaleDisplayRequest;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 
+import vn.conganh.commercial.feature.catalog.CatalogDisplayService;
+
 @Service
 @RequiredArgsConstructor
 public class SaleCampaignServiceImpl implements SaleCampaignService {
 
     private final SaleCampaignRepository campaignRepository;
     private final SaleCampaignItemRepository itemRepository;
-    private final ProductImageRepository productImageRepository;
-    private final ProductTranslationRepository productTranslationRepository;
     private final SaleCampaignTranslationRepository campaignTranslationRepository;
     private final UserRepository userRepository;
     private final SaleCampaignValidator validator;
-    private final SaleCampaignResponseAssembler responseAssembler;
+    private final CatalogDisplayService catalogDisplayService;
 
     @Override
     @Transactional(readOnly = true)
@@ -331,32 +331,7 @@ public class SaleCampaignServiceImpl implements SaleCampaignService {
             List<SaleCampaign> campaigns,
             Instant now,
             String localeCode) {
-        if (campaigns.isEmpty()) {
-            return Map.of();
-        }
-        List<Long> campaignIds = campaigns.stream().map(SaleCampaign::getId).distinct().toList();
-        List<Long> productIds = campaigns.stream()
-                .flatMap(campaign -> campaign.getItems().stream())
-                .map(item -> item.getVariant().getProduct().getId())
-                .distinct()
-                .toList();
-        Map<Long, List<ProductImage>> imagesByProduct = productIds.isEmpty()
-                ? Map.of()
-                : productImageRepository.findByProductIdIn(productIds).stream()
-                        .collect(Collectors.groupingBy(image -> image.getProduct().getId()));
-        Map<Long, Map<String, SaleCampaignTranslation>> campaignTranslations = campaignTranslationRepository
-                .findByCampaignIdIn(campaignIds).stream()
-                .collect(Collectors.groupingBy(
-                        SaleCampaignTranslation::getCampaignId,
-                        Collectors.toMap(SaleCampaignTranslation::getLocaleCode, Function.identity())));
-        Map<Long, Map<String, ProductTranslation>> productTranslations = productIds.isEmpty()
-                ? Map.of()
-                : productTranslationRepository.findByProductIdIn(productIds).stream()
-                        .collect(Collectors.groupingBy(
-                                ProductTranslation::getProductId,
-                                Collectors.toMap(ProductTranslation::getLocaleCode, Function.identity())));
-        return responseAssembler.assembleResponses(
-                campaigns, now, localeCode, imagesByProduct, campaignTranslations, productTranslations);
+        return catalogDisplayService.assembleCampaignResponses(campaigns, now, localeCode);
     }
 
     private void upsertDefaultTranslation(SaleCampaign campaign) {

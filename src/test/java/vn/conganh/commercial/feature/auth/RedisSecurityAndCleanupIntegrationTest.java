@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -25,6 +26,7 @@ import vn.conganh.commercial.feature.role.RoleService;
 import vn.conganh.commercial.feature.role.dto.UpdateRoleRequest;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.util.constant.UserGender;
 
 @DisplayName("Redis Security and Cleanup Integration Tests")
 class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTest {
@@ -108,8 +110,8 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
         user.setFullName("Update Test User");
         user.setEmail("user.update@velawear.local");
         user.setPassword("encodedPassword");
-        user.setBirthDate(java.time.LocalDate.now());
-        user.setGender(vn.conganh.commercial.util.constant.UserGender.OTHER);
+        user.setBirthDate(LocalDate.now());
+        user.setGender(UserGender.OTHER);
         user = userRepository.save(user);
 
         String token = tokenWithRoles(user.getEmail(), user.getId(), List.of("ROLE_USER"));
@@ -160,8 +162,8 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
         user.setFullName("Cleanup Test User");
         user.setEmail("cleanup@velawear.local");
         user.setPassword("encodedPassword");
-        user.setBirthDate(java.time.LocalDate.now());
-        user.setGender(vn.conganh.commercial.util.constant.UserGender.OTHER);
+        user.setBirthDate(LocalDate.now());
+        user.setGender(UserGender.OTHER);
         user = userRepository.save(user);
 
         // Create active, expired, and revoked refresh tokens
@@ -206,8 +208,8 @@ class RedisSecurityAndCleanupIntegrationTest extends AuthenticatedIntegrationTes
         user.setFullName("Revoke All Test User");
         user.setEmail("revoke-all@velawear.local");
         user.setPassword("encodedPassword");
-        user.setBirthDate(java.time.LocalDate.now());
-        user.setGender(vn.conganh.commercial.util.constant.UserGender.OTHER);
+        user.setBirthDate(LocalDate.now());
+        user.setGender(UserGender.OTHER);
         user = userRepository.save(user);
 
         RefreshToken activeToken = new RefreshToken();

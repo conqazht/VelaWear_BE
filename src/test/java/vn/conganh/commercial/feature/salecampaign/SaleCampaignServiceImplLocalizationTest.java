@@ -17,14 +17,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import vn.conganh.commercial.feature.product.ProductImageRepository;
+import vn.conganh.commercial.feature.catalog.CatalogDisplayService;
+import vn.conganh.commercial.feature.category.CategoryRepository;
+import vn.conganh.commercial.feature.category.CategoryTranslationRepository;
 import vn.conganh.commercial.feature.product.Product;
+import vn.conganh.commercial.feature.product.ProductImageRepository;
 import vn.conganh.commercial.feature.product.ProductRepository;
 import vn.conganh.commercial.feature.product.ProductTranslationRepository;
-import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
-import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 import vn.conganh.commercial.feature.salecampaign.dto.EndAndCloneSaleCampaignRequest;
+import vn.conganh.commercial.feature.user.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class SaleCampaignServiceImplLocalizationTest {
@@ -35,25 +39,34 @@ class SaleCampaignServiceImplLocalizationTest {
     @Mock ProductImageRepository productImageRepository;
     @Mock ProductRepository productRepository;
     @Mock ProductTranslationRepository productTranslationRepository;
+    @Mock CategoryRepository categoryRepository;
+    @Mock CategoryTranslationRepository categoryTranslationRepository;
+    @Mock VariantPricingService variantPricingService;
     @Mock SaleCampaignTranslationRepository campaignTranslationRepository;
     @Mock UserRepository userRepository;
 
     private SaleCampaignServiceImpl service;
+    private CatalogDisplayService catalogDisplayService;
 
     @BeforeEach
     void setUp() {
         SaleCampaignValidator validator = new SaleCampaignValidator(
                 itemRepository, variantRepository, productRepository, campaignRepository);
-        SaleCampaignResponseAssembler responseAssembler = new SaleCampaignResponseAssembler();
+        catalogDisplayService = new CatalogDisplayService(
+                productTranslationRepository,
+                categoryTranslationRepository,
+                categoryRepository,
+                productImageRepository,
+                variantRepository,
+                variantPricingService,
+                campaignTranslationRepository);
         service = new SaleCampaignServiceImpl(
                 campaignRepository,
                 itemRepository,
-                productImageRepository,
-                productTranslationRepository,
                 campaignTranslationRepository,
                 userRepository,
                 validator,
-                responseAssembler);
+                catalogDisplayService);
     }
 
     @Test

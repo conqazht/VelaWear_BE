@@ -203,11 +203,11 @@ public class ProductVariantServiceImpl implements ProductVariantService {
                 .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "id", id));
     }
 
-    private vn.conganh.commercial.feature.salecampaign.VariantPricing resolvePricing(ProductVariant variant) {
+    private VariantPricing resolvePricing(ProductVariant variant) {
         if (variant.getId() == null) {
             return null;
         }
-        var pricing = variantPricingService.resolve(java.util.List.of(variant));
+        var pricing = variantPricingService.resolve(List.of(variant));
         return pricing == null ? null : pricing.get(variant.getId());
     }
 

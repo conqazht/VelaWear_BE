@@ -29,7 +29,7 @@ import vn.conganh.commercial.feature.payment.PaymentTransactionRepository;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 import vn.conganh.commercial.util.constant.PaymentTransactionStatus;
-import vn.conganh.commercial.feature.checkout.OrderResourceLifecycleService;
+import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 
 @RequiredArgsConstructor
 @Service
@@ -42,7 +42,7 @@ public class SePayService {
     private final PaymentRepository paymentRepository;
     private final PaymentTransactionRepository transactionRepository;
     private final ObjectMapper objectMapper;
-    private final OrderResourceLifecycleService resourceLifecycleService;
+    private final OrderFulfillmentService resourceLifecycleService;
 
     public SePayCheckoutForm createCheckoutForm(Order order) {
         validateProductionConfiguration();

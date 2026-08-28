@@ -44,6 +44,7 @@ import vn.conganh.commercial.feature.coupon.CouponRepository;
 import vn.conganh.commercial.feature.coupon.CouponUsage;
 import vn.conganh.commercial.feature.coupon.CouponUsageRepository;
 import vn.conganh.commercial.feature.order.Order;
+import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
 import vn.conganh.commercial.feature.order.OrderRepository;
@@ -58,15 +59,10 @@ import vn.conganh.commercial.feature.productvariant.InventoryLog;
 import vn.conganh.commercial.feature.productvariant.InventoryLogRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
+import vn.conganh.commercial.feature.salecampaign.CampaignReservationService;
 import vn.conganh.commercial.feature.salecampaign.PriceSource;
 import vn.conganh.commercial.feature.salecampaign.SaleAllocation;
-import vn.conganh.commercial.feature.salecampaign.SaleAllocationRepository;
 import vn.conganh.commercial.feature.salecampaign.SaleAllocationStatus;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaignItemRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaignRepository;
-import vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus;
-import vn.conganh.commercial.feature.salecampaign.SaleCustomerUsageRepository;
 import vn.conganh.commercial.feature.salecampaign.VariantPricing;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
 import vn.conganh.commercial.feature.user.User;
@@ -106,14 +102,10 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final UserRepository userRepository;
     private final SePayService sePayService;
     private final VariantPricingService pricingService;
-    private final SaleCampaignItemRepository campaignItemRepository;
-    private final SaleCampaignRepository campaignRepository;
-    private final SaleCustomerUsageRepository customerUsageRepository;
-    private final SaleAllocationRepository allocationRepository;
-    private final OrderResourceLifecycleService lifecycleService;
+    private final CampaignReservationService campaignReservationService;
+    private final OrderFulfillmentService lifecycleService;
     private final CatalogContentLocalizationService localizationService;
     private final CheckoutFingerprintService fingerprintService;
-    private final CheckoutOrderItemAssembler orderItemAssembler;
 
     @Value("${app.checkout.shipping-fee:30000}")
     private BigDecimal configuredShippingFee;
@@ -340,21 +332,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             VariantPricing pricing = line.pricing();
             int quantity = line.item().getQuantity();
             if (pricing.isFlash()) {
-                SaleCampaignItem campaignItem = pricing.campaignItem();
-                customerUsageRepository.createCounterIfAbsent(campaignItem.getId(), user.getId());
-                int max = campaignItem.getMaxPerCustomer() == null
-                        ? Integer.MAX_VALUE : campaignItem.getMaxPerCustomer();
-                if (campaignItemRepository.reserveQuota(campaignItem.getId(), quantity, now) != 1) {
-                    String code = !campaignItem.getCampaign().getEndsAt().isAfter(now)
-                            ? "FLASH_SALE_ENDED" : "FLASH_SALE_SOLD_OUT";
-                    throw conflict(code, "Flash sale quota is no longer available",
-                            Map.of("variantId", line.variant().getId()));
-                }
-                if (customerUsageRepository.reserveWithinLimit(
-                        campaignItem.getId(), user.getId(), quantity, max) != 1) {
-                    throw conflict("FLASH_SALE_LIMIT_EXCEEDED", "Flash sale customer limit exceeded",
-                            Map.of("variantId", line.variant().getId(), "maxPerCustomer", max));
-                }
+                campaignReservationService.reserveFlashQuota(
+                        line.variant().getId(),
+                        pricing.campaignItem(),
+                        user.getId(),
+                        quantity,
+                        now);
             }
             if (variantRepository.decrementStock(line.variant().getId(), quantity) != 1) {
                 throw conflict("INSUFFICIENT_STOCK", "Product stock is no longer sufficient",
@@ -370,20 +353,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .distinct()
                 .sorted()
                 .toList();
-        if (campaignIds.isEmpty()) {
-            return;
-        }
-        Instant lockedAt = Instant.now();
-        List<vn.conganh.commercial.feature.salecampaign.SaleCampaign> lockedCampaigns =
-                campaignRepository.findAllStatesWithLockByIdIn(campaignIds);
-        boolean stillLive = lockedCampaigns.size() == campaignIds.size()
-                && lockedCampaigns.stream().allMatch(campaign ->
-                        campaign.getStatus() == SaleCampaignStatus.PUBLISHED
-                                && !lockedAt.isBefore(campaign.getStartsAt())
-                                && lockedAt.isBefore(campaign.getEndsAt()));
-        if (!stillLive) {
-            throw conflict("PRICE_CHANGED", "A scheduled sale ended while checkout was being confirmed", Map.of());
-        }
+        campaignReservationService.validateAndLockStandardCampaigns(campaignIds, Instant.now());
     }
 
     private void consumeCoupon(Quote quote, User user, Order order, Instant now) {
@@ -406,13 +376,32 @@ public class CheckoutServiceImpl implements CheckoutService {
             Order order,
             QuoteLocalization localization) {
         ImageIndex imageIndex = prefetchImageIndex(lines);
-        List<OrderItem> orderItems = orderItemAssembler.assembleOrderItems(
-                lines,
-                order,
-                line -> localizedProduct(line, localization),
-                pricing -> localizedCampaignName(pricing, localization),
-                this::buildVariantName,
-                variant -> resolveItemImage(variant, imageIndex));
+        List<OrderItem> orderItems = new ArrayList<>();
+        for (QuoteLine line : lines) {
+            ProductVariant variant = line.variant();
+            VariantPricing pricing = line.pricing();
+            CatalogContentLocalizationService.LocalizedProduct localizedProduct = localizedProduct(line, localization);
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(order);
+            orderItem.setVariantId(variant.getId());
+            orderItem.setProductName(localizedProduct.name());
+            orderItem.setProductSlug(localizedProduct.slug());
+            orderItem.setVariantName(buildVariantName(variant));
+            orderItem.setSku(variant.getSku());
+            orderItem.setImage(resolveItemImage(variant, imageIndex));
+            orderItem.setListPrice(pricing.listPrice());
+            orderItem.setPrice(pricing.effectivePrice());
+            orderItem.setPriceSource(pricing.priceSource());
+            orderItem.setSaleCampaignItem(pricing.campaignItem());
+            if (pricing.campaignItem() != null) {
+                orderItem.setSaleCampaignCode(pricing.campaignItem().getCampaign().getCode());
+                orderItem.setSaleCampaignName(localizedCampaignName(pricing, localization));
+            }
+            orderItem.setQuantity(line.item().getQuantity());
+            orderItem.setSubtotal(pricing.effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())));
+            orderItem.setStatus("PENDING");
+            orderItems.add(orderItem);
+        }
         return orderItemRepository.saveAll(orderItems);
     }
 
@@ -435,8 +424,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                     return allocation;
                 })
                 .toList();
-        allocationRepository.saveAll(allocations);
-        allocationRepository.flush();
+        campaignReservationService.saveAllocations(allocations);
     }
 
     private Coupon findAndValidateCoupon(String code, BigDecimal eligibleSubtotal, Instant now) {
