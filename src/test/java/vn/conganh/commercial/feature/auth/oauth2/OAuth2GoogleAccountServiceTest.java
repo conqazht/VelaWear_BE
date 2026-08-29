@@ -60,7 +60,81 @@ class OAuth2GoogleAccountServiceTest {
         User result = service.resolveOrCreateUser(googleProfile("google-sub-1", "Buyer@Example.com", true));
 
         assertThat(result).isSameAs(user);
-        verify(userRepository, never()).findByEmailAndDeletedAtIsNull(any());
+        verify(userRepository, never()).saveAndFlush(any());
+        verify(socialAccountRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("resolveOrCreateUser - existing Google social account syncs updated email and profile")
+    void resolveOrCreateUser_existingSocialAccount_syncsUpdatedEmailAndProfile() {
+        OAuth2GoogleAccountService service = service();
+        User user = user(1L, "old-email@example.com");
+        user.setFullName("");
+        user.setAvatar("https://example.com/old-avatar.png");
+        SocialAccount socialAccount = socialAccount(user, "google-sub-1");
+
+        when(socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", "google-sub-1"))
+                .thenReturn(Optional.of(socialAccount));
+        when(userRepository.findByEmailAndDeletedAtIsNull("new-email@example.com")).thenReturn(Optional.empty());
+        when(userRepository.existsByEmail("new-email@example.com")).thenReturn(false);
+
+        OAuth2User updatedGoogleProfile = new DefaultOAuth2User(
+                List.of(),
+                Map.of(
+                        "sub", "google-sub-1",
+                        "email", "new-email@example.com",
+                        "email_verified", true,
+                        "name", "New Display Name",
+                        "picture", "https://example.com/new-avatar.png"),
+                "sub");
+
+        User result = service.resolveOrCreateUser(updatedGoogleProfile);
+
+        assertThat(result).isSameAs(user);
+        assertThat(user.getEmail()).isEqualTo("new-email@example.com");
+        assertThat(user.getFullName()).isEqualTo("New Display Name");
+        assertThat(user.getAvatar()).isEqualTo("https://example.com/new-avatar.png");
+        assertThat(socialAccount.getProviderEmail()).isEqualTo("new-email@example.com");
+        verify(userRepository).saveAndFlush(user);
+        verify(socialAccountRepository).saveAndFlush(socialAccount);
+    }
+
+    @Test
+    @DisplayName("resolveOrCreateUser - existing Google social account with conflicting new email rejects")
+    void resolveOrCreateUser_existingSocialAccount_conflictingEmail_rejects() {
+        OAuth2GoogleAccountService service = service();
+        User user = user(1L, "old-email@example.com");
+        User anotherUser = user(2L, "new-email@example.com");
+        SocialAccount socialAccount = socialAccount(user, "google-sub-1");
+
+        when(socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", "google-sub-1"))
+                .thenReturn(Optional.of(socialAccount));
+        when(userRepository.findByEmailAndDeletedAtIsNull("new-email@example.com")).thenReturn(Optional.of(anotherUser));
+
+        OAuth2User updatedGoogleProfile = googleProfile("google-sub-1", "new-email@example.com", true);
+
+        assertThatThrownBy(() -> service.resolveOrCreateUser(updatedGoogleProfile))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("GOOGLE_EMAIL_ALREADY_IN_USE");
+    }
+
+    @Test
+    @DisplayName("resolveOrCreateUser - existing Google social account with soft-deleted new email rejects")
+    void resolveOrCreateUser_existingSocialAccount_softDeletedEmail_rejects() {
+        OAuth2GoogleAccountService service = service();
+        User user = user(1L, "old-email@example.com");
+        SocialAccount socialAccount = socialAccount(user, "google-sub-1");
+
+        when(socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", "google-sub-1"))
+                .thenReturn(Optional.of(socialAccount));
+        when(userRepository.findByEmailAndDeletedAtIsNull("new-email@example.com")).thenReturn(Optional.empty());
+        when(userRepository.existsByEmail("new-email@example.com")).thenReturn(true);
+
+        OAuth2User updatedGoogleProfile = googleProfile("google-sub-1", "new-email@example.com", true);
+
+        assertThatThrownBy(() -> service.resolveOrCreateUser(updatedGoogleProfile))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("ACCOUNT_DISABLED_OR_EMAIL_UNAVAILABLE");
     }
 
     @Test
@@ -155,6 +229,7 @@ class OAuth2GoogleAccountServiceTest {
         ReflectionTestUtils.setField(user, "id", id);
         user.setEmail(email);
         user.setFullName("Buyer Example");
+        user.setAvatar("https://example.com/avatar.png");
         return user;
     }
 
