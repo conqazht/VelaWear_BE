@@ -2,7 +2,7 @@ package vn.conganh.commercial.feature.payment.gateway.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Map;
