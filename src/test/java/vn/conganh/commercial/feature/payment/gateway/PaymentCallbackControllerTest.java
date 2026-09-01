@@ -163,4 +163,32 @@ class PaymentCallbackControllerTest {
 
         verify(paymentCallbackService).processCallback(any());
     }
+
+    @Test
+    @DisplayName("POST /api/v1/payments/stripe/webhook processes Stripe notification and returns received: true")
+    void stripeWebhook_returnsReceived() throws Exception {
+        when(paymentGatewayRouter.getGateway(PaymentProvider.STRIPE)).thenReturn(paymentGateway);
+        when(paymentGateway.verifyCallback(any(), any(), any())).thenReturn(
+                PaymentCallbackResult.builder()
+                        .success(true)
+                        .provider(PaymentProvider.STRIPE)
+                        .orderCode("VELA-STRIPE1")
+                        .transactionCode("cs_test_123")
+                        .build()
+        );
+
+        mockMvc.perform(post("/api/v1/payments/stripe/webhook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Stripe-Signature", "t=123,v1=signature")
+                        .content("""
+                                {
+                                  "id": "evt_123",
+                                  "type": "checkout.session.completed"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.received").value(true));
+
+        verify(paymentCallbackService).processCallback(any());
+    }
 }
