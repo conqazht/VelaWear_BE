@@ -1,6 +1,7 @@
 package vn.conganh.commercial.feature.payment.gateway;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -127,5 +128,39 @@ class PaymentCallbackControllerTest {
                 .andExpect(jsonPath("$.statusCode").value(200))
                 .andExpect(jsonPath("$.data.orderCode").value("VELA-SIM1"))
                 .andExpect(jsonPath("$.data.success").value(true));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/payments/momo/ipn returns MoMo standard acknowledge json")
+    void momoIpn_returnsAcknowledge() throws Exception {
+        when(paymentGatewayRouter.getGateway(PaymentProvider.MOMO)).thenReturn(paymentGateway);
+        when(paymentGateway.verifyCallback(any(), any(), any())).thenReturn(
+                PaymentCallbackResult.builder()
+                        .success(true)
+                        .provider(PaymentProvider.MOMO)
+                        .orderCode("VELA-MOMO1")
+                        .transactionCode("MOMO-12345")
+                        .build()
+        );
+
+        mockMvc.perform(post("/api/v1/payments/momo/ipn")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "partnerCode": "MOMO",
+                                  "orderId": "VELA-MOMO1",
+                                  "requestId": "REQ-1",
+                                  "amount": 50000,
+                                  "resultCode": 0,
+                                  "message": "Thành công.",
+                                  "transId": 123456789,
+                                  "signature": "TEST_SIG"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value(0))
+                .andExpect(jsonPath("$.message").value("Acknowledge"));
+
+        verify(paymentCallbackService).processCallback(any());
     }
 }
