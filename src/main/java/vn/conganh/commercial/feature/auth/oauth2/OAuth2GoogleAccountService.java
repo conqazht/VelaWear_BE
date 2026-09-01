@@ -33,9 +33,64 @@ public class OAuth2GoogleAccountService {
         GoogleProfile profile = GoogleProfile.from(oauth2User);
 
         return socialAccountRepository.findByProviderAndProviderUserId(GOOGLE_PROVIDER, profile.providerUserId())
-                .map(SocialAccount::getUser)
+                .map(socialAccount -> syncExistingSocialAccount(socialAccount, profile))
                 .map(this::requireActiveUser)
                 .orElseGet(() -> resolveByVerifiedEmail(profile));
+    }
+
+    private User syncExistingSocialAccount(SocialAccount socialAccount, GoogleProfile profile) {
+        User user = socialAccount.getUser();
+        boolean userDirty = false;
+        boolean socialAccountDirty = false;
+
+        if (profile.emailVerified() && !profile.email().equalsIgnoreCase(user.getEmail())) {
+            userRepository.findByEmailAndDeletedAtIsNull(profile.email())
+                    .filter(existing -> !existing.getId().equals(user.getId()))
+                    .ifPresent(existing -> {
+                        throw new InvalidRequestException("GOOGLE_EMAIL_ALREADY_IN_USE");
+                    });
+
+            if (userRepository.existsByEmail(profile.email())
+                    && userRepository.findByEmailAndDeletedAtIsNull(profile.email()).isEmpty()) {
+                throw new InvalidRequestException("ACCOUNT_DISABLED_OR_EMAIL_UNAVAILABLE");
+            }
+
+            user.setEmail(profile.email());
+            userDirty = true;
+        }
+
+        if (profile.displayName() != null && !profile.displayName().isBlank()
+                && (user.getFullName() == null || user.getFullName().isBlank())) {
+            user.setFullName(profile.displayName());
+            userDirty = true;
+        }
+
+        if (profile.picture() != null && !profile.picture().isBlank()
+                && (user.getAvatar() == null || user.getAvatar().isBlank() || user.getAvatar().startsWith("http"))
+                && !profile.picture().equals(user.getAvatar())) {
+            user.setAvatar(profile.picture());
+            userDirty = true;
+        }
+
+        if (!profile.email().equalsIgnoreCase(socialAccount.getProviderEmail())) {
+            socialAccount.setProviderEmail(profile.email());
+            socialAccountDirty = true;
+        }
+
+        if (profile.emailVerified() != socialAccount.isProviderEmailVerified()) {
+            socialAccount.setProviderEmailVerified(profile.emailVerified());
+            socialAccountDirty = true;
+        }
+
+        if (userDirty) {
+            userRepository.saveAndFlush(user);
+        }
+
+        if (socialAccountDirty) {
+            socialAccountRepository.saveAndFlush(socialAccount);
+        }
+
+        return user;
     }
 
     private User resolveByVerifiedEmail(GoogleProfile profile) {
