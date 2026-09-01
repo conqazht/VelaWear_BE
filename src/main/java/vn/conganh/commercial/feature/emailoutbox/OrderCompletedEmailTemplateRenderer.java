@@ -148,6 +148,7 @@ public class OrderCompletedEmailTemplateRenderer {
             case "SEPAY", "BANK_TRANSFER" -> "Chuyển khoản ngân hàng";
             case "VNPAY" -> "VNPay";
             case "MOMO" -> "MoMo";
+            case "STRIPE" -> "Thẻ quốc tế (Stripe)";
             default -> paymentMethod;
         };
     }

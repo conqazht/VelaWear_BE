@@ -244,7 +244,7 @@ public class CommerceEmailTemplateRenderer {
     }
 
     private String escape(String input) {
-        return input == null ? "" : HtmlUtils.htmlEscape(input);
+        return input == null ? "" : HtmlUtils.htmlEscape(input, StandardCharsets.UTF_8.name());
     }
 
     private String loadTemplate(String path) {
