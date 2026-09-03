@@ -60,6 +60,8 @@ class OrderServiceImplTest {
     private PaymentRepository paymentRepository;
     @Mock
     private OrderCompletedEmailOutboxService orderCompletedEmailOutboxService;
+    @Mock
+    private vn.conganh.commercial.feature.payment.gateway.PaymentGatewayRouter paymentGatewayRouter;
 
     private OrderServiceImpl orderService;
 
@@ -68,7 +70,7 @@ class OrderServiceImplTest {
         orderService = new OrderServiceImpl(
                 orderRepository, userRepository, orderStatusHistoryRepository,
                 orderItemRepository, resourceLifecycleService, paymentRepository,
-                orderCompletedEmailOutboxService);
+                orderCompletedEmailOutboxService, paymentGatewayRouter);
     }
 
     @Nested
@@ -157,6 +159,37 @@ class OrderServiceImplTest {
             // Act & Assert
             assertThatThrownBy(() -> orderService.getOrderByOrderCode("ORD-404"))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("getMyOrderByOrderCode - trả về paymentInitiation khi đơn online PENDING & UNPAID trong hạn")
+        void getMyOrderByOrderCode_pendingUnpaidOnlineOrder_returnsPaymentInitiation() {
+            User user = user(1L);
+            Order order = order(10L, user, "PENDING");
+            order.setPaymentStatus("UNPAID");
+            order.setPaymentMethod("VNPAY");
+            order.setPaymentDueAt(java.time.Instant.now().plusSeconds(900));
+            order.setReservationExpiresAt(java.time.Instant.now().plusSeconds(900));
+
+            vn.conganh.commercial.feature.payment.Payment payment = new vn.conganh.commercial.feature.payment.Payment();
+            payment.setOrder(order);
+            payment.setProvider(vn.conganh.commercial.util.constant.PaymentProvider.VNPAY);
+            payment.setStatus(vn.conganh.commercial.util.constant.PaymentStatus.PENDING);
+
+            vn.conganh.commercial.feature.payment.gateway.PaymentGateway gateway = org.mockito.Mockito.mock(vn.conganh.commercial.feature.payment.gateway.PaymentGateway.class);
+            vn.conganh.commercial.feature.payment.gateway.PaymentInitiationResult result = new vn.conganh.commercial.feature.payment.gateway.PaymentInitiationResult(
+                    vn.conganh.commercial.util.constant.PaymentProvider.VNPAY, "VNPAY", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?foo=bar", java.util.Map.of(), "TXN-10");
+            when(gateway.initiatePayment(order, payment)).thenReturn(result);
+            when(paymentGatewayRouter.getGateway(vn.conganh.commercial.util.constant.PaymentProvider.VNPAY)).thenReturn(gateway);
+
+            when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+            when(orderRepository.findByOrderCodeAndUserId("ORD-10", 1L)).thenReturn(Optional.of(order));
+            when(paymentRepository.findByOrderId(10L)).thenReturn(Optional.of(payment));
+
+            OrderResponse response = orderService.getMyOrderByOrderCode("test@example.com", "ORD-10");
+
+            assertThat(response.paymentInitiation()).isNotNull();
+            assertThat(response.paymentInitiation().actionUrl()).contains("vnpayment.vn");
         }
 
         @Test
