@@ -43,7 +43,11 @@ public class OAuth2GoogleAccountService {
         boolean userDirty = false;
         boolean socialAccountDirty = false;
 
-        if (profile.emailVerified() && !profile.email().equalsIgnoreCase(user.getEmail())) {
+        boolean emailOriginallySynced = socialAccount.getProviderEmail() != null
+                && socialAccount.getProviderEmail().equalsIgnoreCase(user.getEmail());
+        boolean googleEmailChanged = !profile.email().equalsIgnoreCase(socialAccount.getProviderEmail());
+
+        if (profile.emailVerified() && emailOriginallySynced && googleEmailChanged) {
             userRepository.findByEmailAndDeletedAtIsNull(profile.email())
                     .filter(existing -> !existing.getId().equals(user.getId()))
                     .ifPresent(existing -> {

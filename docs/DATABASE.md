@@ -829,7 +829,7 @@ Notes:
 | receiver_name | VARCHAR(150) | NOT NULL | Snapshot at checkout |
 | receiver_phone | VARCHAR(20) | NOT NULL | Snapshot at checkout |
 | receiver_address | VARCHAR(500) | NOT NULL | Snapshot at checkout |
-| payment_method | VARCHAR(30) | NOT NULL | COD, VNPAY, MOMO, BANK_TRANSFER, SEPAY |
+| payment_method | VARCHAR(30) | NOT NULL | COD, VNPAY, MOMO, BANK_TRANSFER, SEPAY, STRIPE |
 | payment_status | VARCHAR(30) | NOT NULL | UNPAID, PAID, FAILED, REFUND_PENDING, REFUNDED |
 | payment_due_at | TIMESTAMPTZ | NULLABLE | Hạn thanh toán online, mặc định sau 15 phút |
 | reservation_expires_at | TIMESTAMPTZ | NULLABLE | Hạn giữ stock/quota, mặc định sau `payment_due_at` 30 giây |

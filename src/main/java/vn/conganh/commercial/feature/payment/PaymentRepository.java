@@ -17,6 +17,11 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
 
     Optional<Payment> findByOrderId(Long orderId);
 
+    Optional<Payment> findFirstByOrderIdOrderByCreatedAtDesc(Long orderId);
+
+    Optional<Payment> findByTransactionCode(String transactionCode);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Payment> findWithLockByOrderId(Long orderId);
 }
+

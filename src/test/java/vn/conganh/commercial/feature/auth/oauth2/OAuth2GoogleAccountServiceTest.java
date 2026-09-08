@@ -100,6 +100,26 @@ class OAuth2GoogleAccountServiceTest {
     }
 
     @Test
+    @DisplayName("resolveOrCreateUser - existing Google social account preserves customized user email")
+    void resolveOrCreateUser_existingSocialAccount_customUserEmail_preservesUserEmail() {
+        OAuth2GoogleAccountService service = service();
+        User user = user(1L, "custom-email@example.com");
+        SocialAccount socialAccount = socialAccount(user, "google-sub-1");
+        socialAccount.setProviderEmail("google-account@example.com");
+
+        when(socialAccountRepository.findByProviderAndProviderUserId("GOOGLE", "google-sub-1"))
+                .thenReturn(Optional.of(socialAccount));
+
+        OAuth2User googleProfile = googleProfile("google-sub-1", "google-account@example.com", true);
+
+        User result = service.resolveOrCreateUser(googleProfile);
+
+        assertThat(result).isSameAs(user);
+        assertThat(user.getEmail()).isEqualTo("custom-email@example.com");
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("resolveOrCreateUser - existing Google social account with conflicting new email rejects")
     void resolveOrCreateUser_existingSocialAccount_conflictingEmail_rejects() {
         OAuth2GoogleAccountService service = service();

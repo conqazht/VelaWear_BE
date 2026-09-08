@@ -5,27 +5,27 @@ The system MUST allow the backend to initiate a sandbox payment for an existing 
 
 #### Scenario: Initiate MoMo sandbox payment
 - **WHEN** a client requests payment initiation for an eligible order with provider `MOMO`
-- **THEN** the system creates or reuses a pending payment, calls the configured MoMo sandbox gateway, and returns a redirect URL or payment session payload to the client
+- **THEN** the system creates or reuses a pending payment, calls the configured MoMo sandbox gateway API (`/v2/gateway/api/create`) with HMAC-SHA256 signature, and returns the `payUrl` or QR payload to the client
 
 #### Scenario: Initiate VNPay sandbox payment
 - **WHEN** a client requests payment initiation for an eligible order with provider `VNPAY`
-- **THEN** the system creates or reuses a pending payment, creates a signed VNPay sandbox payment URL, and returns it to the client
-
-#### Scenario: Initiate ZaloPay sandbox payment
-- **WHEN** a client requests payment initiation for an eligible order with provider `ZALOPAY`
-- **THEN** the system creates or reuses a pending payment, calls the configured ZaloPay sandbox gateway, and returns a payment URL, order token, or QR payload to the client
+- **THEN** the system creates or reuses a pending payment, creates an ASCII-sorted parameter query with HMAC-SHA512 checksum, and returns the signed VNPay sandbox URL to the client
 
 #### Scenario: Initiate SePay bank transfer sandbox payment
 - **WHEN** a client requests payment initiation for an eligible order with provider `SEPAY`
-- **THEN** the system creates or reuses a pending payment with provider `SEPAY` and returns QR or bank-transfer reference data for the order
+- **THEN** the system creates or reuses a pending payment with provider `SEPAY` and returns VietQR and bank-transfer reference data for the order
 
 #### Scenario: Initiate Stripe test-mode payment
 - **WHEN** Stripe test mode is enabled and a client requests payment initiation for an eligible order with provider `STRIPE`
-- **THEN** the system creates or reuses a pending payment, creates a Stripe test-mode checkout/payment session, and returns the test redirect URL or session payload to the client
+- **THEN** the system creates or reuses a pending payment, calls the official Stripe Java SDK to create a Checkout Session with card payment method and idempotency key, and returns the Stripe session redirect URL to the client
 
 #### Scenario: Initiate COD payment
 - **WHEN** a client requests payment initiation for an eligible order with provider `COD`
 - **THEN** the system records the COD payment state without calling an external gateway
+
+#### Scenario: Payment URL expiry capped by reservation TTL
+- **WHEN** a payment session or signed URL is created for an order
+- **THEN** the gateway expiry timestamp MUST NOT exceed the order's `reservationExpiresAt` timestamp
 
 ### Requirement: Gateway Configuration
 The system MUST keep sandbox provider endpoints, credentials, return URLs, callback URLs, enabled-provider flags, and the global sandbox payment environment in backend configuration.
@@ -76,7 +76,7 @@ The system MUST process provider callback, webhook, IPN, or simulation payloads 
 The system MUST handle duplicate callbacks and simulations idempotently.
 
 #### Scenario: Duplicate success callback
-- **WHEN** the backend receives the same successful provider transaction more than once
+- **WHEN** the backend receives the same successful provider transaction or Stripe event ID more than once
 - **THEN** the system MUST NOT duplicate state transitions or send duplicate success notifications
 
 #### Scenario: Already finalized payment
@@ -95,8 +95,8 @@ The system MUST store provider callback/simulation data as payment transaction a
 - **THEN** the system stores the raw gateway response or normalized simulation payload in `payment_transactions.gateway_response`
 
 #### Scenario: Store provider transaction code
-- **WHEN** the provider supplies a transaction identifier
-- **THEN** the system stores that identifier as the transaction code and uses it for idempotency where possible
+- **WHEN** the provider supplies a transaction identifier or event ID
+- **THEN** the system stores that identifier as the transaction code and uses it for idempotency
 
 ### Requirement: Dev/Test Payment Simulation
 The system MUST provide payment success and failure simulation only when explicitly enabled for dev or test use.
@@ -112,3 +112,4 @@ The system MUST provide payment success and failure simulation only when explici
 #### Scenario: Simulation disabled
 - **WHEN** simulation is disabled by profile or configuration
 - **THEN** the system rejects simulation requests and MUST NOT change payment or order state
+

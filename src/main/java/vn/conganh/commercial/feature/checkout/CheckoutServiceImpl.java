@@ -43,6 +43,7 @@ import vn.conganh.commercial.feature.coupon.Coupon;
 import vn.conganh.commercial.feature.coupon.CouponRepository;
 import vn.conganh.commercial.feature.coupon.CouponUsage;
 import vn.conganh.commercial.feature.coupon.CouponUsageRepository;
+import vn.conganh.commercial.feature.emailoutbox.CommerceEmailOutboxService;
 import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 import vn.conganh.commercial.feature.order.OrderItem;
@@ -50,8 +51,9 @@ import vn.conganh.commercial.feature.order.OrderItemRepository;
 import vn.conganh.commercial.feature.order.OrderRepository;
 import vn.conganh.commercial.feature.payment.Payment;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
-import vn.conganh.commercial.feature.payment.sepay.SePayCheckoutForm;
-import vn.conganh.commercial.feature.payment.sepay.SePayService;
+import vn.conganh.commercial.feature.payment.gateway.PaymentGateway;
+import vn.conganh.commercial.feature.payment.gateway.PaymentGatewayRouter;
+import vn.conganh.commercial.feature.payment.gateway.PaymentInitiationResult;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
@@ -100,7 +102,8 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final InventoryLogRepository inventoryLogRepository;
     private final ProductImageRepository productImageRepository;
     private final UserRepository userRepository;
-    private final SePayService sePayService;
+    private final PaymentGatewayRouter paymentGatewayRouter;
+    private final CommerceEmailOutboxService commerceEmailOutboxService;
     private final VariantPricingService pricingService;
     private final CampaignReservationService campaignReservationService;
     private final OrderFulfillmentService lifecycleService;
@@ -180,7 +183,10 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         lockAndRecheckStandardCampaigns(quote.lines());
 
-        boolean online = !"COD".equalsIgnoreCase(request.paymentMethod());
+        PaymentGateway gateway = paymentGatewayRouter.getGateway(request.paymentMethod());
+        PaymentProvider provider = gateway.getProvider();
+        boolean online = provider != PaymentProvider.COD;
+
         Order order = new Order();
         order.setUser(user);
         order.setOrderCode(newOrderCode());
@@ -192,7 +198,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         order.setReceiverName(request.receiverName());
         order.setReceiverPhone(request.receiverPhone());
         order.setReceiverAddress(request.receiverAddress());
-        order.setPaymentMethod(request.paymentMethod().toUpperCase());
+        order.setPaymentMethod(provider.name());
         order.setPaymentStatus("UNPAID");
         order.setCheckoutIdempotencyKey(normalizedKey);
         order.setCheckoutRequestHash(requestHash);
@@ -219,19 +225,23 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         Long paymentId = null;
         PaymentInitiationResponse paymentInitiation = null;
+        Payment payment = null;
         if (online) {
-            Payment payment = new Payment();
+            payment = new Payment();
             payment.setOrder(order);
-            payment.setProvider(PaymentProvider.SEPAY);
+            payment.setProvider(provider);
             payment.setAmount(order.getFinalAmount());
             payment.setStatus(PaymentStatus.PENDING);
             payment = paymentRepository.save(payment);
             paymentId = payment.getId();
-
-            SePayCheckoutForm checkoutForm = sePayService.createCheckoutForm(order);
-            paymentInitiation = new PaymentInitiationResponse(
-                    PaymentProvider.SEPAY.name(), "POST", checkoutForm.actionUrl(), checkoutForm.fields());
         }
+
+        PaymentInitiationResult initiationResult = gateway.initiatePayment(order, payment);
+        if (initiationResult != null && online) {
+            paymentInitiation = initiationResult.toResponse();
+        }
+
+        commerceEmailOutboxService.enqueueOrderCreated(order);
 
         cartItemRepository.deleteByCartId(cart.getId());
         return CheckoutResponse.fromEntity(
@@ -488,9 +498,11 @@ public class CheckoutServiceImpl implements CheckoutService {
                 && "UNPAID".equals(order.getPaymentStatus())
                 && (order.getPaymentDueAt() == null || order.getPaymentDueAt().isAfter(now))
                 && (order.getReservationExpiresAt() == null || order.getReservationExpiresAt().isAfter(now))) {
-            SePayCheckoutForm checkoutForm = sePayService.createCheckoutForm(order);
-            paymentInitiation = new PaymentInitiationResponse(
-                    PaymentProvider.SEPAY.name(), "POST", checkoutForm.actionUrl(), checkoutForm.fields());
+            PaymentGateway gateway = paymentGatewayRouter.getGateway(payment.getProvider());
+            PaymentInitiationResult initiationResult = gateway.initiatePayment(order, payment);
+            if (initiationResult != null) {
+                paymentInitiation = initiationResult.toResponse();
+            }
         }
         return CheckoutResponse.fromEntity(
                 order, items.stream().map(CheckoutItemResponse::fromEntity).toList(), paymentId, paymentInitiation);
@@ -517,8 +529,13 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     private void validatePaymentMethod(String paymentMethod) {
-        if (!"COD".equalsIgnoreCase(paymentMethod) && !"SEPAY".equalsIgnoreCase(paymentMethod)) {
-            throw new InvalidRequestException("Only COD and SEPAY payment methods are supported");
+        if (paymentMethod == null || paymentMethod.isBlank()) {
+            throw new InvalidRequestException("Payment method must not be blank");
+        }
+        try {
+            paymentGatewayRouter.getGateway(paymentMethod);
+        } catch (Exception e) {
+            throw new InvalidRequestException("Unsupported payment method: " + paymentMethod);
         }
     }
 

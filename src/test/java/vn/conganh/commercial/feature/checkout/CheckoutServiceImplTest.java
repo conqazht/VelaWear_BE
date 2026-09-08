@@ -44,9 +44,11 @@ import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.order.OrderItemRepository;
 import vn.conganh.commercial.feature.order.OrderRepository;
+import vn.conganh.commercial.feature.emailoutbox.CommerceEmailOutboxService;
 import vn.conganh.commercial.feature.order.OrderStatusHistoryRepository;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
-import vn.conganh.commercial.feature.payment.sepay.SePayService;
+import vn.conganh.commercial.feature.payment.gateway.PaymentGatewayRouter;
+import vn.conganh.commercial.feature.payment.gateway.adapter.CodPaymentGateway;
 import vn.conganh.commercial.feature.product.Product;
 import vn.conganh.commercial.feature.product.ProductImage;
 import vn.conganh.commercial.feature.product.ProductImageRepository;
@@ -65,6 +67,7 @@ import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.PaymentProvider;
 
 @ExtendWith(MockitoExtension.class)
 class CheckoutServiceImplTest {
@@ -88,7 +91,9 @@ class CheckoutServiceImplTest {
     @Mock
     private PaymentRepository paymentRepository;
     @Mock
-    private SePayService sePayService;
+    private PaymentGatewayRouter paymentGatewayRouter;
+    @Mock
+    private CommerceEmailOutboxService commerceEmailOutboxService;
     @Mock
     private InventoryLogRepository inventoryLogRepository;
     @Mock
@@ -119,6 +124,9 @@ class CheckoutServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(paymentGatewayRouter.getGateway(anyString())).thenReturn(new CodPaymentGateway());
+        lenient().when(paymentGatewayRouter.getGateway(any(PaymentProvider.class))).thenReturn(new CodPaymentGateway());
+
         user = new User();
         ReflectionTestUtils.setField(user, "id", 1L);
         user.setEmail("test@example.com");

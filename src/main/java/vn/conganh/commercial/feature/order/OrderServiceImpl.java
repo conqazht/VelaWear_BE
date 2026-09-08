@@ -17,13 +17,24 @@ import vn.conganh.commercial.feature.order.dto.OrderResponse;
 import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryFilterRequest;
 import vn.conganh.commercial.feature.order.dto.UpdateOrderRequest;
 import vn.conganh.commercial.feature.order.dto.OrderStatusHistoryResponse;
+import lombok.extern.slf4j.Slf4j;
+import vn.conganh.commercial.feature.checkout.dto.PaymentInitiationResponse;
+import vn.conganh.commercial.feature.payment.Payment;
+import vn.conganh.commercial.feature.payment.gateway.PaymentGateway;
+import vn.conganh.commercial.feature.payment.gateway.PaymentGatewayRouter;
+import vn.conganh.commercial.feature.payment.gateway.PaymentInitiationResult;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.FilterSpecifications;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailOutboxService;
+import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 
+import java.time.Instant;
+import java.util.List;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
@@ -35,6 +46,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderFulfillmentService resourceLifecycleService;
     private final PaymentRepository paymentRepository;
     private final OrderCompletedEmailOutboxService orderCompletedEmailOutboxService;
+    private final PaymentGatewayRouter paymentGatewayRouter;
 
     @Override
     @Transactional(readOnly = true)
@@ -288,7 +300,32 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private OrderResponse toDetailedResponse(Order order) {
-        return OrderResponse.fromEntity(order, orderItemRepository.findByOrderId(order.getId()));
+        List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
+        PaymentInitiationResponse paymentInitiation = resolvePaymentInitiation(order);
+        return OrderResponse.fromEntity(order, items, paymentInitiation);
+    }
+
+    private PaymentInitiationResponse resolvePaymentInitiation(Order order) {
+        if (!"PENDING".equals(order.getStatus()) || !"UNPAID".equals(order.getPaymentStatus())) {
+            return null;
+        }
+        Instant now = Instant.now();
+        if ((order.getPaymentDueAt() != null && !order.getPaymentDueAt().isAfter(now))
+                || (order.getReservationExpiresAt() != null && !order.getReservationExpiresAt().isAfter(now))) {
+            return null;
+        }
+        Payment payment = paymentRepository.findByOrderId(order.getId()).orElse(null);
+        if (payment == null || payment.getStatus() != PaymentStatus.PENDING || payment.getProvider() == PaymentProvider.COD) {
+            return null;
+        }
+        try {
+            PaymentGateway gateway = paymentGatewayRouter.getGateway(payment.getProvider());
+            PaymentInitiationResult initiationResult = gateway.initiatePayment(order, payment);
+            return initiationResult != null ? initiationResult.toResponse() : null;
+        } catch (Exception e) {
+            log.warn("Failed to initiate payment for order {}", order.getOrderCode(), e);
+            return null;
+        }
     }
 
     private User findActiveUser(String email) {

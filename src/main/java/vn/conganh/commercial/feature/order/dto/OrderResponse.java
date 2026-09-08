@@ -7,6 +7,8 @@ import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.order.OrderItem;
 import vn.conganh.commercial.feature.user.User;
 
+import vn.conganh.commercial.feature.checkout.dto.PaymentInitiationResponse;
+
 public record OrderResponse(
         Long id,
         Long userId,
@@ -28,10 +30,19 @@ public record OrderResponse(
         Instant resourcesReleasedAt,
         Instant createdAt,
         Instant updatedAt,
-        List<OrderItemResponse> items
+        List<OrderItemResponse> items,
+        PaymentInitiationResponse paymentInitiation
 ) {
 
     public static OrderResponse fromEntity(Order order) {
+        return fromEntity(order, List.of(), null);
+    }
+
+    public static OrderResponse fromEntity(Order order, List<OrderItem> items) {
+        return fromEntity(order, items, null);
+    }
+
+    public static OrderResponse fromEntity(Order order, List<OrderItem> items, PaymentInitiationResponse paymentInitiation) {
         User user = order.getUser();
         return new OrderResponse(
                 order.getId(),
@@ -54,34 +65,9 @@ public record OrderResponse(
                 order.getResourcesReleasedAt(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
-                List.of());
-    }
-
-    public static OrderResponse fromEntity(Order order, List<OrderItem> items) {
-        OrderResponse response = fromEntity(order);
-        return new OrderResponse(
-                response.id(),
-                response.userId(),
-                response.userFullName(),
-                response.userEmail(),
-                response.orderCode(),
-                response.status(),
-                response.subtotal(),
-                response.shippingFee(),
-                response.discountAmount(),
-                response.finalAmount(),
-                response.receiverName(),
-                response.receiverPhone(),
-                response.receiverAddress(),
-                response.paymentMethod(),
-                response.paymentStatus(),
-                response.paymentDueAt(),
-                response.reservationExpiresAt(),
-                response.resourcesReleasedAt(),
-                response.createdAt(),
-                response.updatedAt(),
                 items == null
                         ? List.of()
-                        : items.stream().map(OrderItemResponse::fromEntity).toList());
+                        : items.stream().map(OrderItemResponse::fromEntity).toList(),
+                paymentInitiation);
     }
 }

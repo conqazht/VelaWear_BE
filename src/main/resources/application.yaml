@@ -63,9 +63,9 @@ spring:
           starttls:
             enable: true
             required: true
-          connectiontimeout: 5000
-          timeout: 10000
-          writetimeout: 10000
+          connectiontimeout: ${MAIL_CONNECTION_TIMEOUT:10000}
+          timeout: ${MAIL_TIMEOUT:15000}
+          writetimeout: ${MAIL_WRITE_TIMEOUT:15000}
 
 server:
   port: ${SERVER_PORT}
@@ -96,6 +96,31 @@ jwt:
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
 payment:
+  environment: ${PAYMENT_ENVIRONMENT:sandbox}
+  simulation:
+    enabled: ${PAYMENT_SIMULATION_ENABLED:true}
+  vnpay:
+    enabled: ${VNPAY_ENABLED:true}
+    tmn-code: ${VNPAY_TMN_CODE:VNPAY_TMN_CODE_PLACEHOLDER}
+    hash-secret: ${VNPAY_HASH_SECRET:VNPAY_HASH_SECRET_PLACEHOLDER}
+    pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+    return-url: ${VNPAY_RETURN_URL:http://localhost:3000/payment/vnpay/return}
+    expire-minutes: ${VNPAY_EXPIRE_MINUTES:15}
+  momo:
+    enabled: ${MOMO_ENABLED:true}
+    partner-code: ${MOMO_PARTNER_CODE:MOMO_PARTNER_CODE_PLACEHOLDER}
+    access-key: ${MOMO_ACCESS_KEY:MOMO_ACCESS_KEY_PLACEHOLDER}
+    secret-key: ${MOMO_SECRET_KEY:MOMO_SECRET_KEY_PLACEHOLDER}
+    endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
+    return-url: ${MOMO_RETURN_URL:http://localhost:3000/payment/momo/return}
+    ipn-url: ${MOMO_IPN_URL:http://localhost:8080/api/v1/payments/momo/ipn}
+  stripe:
+    enabled: ${STRIPE_ENABLED:true}
+    secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
+    success-url: ${STRIPE_SUCCESS_URL:http://localhost:3000/payment/stripe/success?session_id={CHECKOUT_SESSION_ID}&order_code={ORDER_CODE}}
+    cancel-url: ${STRIPE_CANCEL_URL:http://localhost:3000/payment/stripe/cancel?order_code={ORDER_CODE}}
+    currency: ${STRIPE_CURRENCY:vnd}
   sepay:
     enabled: ${SEPAY_ENABLED:false}
     environment: ${SEPAY_ENVIRONMENT:production}
