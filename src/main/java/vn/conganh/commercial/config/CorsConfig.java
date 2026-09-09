@@ -14,16 +14,22 @@ public class CorsConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "https://velawear-fe.vercel.app",
-                "https://*.vercel.app"));
+        configuration.setAllowedOrigins(Arrays.asList(
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "https://velawear-fe.vercel.app"));
 
         configuration.setAllowedMethods(
                 Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Authorization",
+                "Content-Type",
+                "Cache-Control",
+                "Idempotency-Key",
+                "X-Requested-With",
+                "Accept",
+                "Origin"));
 
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
