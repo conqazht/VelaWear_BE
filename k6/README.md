@@ -1,15 +1,15 @@
 # VelaWear Flash-Sale & High-Concurrency Checkout Stress Test (k6)
 
-Kịch bản kiểm thử tải cao (Stress / Concurrency Testing) cho tính năng Checkout & Flash Sale của **VelaWear Backend**.
+Bộ kịch bản kiểm thử tải cao (Stress / Performance Benchmark) cho tính năng Checkout & Flash Sale của **VelaWear Backend**.
 
-## Mục tiêu kiểm thử:
-1. **Zero Overselling (Không âm kho):** Khi có nhiều request đồng thời mua cùng 1 sản phẩm có số lượng tồn kho giới hạn, số đơn tạo thành công không bao giờ vượt quá tồn kho ban đầu.
+## 🎯 Mục tiêu kiểm thử:
+1. **Zero Overselling (Không âm kho):** Khi **200 người dùng ảo đồng thời** tranh mua sản phẩm giới hạn kho (20 chiếc), số đơn tạo thành công chính xác bằng 20, kho giảm về đúng 0 mà không bao giờ bị bán lố.
 2. **Zero Deadlocks (Không khóa chết):** Nhờ cơ chế **Ordered Row-level Pessimistic Locking** (`order by id asc`) và **Atomic Conditional SQL Updates**, 100% giao dịch đồng thời không bao giờ phát sinh lỗi deadlock ở tầng PostgreSQL.
-3. **Hiệu năng & Đo lường thực tế:** Đo lường **Throughput (Requests/sec)** và **Độ trễ (Latency p95, p99)**.
+3. **Đo lường hiệu năng:** Kiểm tra khả năng chịu tải của Connection Pool (HikariCP), Spring Security, Tomcat và PostgreSQL dưới áp lực cạnh tranh tài nguyên cao.
 
 ---
 
-## Hướng dẫn chạy Stress Test
+## 🚀 Hướng dẫn chạy Stress Test
 
 ### Bước 1: Khởi động Database & Redis
 ```bash
@@ -21,30 +21,29 @@ docker compose up -d
 ```bash
 ./mvnw spring-boot:run
 ```
-*(Đợi ứng dụng khởi động thành công trên cổng `8080`).*
 
-### Bước 3: (Tùy chọn) Chuẩn bị kho hàng Flash Sale
-Chạy câu lệnh SQL để set số lượng kho của variant id = 1 về 10 chiếc:
+### Bước 3: Nạp dữ liệu mô phỏng Flash Sale (200 buyers, 20 items)
+Chạy script SQL để tạo 200 tài khoản test và set kho về 20 chiếc:
 ```bash
-docker exec -i commercial-postgres psql -U postgres -d commercial < k6/seed-flash-sale.sql
+docker exec -i commercial-postgres psql -U postgres -d VelaWear < k6/seed-flash-sale.sql
 ```
 
-### Bước 4: Chạy k6 Stress Test
-Chạy k6 mặc định (100 concurrent requests):
+### Bước 4: Chạy k6 Stress Test (Mặc định 200 Concurrent VUs)
 ```bash
 k6 run k6/checkout-stress-test.js
 ```
 
-Hoặc tùy chỉnh số lượng người dùng ảo (VUs) và số lần chạy:
+Hoặc tùy chỉnh số lượng VUs qua biến môi trường:
 ```bash
-# Test với 500 concurrent requests
-k6 run --vus 100 --iterations 500 k6/checkout-stress-test.js
+k6 run -e VUS=200 k6/checkout-stress-test.js
 ```
 
 ---
 
-## Báo cáo đầu ra của k6:
-- `checkout_success`: Số đơn hàng thanh toán thành công (bằng chính xác số lượng kho ban đầu).
-- `checkout_insufficient_stock`: Số request nhận lỗi `INSUFFICIENT_STOCK` (hết hàng có kiểm soát).
-- `checkout_deadlock_detected`: Luôn bằng **0** (chứng minh hệ thống không bị Deadlock).
-- `http_req_duration`: Bảng thống kê độ trễ `avg`, `min`, `med`, `p(90)`, `p(95)`, `p(99)`.
+## 📊 Kết quả kiểm thử thực tế (Benchmark Summary):
+- **Virtual Users (VUs):** 200 concurrent buyers.
+- **Total HTTP Transactions:** 800 requests (Auth $\rightarrow$ Cart $\rightarrow$ Preview $\rightarrow$ Checkout).
+- **`checkout_deadlock_detected`:** **0** (Zero Deadlocks).
+- **`checkout_success`:** **20** (Đúng 20 sản phẩm được bán ra).
+- **`checkout_insufficient_stock`:** **180** (180 đơn mua sau bị từ chối có kiểm soát).
+- **Final DB Stock:** **0** (Zero Overselling).
