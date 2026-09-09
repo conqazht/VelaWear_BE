@@ -20,6 +20,8 @@ spring:
         format_sql: false
   flyway:
     enabled: true
+    locations: classpath:db/migration,classpath:db/dev
+    validate-on-migrate: false
 
 springdoc:
   swagger-ui:
