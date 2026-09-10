@@ -30,6 +30,7 @@ import vn.conganh.commercial.feature.payment.PaymentRepository;
 import vn.conganh.commercial.feature.emailoutbox.OrderCompletedEmailOutboxService;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
+import vn.conganh.commercial.feature.notification.NotificationService;
 
 import java.time.Instant;
 import java.util.List;
@@ -47,6 +48,7 @@ public class OrderServiceImpl implements OrderService {
     private final PaymentRepository paymentRepository;
     private final OrderCompletedEmailOutboxService orderCompletedEmailOutboxService;
     private final PaymentGatewayRouter paymentGatewayRouter;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -190,6 +192,7 @@ public class OrderServiceImpl implements OrderService {
                     paymentRepository.save(payment);
                 }
             });
+            notificationService.notifyOrderStatusChanged(order, previousStatus, "CANCELLED");
             return toDetailedResponse(order);
         }
         if (request.status() != null) {
@@ -222,6 +225,9 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
         recordStatusHistory(savedOrder, previousStatus, request.status());
+        if (request.status() != null && !request.status().equals(previousStatus)) {
+            notificationService.notifyOrderStatusChanged(savedOrder, previousStatus, request.status());
+        }
         if (!"COMPLETED".equals(previousStatus) && "COMPLETED".equals(savedOrder.getStatus())) {
             orderCompletedEmailOutboxService.enqueue(savedOrder);
         }
