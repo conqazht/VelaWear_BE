@@ -62,6 +62,8 @@ class OrderServiceImplTest {
     private OrderCompletedEmailOutboxService orderCompletedEmailOutboxService;
     @Mock
     private vn.conganh.commercial.feature.payment.gateway.PaymentGatewayRouter paymentGatewayRouter;
+    @Mock
+    private vn.conganh.commercial.feature.notification.NotificationService notificationService;
 
     private OrderServiceImpl orderService;
 
@@ -70,7 +72,7 @@ class OrderServiceImplTest {
         orderService = new OrderServiceImpl(
                 orderRepository, userRepository, orderStatusHistoryRepository,
                 orderItemRepository, resourceLifecycleService, paymentRepository,
-                orderCompletedEmailOutboxService, paymentGatewayRouter);
+                orderCompletedEmailOutboxService, paymentGatewayRouter, notificationService);
     }
 
     @Nested
