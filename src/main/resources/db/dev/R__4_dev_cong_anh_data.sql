@@ -1,10 +1,12 @@
 -- Targeted shop-page fixtures for the seeded customer account.
+-- NOTE: Công Anh uses truongconganh5575@gmail.com for Google login
+-- (conganhtruongw@gmail.com is the legacy/alternate address). Both are covered below.
 UPDATE users
 SET full_name = CASE
     WHEN EXISTS (
         SELECT 1
         FROM users actual_user
-        WHERE actual_user.email = 'conganhtruongw@gmail.com'
+        WHERE actual_user.email IN ('conganhtruongw@gmail.com', 'truongconganh5575@gmail.com')
     ) THEN 'Demo Customer'
     ELSE 'Công Anh'
 END
@@ -14,19 +16,20 @@ CREATE TEMP TABLE dev_cong_anh_user ON COMMIT DROP AS
 SELECT u.id
 FROM users u
 WHERE u.email = 'conganhtruongw@gmail.com'
+   OR u.email = 'truongconganh5575@gmail.com'
    OR u.email = 'user@velawear.local'
 ORDER BY
     CASE WHEN u.email = 'user@velawear.local' THEN 1 ELSE 0 END,
     u.id
 LIMIT 1;
 
--- Ensure Công Anh (conganhtruongw@gmail.com) has ADMIN role with full permissions, while user@velawear.local remains customer-only
+-- Ensure Công Anh (either Google email) has ADMIN role with full permissions, while user@velawear.local remains customer-only
 INSERT INTO user_role (user_id, role_id)
 SELECT u.id, r.id
 FROM users u
 CROSS JOIN roles r
 WHERE r.name = 'ADMIN'
-  AND u.email = 'conganhtruongw@gmail.com'
+  AND u.email IN ('conganhtruongw@gmail.com', 'truongconganh5575@gmail.com')
 ON CONFLICT DO NOTHING;
 
 DELETE FROM user_role
@@ -408,12 +411,13 @@ WHERE NOT EXISTS (
 
 -- OAuth accounts are created after Flyway has finished. Move the fixtures as
 -- soon as the real Công Anh account appears so reloads keep using the same user.
+-- Handles both the legacy address and the current Google login email.
 CREATE OR REPLACE FUNCTION assign_dev_fixtures_to_cong_anh()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF NEW.email = 'conganhtruongw@gmail.com' THEN
+    IF NEW.email IN ('conganhtruongw@gmail.com', 'truongconganh5575@gmail.com') THEN
         INSERT INTO user_role (user_id, role_id)
         SELECT NEW.id, r.id
         FROM roles r
