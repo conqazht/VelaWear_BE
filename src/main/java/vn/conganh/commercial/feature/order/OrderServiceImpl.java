@@ -192,7 +192,6 @@ public class OrderServiceImpl implements OrderService {
                     paymentRepository.save(payment);
                 }
             });
-            notificationService.notifyOrderStatusChanged(order, previousStatus, "CANCELLED");
             return toDetailedResponse(order);
         }
         if (request.status() != null) {

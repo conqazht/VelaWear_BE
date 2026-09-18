@@ -14,6 +14,7 @@ import vn.conganh.commercial.feature.productvariant.InventoryLog;
 import vn.conganh.commercial.feature.productvariant.InventoryLogRepository;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.salecampaign.CampaignReservationService;
+import vn.conganh.commercial.feature.notification.NotificationService;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 
 @Slf4j
@@ -30,6 +31,7 @@ public class OrderFulfillmentService {
     private final CouponUsageRepository couponUsageRepository;
     private final CampaignReservationService campaignReservationService;
     private final PaymentRepository paymentRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public void expireOrder(Long orderId) {
@@ -114,6 +116,7 @@ public class OrderFulfillmentService {
             history.setToStatus("CANCELLED");
             history.setReason(reason);
             historyRepository.save(history);
+            notificationService.notifyOrderStatusChanged(order, previousStatus, "CANCELLED");
         }
         log.info("Released order resources once for order {}, reason {}", order.getId(), reason);
         return true;
