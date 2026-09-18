@@ -27,6 +27,7 @@ import vn.conganh.commercial.feature.coupon.Coupon;
 import vn.conganh.commercial.feature.coupon.CouponRepository;
 import vn.conganh.commercial.feature.coupon.CouponUsage;
 import vn.conganh.commercial.feature.coupon.CouponUsageRepository;
+import vn.conganh.commercial.feature.notification.NotificationService;
 import vn.conganh.commercial.feature.payment.Payment;
 import vn.conganh.commercial.feature.payment.PaymentRepository;
 import vn.conganh.commercial.feature.productvariant.InventoryLog;
@@ -50,6 +51,7 @@ class OrderFulfillmentServiceTest {
     @Mock private CouponUsageRepository couponUsageRepository;
     @Mock private CampaignReservationService campaignReservationService;
     @Mock private PaymentRepository paymentRepository;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private OrderFulfillmentService fulfillmentService;
@@ -131,6 +133,7 @@ class OrderFulfillmentServiceTest {
 
             assertThat(released).isFalse();
             verify(campaignReservationService, never()).releaseAllocationsForOrder(anyLong(), any());
+            verify(notificationService, never()).notifyOrderStatusChanged(any(), any(), any());
         }
 
         @Test
@@ -169,6 +172,7 @@ class OrderFulfillmentServiceTest {
             verify(couponUsageRepository).delete(usage);
             verify(orderRepository).save(order);
             verify(historyRepository).save(any(OrderStatusHistory.class));
+            verify(notificationService).notifyOrderStatusChanged(order, "PENDING", "CANCELLED");
         }
     }
 
@@ -201,6 +205,7 @@ class OrderFulfillmentServiceTest {
             assertThat(order.getStatus()).isEqualTo("CANCELLED");
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
             verify(paymentRepository).save(payment);
+            verify(notificationService).notifyOrderStatusChanged(order, "PENDING", "CANCELLED");
         }
     }
 }

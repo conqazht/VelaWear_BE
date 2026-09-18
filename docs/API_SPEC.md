@@ -2089,6 +2089,10 @@ theo exact method/path RBAC. Với generic customer-resource route đã contract
 | GET | `/api/v1/orders/me/{id}` | Bearer | Implemented | Get principal-owned order; foreign ID is 404 |
 | GET | `/api/v1/orders/me/code/{orderCode}` | Bearer | Implemented | Get principal-owned order by code; foreign code is 404 |
 | GET | `/api/v1/orders/me/{id}/status-histories` | Bearer | Implemented | List history for a principal-owned order |
+| GET | `/api/v1/notifications/me` | Bearer | Implemented | List paginated principal-owned notifications |
+| GET | `/api/v1/notifications/me/unread-count` | Bearer | Implemented | Get unread notification count |
+| PUT | `/api/v1/notifications/{id}/read` | Bearer | Implemented | Mark notification as read |
+| PUT | `/api/v1/notifications/me/read-all` | Bearer | Implemented | Mark all notifications as read |
 | GET | `/orders` | Bearer | Implemented | List orders |
 | GET | `/orders/{id}` | Bearer | Implemented | Get order by id |
 | GET | `/orders/code/{orderCode}` | Bearer | Implemented | Get order by code |
@@ -2367,3 +2371,115 @@ and customer usage exactly once.
 - COD creates `CONFIRMED` allocations immediately. Valid cancellation moves
   them to `REVERSED` exactly once. COD collection may move `UNPAID -> PAID`;
   shipped/completed orders cannot use cancellation to restore stock.
+
+---
+
+## 10. Customer Notifications Implemented
+
+All customer notification endpoints are principal-scoped using the authenticated user's token.
+
+### GET /api/v1/notifications/me Bearer
+
+Returns paginated list of notifications for the authenticated user, sorted by `createdAt,desc` by default.
+
+**Query Parameters:**
+- `page` (number, 1-indexed, default: `1`)
+- `size` (number, default: `10`)
+- `sort` (string, e.g. `createdAt,desc`)
+- `type` (optional string, enum: `ORDER_UPDATE`, `PROMOTION`, `SYSTEM`, `PAYMENT`)
+- `targetType` (optional string, enum: `ORDER`, `PRODUCT`, `SALE_CAMPAIGN`, `COUPON`)
+- `isRead` (optional boolean, `true` or `false`)
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "meta": { "page": 1, "pageSize": 10, "pages": 1, "total": 1 },
+    "result": [
+      {
+        "id": 1,
+        "title": "Đơn hàng #VELA-12345 đã được xác nhận",
+        "content": "Người bán đang chuẩn bị đóng gói kiện hàng của bạn.",
+        "type": "ORDER_UPDATE",
+        "targetType": "ORDER",
+        "targetId": "VELA-12345",
+        "linkUrl": "/profile/orders/VELA-12345",
+        "imageUrl": null,
+        "isRead": false,
+        "readAt": null,
+        "createdAt": "2026-09-10T03:00:00Z"
+      }
+    ]
+  },
+  "message": "Success",
+  "timestamp": "2026-09-10T03:00:00"
+}
+```
+
+---
+
+### GET /api/v1/notifications/me/unread-count Bearer
+
+Returns unread notification count for the notification bell badge.
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "unreadCount": 3
+  },
+  "message": "Success",
+  "timestamp": "2026-09-10T03:00:00"
+}
+```
+
+---
+
+### PUT /api/v1/notifications/{id}/read Bearer
+
+Marks a single notification as read. The notification must belong to the authenticated user.
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "id": 1,
+    "title": "Đơn hàng #VELA-12345 đã được xác nhận",
+    "content": "Người bán đang chuẩn bị đóng gói kiện hàng của bạn.",
+    "type": "ORDER_UPDATE",
+    "targetType": "ORDER",
+    "targetId": "VELA-12345",
+    "linkUrl": "/profile/orders/VELA-12345",
+    "imageUrl": null,
+    "isRead": true,
+    "readAt": "2026-09-10T03:05:00Z",
+    "createdAt": "2026-09-10T03:00:00Z"
+  },
+  "message": "Success",
+  "timestamp": "2026-09-10T03:05:00"
+}
+```
+
+---
+
+### PUT /api/v1/notifications/me/read-all Bearer
+
+Marks all unread notifications of the authenticated user as read.
+
+**Success Response (200):**
+
+```json
+{
+  "statusCode": 200,
+  "data": null,
+  "message": "Success",
+  "timestamp": "2026-09-10T03:05:00"
+}
+```
+
