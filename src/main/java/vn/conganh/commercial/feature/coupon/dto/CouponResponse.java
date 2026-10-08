@@ -5,6 +5,7 @@ import java.time.Instant;
 import vn.conganh.commercial.feature.coupon.Coupon;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 
 public record CouponResponse(
         Long id,
@@ -17,7 +18,8 @@ public record CouponResponse(
         int usedCount,
         Instant startDate,
         Instant endDate,
-        CouponStatus status
+        CouponStatus status,
+        CustomerTier minTier
 ) {
 
     public static CouponResponse fromEntity(Coupon coupon) {
@@ -32,6 +34,7 @@ public record CouponResponse(
                 coupon.getUsedCount(),
                 coupon.getStartDate(),
                 coupon.getEndDate(),
-                coupon.getStatus());
+                coupon.getStatus(),
+                coupon.getMinTier() != null ? coupon.getMinTier() : CustomerTier.STANDARD);
     }
 }

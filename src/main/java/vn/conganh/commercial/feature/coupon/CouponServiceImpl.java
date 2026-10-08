@@ -16,9 +16,12 @@ import vn.conganh.commercial.feature.coupon.dto.CreateCouponRequest;
 import vn.conganh.commercial.feature.coupon.dto.CouponUsageResponse;
 import vn.conganh.commercial.feature.coupon.dto.MyCouponsResponse;
 import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
+import vn.conganh.commercial.feature.membership.MembershipService;
+import vn.conganh.commercial.feature.membership.dto.MembershipSummaryResponse;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.CouponStatus;
+import vn.conganh.commercial.util.constant.CustomerTier;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +30,7 @@ public class CouponServiceImpl implements CouponService {
     private final CouponRepository couponRepository;
     private final CouponUsageRepository couponUsageRepository;
     private final UserRepository userRepository;
+    private final MembershipService membershipService;
 
     @Override
     @Transactional(readOnly = true)
@@ -47,6 +51,7 @@ public class CouponServiceImpl implements CouponService {
         User user = userRepository.findByEmailAndDeletedAtIsNull(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
         Instant now = Instant.now();
+        MembershipSummaryResponse membershipSummary = membershipService.getMembershipSummary(user, now);
         var availableCoupons = couponRepository
                 .findAllByStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByEndDateAsc(
                         CouponStatus.ACTIVE, now, now)
@@ -57,7 +62,16 @@ public class CouponServiceImpl implements CouponService {
                 .stream()
                 .map(CouponUsageResponse::fromEntity)
                 .toList();
-        return new MyCouponsResponse(availableCoupons, usageHistory);
+        return new MyCouponsResponse(
+                membershipSummary.currentTier(),
+                membershipSummary.tierLabel(),
+                membershipSummary.cycleSpentAmount(),
+                membershipSummary.nextTier(),
+                membershipSummary.nextTierLabel(),
+                membershipSummary.amountToNextTier(),
+                membershipSummary.cycleDays(),
+                availableCoupons,
+                usageHistory);
     }
 
     @Override
@@ -79,6 +93,7 @@ public class CouponServiceImpl implements CouponService {
         coupon.setStartDate(request.startDate());
         coupon.setEndDate(request.endDate());
         coupon.setStatus(request.status());
+        coupon.setMinTier(request.minTier() != null ? request.minTier() : CustomerTier.STANDARD);
         return CouponResponse.fromEntity(couponRepository.save(coupon));
     }
 
@@ -97,6 +112,7 @@ public class CouponServiceImpl implements CouponService {
         coupon.setStartDate(request.startDate());
         coupon.setEndDate(request.endDate());
         coupon.setStatus(request.status());
+        coupon.setMinTier(request.minTier() != null ? request.minTier() : CustomerTier.STANDARD);
         return CouponResponse.fromEntity(couponRepository.save(coupon));
     }
 

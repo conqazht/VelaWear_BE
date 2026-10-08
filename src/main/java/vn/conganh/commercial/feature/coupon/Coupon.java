@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 
 @Getter
 @Setter
@@ -60,4 +61,8 @@ public class Coupon {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private CouponStatus status = CouponStatus.ACTIVE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "min_tier", length = 20)
+    private CustomerTier minTier = CustomerTier.STANDARD;
 }

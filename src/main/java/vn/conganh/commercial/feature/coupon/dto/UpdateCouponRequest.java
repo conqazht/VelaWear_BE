@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 
 public record UpdateCouponRequest(
 
@@ -31,6 +32,20 @@ public record UpdateCouponRequest(
         Instant endDate,
 
         @NotNull(message = "Status is required")
-        CouponStatus status
+        CouponStatus status,
+
+        CustomerTier minTier
 ) {
+
+    public UpdateCouponRequest(
+            CouponType type,
+            BigDecimal value,
+            BigDecimal minOrderAmount,
+            BigDecimal maxDiscount,
+            Integer usageLimit,
+            Instant startDate,
+            Instant endDate,
+            CouponStatus status) {
+        this(type, value, minOrderAmount, maxDiscount, usageLimit, startDate, endDate, status, CustomerTier.STANDARD);
+    }
 }

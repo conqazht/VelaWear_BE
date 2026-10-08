@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 
 public record CreateCouponRequest(
 
@@ -36,6 +37,21 @@ public record CreateCouponRequest(
         @NotNull(message = "End date is required")
         Instant endDate,
 
-        CouponStatus status
+        CouponStatus status,
+
+        CustomerTier minTier
 ) {
+
+    public CreateCouponRequest(
+            String code,
+            CouponType type,
+            BigDecimal value,
+            BigDecimal minOrderAmount,
+            BigDecimal maxDiscount,
+            Integer usageLimit,
+            Instant startDate,
+            Instant endDate,
+            CouponStatus status) {
+        this(code, type, value, minOrderAmount, maxDiscount, usageLimit, startDate, endDate, status, CustomerTier.STANDARD);
+    }
 }

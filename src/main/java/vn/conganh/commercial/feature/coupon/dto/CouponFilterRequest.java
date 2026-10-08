@@ -5,11 +5,13 @@ import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 
 public record CouponFilterRequest(
         String code,
         CouponType type,
         CouponStatus status,
+        CustomerTier minTier,
         BigDecimal valueFrom,
         BigDecimal valueTo,
         BigDecimal minOrderAmountFrom,

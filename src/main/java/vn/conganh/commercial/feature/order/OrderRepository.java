@@ -1,5 +1,6 @@
 package vn.conganh.commercial.feature.order;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -57,4 +58,13 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     boolean existsByOrderCode(String orderCode);
 
     Page<Order> findByUserId(Long userId, Pageable pageable);
+
+    @Query("""
+            select coalesce(sum(o.finalAmount), 0)
+            from Order o
+            where o.user.id = :userId
+              and o.status = 'COMPLETED'
+              and o.createdAt >= :since
+            """)
+    BigDecimal findCompletedSpendSince(@Param("userId") Long userId, @Param("since") Instant since);
 }

@@ -67,10 +67,12 @@ import vn.conganh.commercial.feature.salecampaign.SaleAllocation;
 import vn.conganh.commercial.feature.salecampaign.SaleAllocationStatus;
 import vn.conganh.commercial.feature.salecampaign.VariantPricing;
 import vn.conganh.commercial.feature.salecampaign.VariantPricingService;
+import vn.conganh.commercial.feature.membership.MembershipService;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 import vn.conganh.commercial.util.constant.PaymentStatus;
 
@@ -109,6 +111,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final OrderFulfillmentService lifecycleService;
     private final CatalogContentLocalizationService localizationService;
     private final CheckoutFingerprintService fingerprintService;
+    private final MembershipService membershipService;
 
     @Value("${app.checkout.shipping-fee:30000}")
     private BigDecimal configuredShippingFee;
@@ -327,7 +330,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .filter(line -> line.pricing().priceSource() != PriceSource.FLASH_SALE)
                 .map(line -> line.pricing().effectivePrice().multiply(BigDecimal.valueOf(line.item().getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        Coupon coupon = findAndValidateCoupon(couponCode, eligibleSubtotal, now);
+        Coupon coupon = findAndValidateCoupon(user, couponCode, eligibleSubtotal, now);
         BigDecimal discount = coupon == null ? BigDecimal.ZERO : calculateDiscount(coupon, eligibleSubtotal);
         BigDecimal shippingFee = configuredShippingFee == null ? BigDecimal.ZERO : configuredShippingFee;
         BigDecimal finalAmount = subtotal.add(shippingFee).subtract(discount).max(BigDecimal.ZERO);
@@ -437,7 +440,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         campaignReservationService.saveAllocations(allocations);
     }
 
-    private Coupon findAndValidateCoupon(String code, BigDecimal eligibleSubtotal, Instant now) {
+    private Coupon findAndValidateCoupon(User user, String code, BigDecimal eligibleSubtotal, Instant now) {
         if (code == null || code.isBlank()) {
             return null;
         }
@@ -455,6 +458,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         }
         if (eligibleSubtotal.signum() == 0) {
             throw new CouponNotValidException("Coupon cannot be applied to Flash Sale items");
+        }
+        if (coupon.getMinTier() != null && coupon.getMinTier() != CustomerTier.STANDARD) {
+            CustomerTier userTier = membershipService.getUserTier(user, now);
+            if (userTier.getRank() < coupon.getMinTier().getRank()) {
+                throw new CouponNotValidException("Coupon requires " + coupon.getMinTier().getLabel() + " membership tier");
+            }
         }
         return coupon;
     }

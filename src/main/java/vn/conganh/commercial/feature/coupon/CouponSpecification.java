@@ -22,6 +22,7 @@ public final class CouponSpecification {
                 FilterSpecifications.addContains(predicates, cb, from.get("code"), filter.code());
                 FilterSpecifications.addEquals(predicates, cb, from.get("type"), filter.type());
                 FilterSpecifications.addEquals(predicates, cb, from.get("status"), filter.status());
+                FilterSpecifications.addEquals(predicates, cb, from.get("minTier"), filter.minTier());
                 FilterSpecifications.addRange(
                         predicates, cb, from.<BigDecimal>get("value"), filter.valueFrom(), filter.valueTo(), "value");
                 FilterSpecifications.addRange(

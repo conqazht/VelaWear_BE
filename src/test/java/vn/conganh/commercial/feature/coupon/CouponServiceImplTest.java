@@ -35,8 +35,11 @@ import vn.conganh.commercial.feature.coupon.dto.UpdateCouponRequest;
 import vn.conganh.commercial.feature.order.Order;
 import vn.conganh.commercial.feature.user.User;
 import vn.conganh.commercial.feature.user.UserRepository;
+import vn.conganh.commercial.feature.membership.MembershipService;
+import vn.conganh.commercial.feature.membership.dto.MembershipSummaryResponse;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Module Coupon - CouponServiceImpl")
@@ -51,11 +54,14 @@ class CouponServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private MembershipService membershipService;
+
     private CouponServiceImpl couponService;
 
     @BeforeEach
     void setUp() {
-        couponService = new CouponServiceImpl(couponRepository, couponUsageRepository, userRepository);
+        couponService = new CouponServiceImpl(couponRepository, couponUsageRepository, userRepository, membershipService);
     }
 
     @Nested
@@ -168,9 +174,21 @@ class CouponServiceImplTest {
                             eq(CouponStatus.ACTIVE), any(Instant.class), any(Instant.class)))
                     .thenReturn(List.of(coupon));
             when(couponUsageRepository.findAllDetailedByUserId(7L)).thenReturn(List.of(usage));
+            when(membershipService.getMembershipSummary(eq(user), any(Instant.class)))
+                    .thenReturn(new MembershipSummaryResponse(
+                            CustomerTier.STANDARD,
+                            "Thành viên",
+                            BigDecimal.ZERO,
+                            CustomerTier.SILVER,
+                            "Bạc",
+                            BigDecimal.valueOf(2000000),
+                            180,
+                            Instant.parse("2026-01-01T00:00:00Z")
+                    ));
 
             MyCouponsResponse response = couponService.getMyCoupons("customer@test.local");
 
+            assertThat(response.membershipTier()).isEqualTo(CustomerTier.STANDARD);
             assertThat(response.availableCoupons()).extracting(CouponResponse::code).containsExactly("SALE10");
             assertThat(response.usageHistory()).hasSize(1);
             assertThat(response.usageHistory().getFirst().orderCode()).isEqualTo("VW-TEST-9");

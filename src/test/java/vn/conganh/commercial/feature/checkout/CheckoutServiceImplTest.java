@@ -57,6 +57,7 @@ import vn.conganh.commercial.feature.productvariant.ProductVariant;
 import vn.conganh.commercial.feature.order.OrderFulfillmentService;
 import vn.conganh.commercial.feature.productvariant.ProductVariantRepository;
 import vn.conganh.commercial.feature.salecampaign.CampaignReservationService;
+import vn.conganh.commercial.feature.membership.MembershipService;
 import vn.conganh.commercial.feature.salecampaign.PriceSource;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaign;
 import vn.conganh.commercial.feature.salecampaign.VariantPricing;
@@ -67,6 +68,7 @@ import vn.conganh.commercial.feature.salecampaign.SaleCampaignItem;
 import vn.conganh.commercial.feature.salecampaign.SaleCampaignStatus;
 import vn.conganh.commercial.util.constant.CouponStatus;
 import vn.conganh.commercial.util.constant.CouponType;
+import vn.conganh.commercial.util.constant.CustomerTier;
 import vn.conganh.commercial.util.constant.PaymentProvider;
 
 @ExtendWith(MockitoExtension.class)
@@ -108,6 +110,8 @@ class CheckoutServiceImplTest {
     private OrderFulfillmentService lifecycleService;
     @Mock
     private CatalogContentLocalizationService localizationService;
+    @Mock
+    private MembershipService membershipService;
     @Spy
     private CheckoutFingerprintService fingerprintService = new CheckoutFingerprintService();
 
@@ -429,6 +433,37 @@ class CheckoutServiceImplTest {
         verify(couponRepository).consumeUsage(eq(10L), any(Instant.class));
         verify(couponUsageRepository, never()).save(any());
         verify(productVariantRepository).decrementStock(1L, 2);
+    }
+
+    @Test
+    @DisplayName("Should throw CouponNotValidException when user tier is insufficient for VIP coupon")
+    void preview_vipCoupon_insufficientTier_throwsException() {
+        Coupon coupon = new Coupon();
+        ReflectionTestUtils.setField(coupon, "id", 15L);
+        coupon.setCode("VIPGOLD15");
+        coupon.setType(CouponType.PERCENTAGE);
+        coupon.setValue(BigDecimal.valueOf(15));
+        coupon.setMinOrderAmount(BigDecimal.valueOf(50));
+        coupon.setStatus(CouponStatus.ACTIVE);
+        coupon.setStartDate(Instant.now().minusSeconds(60));
+        coupon.setEndDate(Instant.now().plusSeconds(3600));
+        coupon.setMinTier(CustomerTier.GOLD);
+
+        when(userRepository.findByEmailAndDeletedAtIsNull("test@example.com")).thenReturn(Optional.of(user));
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(cart));
+        when(cartItemRepository.findByCartId(300L)).thenReturn(List.of(cartItem));
+        when(productVariantRepository.findAllByIdInAndDeletedAtIsNull(List.of(1L))).thenReturn(List.of(variant));
+        when(pricingService.resolve(eq(List.of(variant)), any(Instant.class), eq(1L)))
+                .thenReturn(java.util.Map.of(1L, new VariantPricing(
+                        1L, BigDecimal.valueOf(100), BigDecimal.valueOf(80),
+                        PriceSource.BASE, null, null, null, 10)));
+        when(couponRepository.findByCode("VIPGOLD15")).thenReturn(Optional.of(coupon));
+        when(membershipService.getUserTier(eq(user), any(Instant.class))).thenReturn(CustomerTier.SILVER);
+
+        CheckoutPreviewRequest previewRequest = new CheckoutPreviewRequest("COD", "VIPGOLD15");
+
+        assertThrows(CouponNotValidException.class, () -> checkoutService.preview(previewRequest, "test@example.com"));
+        verify(couponRepository, never()).consumeUsage(any(), any());
     }
 
     // Task 5.6
