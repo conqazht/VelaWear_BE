@@ -92,4 +92,25 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
             order by rhp.permission.module, rhp.permission.name
             """)
     List<Permission> findEffectivePermissionsByUserId(Long userId);
+
+    long countByDeletedAtIsNull();
+
+    @Query("""
+            select count(u)
+            from User u
+            where u.createdAt >= :start
+              and u.createdAt < :end
+              and u.deletedAt is null
+            """)
+    long countUsersCreatedBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select u
+            from User u
+            where u.createdAt >= :start
+              and u.createdAt < :end
+              and u.deletedAt is null
+            order by u.createdAt asc
+            """)
+    List<User> findUsersCreatedBetween(@Param("start") Instant start, @Param("end") Instant end);
 }

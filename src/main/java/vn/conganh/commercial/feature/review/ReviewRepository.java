@@ -30,4 +30,13 @@ public interface ReviewRepository extends JpaRepository<Review, Long>, JpaSpecif
             order by review.rating
             """)
     List<ReviewRatingCount> summarizeByProductId(@Param("productId") Long productId);
+
+    @Query("select coalesce(avg(cast(r.rating as double)), 0.0) from Review r")
+    Double getAverageRating();
+
+    @Query("select count(r) from Review r")
+    long countAllReviews();
+
+    @Query("select r from Review r join fetch r.user join fetch r.orderItem order by r.createdAt desc")
+    List<Review> findRecentReviews(Pageable pageable);
 }

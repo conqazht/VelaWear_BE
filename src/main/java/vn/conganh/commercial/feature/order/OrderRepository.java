@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import vn.conganh.commercial.feature.dashboard.dto.TopSpendingCustomerProjection;
 
 public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
 
@@ -67,4 +68,141 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
               and o.createdAt >= :since
             """)
     BigDecimal findCompletedSpendSince(@Param("userId") Long userId, @Param("since") Instant since);
+
+    @Query("""
+            select coalesce(sum(o.finalAmount), 0)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.status not in ('CANCELLED')
+            """)
+    BigDecimal sumRevenueBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select count(o)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+            """)
+    long countOrdersBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select count(o)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.status = 'CANCELLED'
+            """)
+    long countCancelledOrdersBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select o
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.status not in ('CANCELLED')
+            order by o.createdAt asc
+            """)
+    List<Order> findRevenueOrdersBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @EntityGraph(attributePaths = "user")
+    @Query("select o from Order o order by o.createdAt desc")
+    List<Order> findRecentOrders(Pageable pageable);
+
+    @Query("""
+            select coalesce(sum(o.finalAmount), 0)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.paymentStatus = 'PAID'
+            """)
+    BigDecimal sumPaidRevenueBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select coalesce(sum(o.finalAmount), 0)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.paymentStatus = 'UNPAID'
+              and o.status not in ('CANCELLED')
+            """)
+    BigDecimal sumPendingRevenueBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select coalesce(sum(o.finalAmount), 0)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and (o.paymentStatus = 'REFUNDED' or o.status = 'REFUNDED')
+            """)
+    BigDecimal sumRefundedRevenueBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select coalesce(sum(o.discountAmount), 0)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.status not in ('CANCELLED')
+            """)
+    BigDecimal sumDiscountAmountBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select count(o)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.paymentStatus = 'PAID'
+            """)
+    long countPaidOrdersBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select count(o)
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+              and o.paymentStatus = 'UNPAID'
+              and o.status not in ('CANCELLED')
+            """)
+    long countPendingOrdersBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @EntityGraph(attributePaths = "user")
+    @Query("""
+            select o
+            from Order o
+            where o.createdAt >= :start
+              and o.createdAt < :end
+            order by o.createdAt asc
+            """)
+    List<Order> findAllOrdersBetween(@Param("start") Instant start, @Param("end") Instant end);
+
+    @Query("""
+            select count(distinct o.user.id)
+            from Order o
+            where o.status not in ('CANCELLED')
+            """)
+    long countDistinctActiveBuyers();
+
+    @Query("""
+            select o.user.id
+            from Order o
+            where o.status not in ('CANCELLED')
+            group by o.user.id
+            having count(o) >= 2
+            """)
+    List<Long> findRepeatCustomerIds();
+
+    @Query("""
+            select o.user.id as userId,
+                   o.user.fullName as fullName,
+                   o.user.email as email,
+                   max(o.receiverPhone) as receiverPhone,
+                   count(o) as totalOrders,
+                   sum(o.finalAmount) as totalSpent,
+                   max(o.createdAt) as lastOrderDate
+            from Order o
+            where o.status not in ('CANCELLED')
+            group by o.user.id, o.user.fullName, o.user.email
+            order by sum(o.finalAmount) desc
+            """)
+    List<TopSpendingCustomerProjection> findTopSpendingCustomers(Pageable pageable);
 }

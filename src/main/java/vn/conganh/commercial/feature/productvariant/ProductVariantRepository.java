@@ -54,4 +54,12 @@ public interface ProductVariantRepository
 
     List<ProductVariant> findByProductIdAndDeletedAtIsNull(Long productId);
 
+    long countByDeletedAtIsNull();
+
+    long countByDeletedAtIsNullAndStockQuantity(int stockQuantity);
+
+    long countByDeletedAtIsNullAndStockQuantityGreaterThanAndStockQuantityLessThanEqual(
+            int minStock, int maxStock);
+
+    long countByDeletedAtIsNullAndStockQuantityGreaterThan(int minStock);
 }
