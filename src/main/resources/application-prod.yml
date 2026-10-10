@@ -58,3 +58,9 @@ logging:
 app:
   security:
     hmac-secret: ${SECURITY_HMAC_SECRET}
+
+server:
+  tomcat:
+    threads:
+      max: 20
+      min-spare: 2

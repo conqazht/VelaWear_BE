@@ -12,11 +12,11 @@ COPY --from=build /app/target/*.jar app.jar
 COPY uploads ./uploads
 EXPOSE 8080
 ENTRYPOINT ["java", \
-  "-Xmx240m", \
+  "-Xmx200m", \
   "-Xms64m", \
   "-Xss256k", \
-  "-XX:MaxMetaspaceSize=100m", \
-  "-XX:ReservedCodeCacheSize=48m", \
+  "-XX:MaxMetaspaceSize=160m", \
+  "-XX:ReservedCodeCacheSize=40m", \
   "-XX:+UseSerialGC", \
   "-XX:+ExitOnOutOfMemoryError", \
   "-Djava.security.egd=file:/dev/./urandom", \
