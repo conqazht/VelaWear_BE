@@ -68,7 +68,9 @@ public class DashboardServiceImpl implements DashboardService {
 
         // 1. KPI Calculations
         BigDecimal currentRevenue = orderRepository.sumRevenueBetween(range.currentStart(), range.currentEnd());
+        if (currentRevenue == null) currentRevenue = BigDecimal.ZERO;
         BigDecimal previousRevenue = orderRepository.sumRevenueBetween(range.previousStart(), range.previousEnd());
+        if (previousRevenue == null) previousRevenue = BigDecimal.ZERO;
         Double revenueChange = calculatePercentageChange(previousRevenue, currentRevenue);
 
         long currentOrders = orderRepository.countOrdersBetween(range.currentStart(), range.currentEnd());
@@ -161,7 +163,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
 
         CustomerReviewSummary customerReviews = CustomerReviewSummary.builder()
-                .averageRating(Math.round(avgRating * 10.0) / 10.0)
+                .averageRating(avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : 0.0)
                 .totalReviews(totalReviews)
                 .recentReviews(recentReviews)
                 .build();
@@ -184,12 +186,17 @@ public class DashboardServiceImpl implements DashboardService {
 
         // 1. KPIs
         BigDecimal netCollectedRevenue = orderRepository.sumPaidRevenueBetween(range.currentStart(), range.currentEnd());
+        if (netCollectedRevenue == null) netCollectedRevenue = BigDecimal.ZERO;
         BigDecimal previousNetCollected = orderRepository.sumPaidRevenueBetween(range.previousStart(), range.previousEnd());
+        if (previousNetCollected == null) previousNetCollected = BigDecimal.ZERO;
         Double netCollectedChange = calculatePercentageChange(previousNetCollected, netCollectedRevenue);
 
         BigDecimal pendingRevenue = orderRepository.sumPendingRevenueBetween(range.currentStart(), range.currentEnd());
+        if (pendingRevenue == null) pendingRevenue = BigDecimal.ZERO;
         BigDecimal refundedRevenue = orderRepository.sumRefundedRevenueBetween(range.currentStart(), range.currentEnd());
+        if (refundedRevenue == null) refundedRevenue = BigDecimal.ZERO;
         BigDecimal totalDiscounts = orderRepository.sumDiscountAmountBetween(range.currentStart(), range.currentEnd());
+        if (totalDiscounts == null) totalDiscounts = BigDecimal.ZERO;
 
         long paidOrdersCount = orderRepository.countPaidOrdersBetween(range.currentStart(), range.currentEnd());
         long pendingOrdersCount = orderRepository.countPendingOrdersBetween(range.currentStart(), range.currentEnd());

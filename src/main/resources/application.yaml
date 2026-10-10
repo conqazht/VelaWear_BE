@@ -68,7 +68,7 @@ spring:
           writetimeout: ${MAIL_WRITE_TIMEOUT:15000}
 
 server:
-  port: ${SERVER_PORT}
+  port: ${PORT:${SERVER_PORT:8080}}
   forward-headers-strategy: ${SERVER_FORWARD_HEADERS_STRATEGY:NONE}
   tomcat:
     remoteip:
